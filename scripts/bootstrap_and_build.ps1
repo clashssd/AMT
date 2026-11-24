@@ -39,10 +39,10 @@ if (-not $winget) { Fail "winget не найден (нужен для авто-�
 Step "Проверяю Python 3.12+"
 $py = $null
 
-function Test-Python312Plus([string]$cmd) {
-  # $cmd = 'py -3', 'python', etc. — запускаем и проверяем major.minor >= 3.12
+function Test-Python312Plus([string[]]$cmdParts) {
+  # Запускаем команду (массив аргументов, чтобы не зависеть от кавычек) и проверяем major.minor >= 3.12
   try {
-    $ver = & $cmd -c "import sys; print('.'.join(map(str, sys.version_info[:2])))" 2>$null
+    $ver = & $cmdParts -c "import sys; print('.'.join(map(str, sys.version_info[:2])))" 2>$null
   } catch { return $false }
   if ($LASTEXITCODE -ne 0 -or -not $ver) { return $false }
   $parts = $ver -split '\.'
@@ -56,30 +56,66 @@ function Test-Python312Plus([string]$cmd) {
 #     без конкретного алиаса "-3.12", и тогда "py -3.12" упадёт (exit 103), хотя подходящий
 #     интерпретатор 3.12+ на самом деле есть.
 $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
-if ($pyLauncher -and (Test-Python312Plus 'py -3')) {
+if ($pyLauncher -and (Test-Python312Plus @('py','-3'))) {
   $py = 'py -3'
 }
 
 # 1b) обычный python на PATH
 if (-not $py) {
   $pythonExe = Get-Command python -ErrorAction SilentlyContinue
-  if ($pythonExe -and (Test-Python312Plus 'python')) {
+  if ($pythonExe -and (Test-Python312Plus @('python'))) {
     $py = 'python'
   }
 }
 
-# 1c) Не найден -> ставим через winget
+# 1c) Известное место per-user установки winget/официального установщика,
+#     даже если python ещё не на PATH в текущем сеансе (типовая ситуация после
+#     winget per-user install без перезапуска PATH):
+if (-not $py) {
+  $localPy = Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\python.exe"
+  if ((Test-Path $localPy) -and (Test-Python312Plus @($localPy))) {
+    $py = $localPy
+    Write-Host "   Найдено: $localPy (per-user установка, ещё не в PATH)" -ForegroundColor Yellow
+  }
+}
+
+# 1d) Не найден -> ставим через winget. ВАЖНО: не верим слепо коду возврата winget
+#     (он может ненулевое вернуть, даже если пакет УЖЕ установлен/установлен вручную) —
+#     после вызова winget В ЛЮБОМ случае перепроверяем наличие рабочего Python;
+#     ошибка только если Python реально не появился ни в одном из известных мест.
 if (-not $py) {
   Write-Host "   Python 3.12+ не найден — устанавливаю через winget..."
-  winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements | Out-Null
-  if ($LASTEXITCODE -ne 0) { Fail "winget не смог установить Python.Python.3.12 (код $LASTEXITCODE). Попробуйте установить вручную с https://www.python.org/downloads/ (нужен 3.12+)." }
-  # PATH после новой winget-установки в ТЕКУЩЕМ окне терминала не обновится —
-  # нужно перезапустить скрипт в новом окне (та же логика, что и для Node ниже).
-  $freshPython = Get-Command python -ErrorAction SilentlyContinue
-  if ($freshPython -and (Test-Python312Plus 'python')) {
-    $py = 'python'
+  try {
+    winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements | Out-Null
+  } catch {
+    Write-Host "   (winget вернул ошибку/предупреждение, продолжаю и перепроверяю фактическое наличие)" -ForegroundColor Yellow
+  }
+  $wingetCode = $LASTEXITCODE
+
+  # Перепроверяем ВСЕ варианты (py-лаунчер + PATH + известное per-user место), независимо от кода winget.
+  # ВАЖНО: обязательно перепроверяем ТАКЖЕ "py -3" (системный лаунчер, не зависит от user-PATH),
+  # т.к. winget/установщик Python по умолчанию регистрирует python с py-лаунчером даже когда
+  # сам "python.exe" не попадает в PATH (например, корпоративный/ограниченный аккаунт).
+  if (Get-Command py -ErrorAction SilentlyContinue -and (Test-Python312Plus @('py','-3'))) {
+    $py = 'py -3'
   } else {
-    Fail "Python 3.12 установлен через winget, но не появился в PATH в ТЕКУЩЕМ окне — перезапустите скрипт в НОВОМ окне терминала (PATH обновится)."
+    $freshByPath = Get-Command python -ErrorAction SilentlyContinue
+    if ($freshByPath -and (Test-Python312Plus @('python'))) {
+      $py = 'python'
+    } else {
+      $localPy = Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\python.exe"
+      if ((Test-Path $localPy) -and (Test-Python312Plus @($localPy))) {
+        $py = $localPy
+      }
+    }
+  }
+
+  if (-not $py) {
+    if ($wingetCode -ne 0) {
+      Fail "winget не смог установить Python.Python.3.12 (код $wingetCode), и Python не найден ни в PATH, ни в ``$env:LOCALAPPDATA\Programs\Python\Python312``. Установите вручную с https://www.python.org/downloads/ (нужен 3.12+) и перезапустите скрипт."
+    } else {
+      Fail "Python 3.12, возможно, установлен через winget, но не найден ни в PATH, ни в ``$env:LOCALAPPDATA\Programs\Python\Python312`` — перезапустите скрипт в НОВОМ окне терминала (PATH/реестр обновятся)."
+    }
   }
 }
 Write-Host "   Python найден/установлен: $py"

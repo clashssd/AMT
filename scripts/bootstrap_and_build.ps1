@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     AMT Chat — «с нуля» бутстрап + сборка. Один скрипт: проверит/поставит Python и Node.js
@@ -38,26 +38,49 @@ if (-not $winget) { Fail "winget не найден (нужен для авто-�
 # ---------- 1. Python 3.12+ ----------
 Step "Проверяю Python 3.12+"
 $py = $null
-$pyLauncher = Get-Command py -ErrorAction SilentlyContinue
-if ($pyLauncher) {
-  $ver = & py -3.12 -c "import sys; print('.'.join(map(str, sys.version_info[:2])))" 2>$null
-  if ($LASTEXITCODE -eq 0) { $py = 'py -3.12' }
+
+function Test-Python312Plus([string]$cmd) {
+  # $cmd = 'py -3', 'python', etc. — запускаем и проверяем major.minor >= 3.12
+  try {
+    $ver = & $cmd -c "import sys; print('.'.join(map(str, sys.version_info[:2])))" 2>$null
+  } catch { return $false }
+  if ($LASTEXITCODE -ne 0 -or -not $ver) { return $false }
+  $parts = $ver -split '\.'
+  if ($parts.Count -lt 2) { return $false }
+  $maj = [int]$parts[0]; $min = [int]$parts[1]
+  return ($maj -ge 3 -and $min -ge 12)
 }
+
+# 1a) py-лаунчер: пробваем ЛЮБОЙ Python 3 (py -3 = самый высокий установленный 3.x),
+#     а не жёстко "py -3.12" — у лаунчера может быть зарегистрирован только 3.14 (или другой),
+#     без конкретного алиаса "-3.12", и тогда "py -3.12" упадёт (exit 103), хотя подходящий
+#     интерпретатор 3.12+ на самом деле есть.
+$pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+if ($pyLauncher -and (Test-Python312Plus 'py -3')) {
+  $py = 'py -3'
+}
+
+# 1b) обычный python на PATH
 if (-not $py) {
   $pythonExe = Get-Command python -ErrorAction SilentlyContinue
-  if ($pythonExe) {
-    $ver = & python -c "import sys; print('.'.join(map(str, sys.version_info[:2])))" 2>$null
-    if ($LASTEXITCODE -eq 0) {
-      $maj, $min = $ver -split '\.'
-      if ([int]$maj -ge 3 -and [int]$min -ge 12) { $py = 'python' }
-    }
+  if ($pythonExe -and (Test-Python312Plus 'python')) {
+    $py = 'python'
   }
 }
+
+# 1c) Не найден -> ставим через winget
 if (-not $py) {
   Write-Host "   Python 3.12+ не найден — устанавливаю через winget..."
   winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements | Out-Null
   if ($LASTEXITCODE -ne 0) { Fail "winget не смог установить Python.Python.3.12 (код $LASTEXITCODE). Попробуйте установить вручную с https://www.python.org/downloads/ (нужен 3.12+)." }
-  $py = 'python'   # пересоздаём PATH-допускение после новой установки
+  # PATH после новой winget-установки в ТЕКУЩЕМ окне терминала не обновится —
+  # нужно перезапустить скрипт в новом окне (та же логика, что и для Node ниже).
+  $freshPython = Get-Command python -ErrorAction SilentlyContinue
+  if ($freshPython -and (Test-Python312Plus 'python')) {
+    $py = 'python'
+  } else {
+    Fail "Python 3.12 установлен через winget, но не появился в PATH в ТЕКУЩЕМ окне — перезапустите скрипт в НОВОМ окне терминала (PATH обновится)."
+  }
 }
 Write-Host "   Python найден/установлен: $py"
 

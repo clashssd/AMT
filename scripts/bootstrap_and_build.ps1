@@ -17,6 +17,11 @@
           иконку, поэтому добавляем её вручную в уже собранный .exe)
 
     Идемпотентен: если Python/Node уже стоят — не переставляет. Безопасно повторный запуск.
+    Если только что поставленный (через winget) инструмент ещё не виден в ТЕКУЩЕМ сеансе
+    (стандартная ситуация: PATH-снапшот процесса зафиксирован до установки) — скрипт САМ,
+    без вашего участия и без просьбы «перезапустите терминал», автоматически перезапускает
+    себя в новом процессе powershell.exe (чистый, пост-установочный PATH) и продолжает
+    работу — вам не нужно вводить ничего повторно, с первого же запуска идёт до конца.
     Только Windows. Нужен запуск с правами, если winget-установка требует повышения
     (обычно winget ставит в per-user scope, без UAC — но проверьте, если не сработает).
 
@@ -111,10 +116,21 @@ if (-not $py) {
   }
 
   if (-not $py) {
+    # Свежая установка winget обычно не видна в ТЕКУЩЕМ процессе (PATH-снапшот
+    # этого powershell.exe зафиксирован ДО установки) — не просим пользователя
+    # вручную перезапускать терминал, а автоматически перезапускаем СЕБЯ в
+    # НОВОМ процессе powershell.exe (у него чистый, пост-установочный PATH).
+    # Защита от бесконечного цикла: перезапускаемся максимум 1 раз.
+    if (-not $env:AMT_BOOTSTRAP_RETRY) {
+      Write-Host "   Python установлен, но ещё не виден в этом сеансе — автоматически перезапущу скрипт в новом контексте (без вашего участия)..." -ForegroundColor Yellow
+      $env:AMT_BOOTSTRAP_RETRY = '1'
+      & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
+      exit $LASTEXITCODE
+    }
     if ($wingetCode -ne 0) {
       Fail "winget не смог установить Python.Python.3.12 (код $wingetCode), и Python не найден ни в PATH, ни в ``$env:LOCALAPPDATA\Programs\Python\Python312``. Установите вручную с https://www.python.org/downloads/ (нужен 3.12+) и перезапустите скрипт."
     } else {
-      Fail "Python 3.12, возможно, установлен через winget, но не найден ни в PATH, ни в ``$env:LOCALAPPDATA\Programs\Python\Python312`` — перезапустите скрипт в НОВОМ окне терминала (PATH/реестр обновятся)."
+      Fail "Python 3.12 установлен через winget, но не обнаружен даже после автоматического перезапуска в новом контексте — возможно, установка не завершилась (проверьте %LOCALAPPDATA%\Programs\Python), или поставьте вручную (https://www.python.org/downloads/) и перезапустите скрипт."
     }
   }
 }
@@ -128,7 +144,19 @@ if (-not $node) {
   winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements | Out-Null
   if ($LASTEXITCODE -ne 0) { Fail "winget не смог установить OpenJS.NodeJS.LTS (код $LASTEXITCODE). Попробуйте вручную: https://nodejs.org (нужен 18+)." }
   $node = Get-Command node -ErrorAction SilentlyContinue
-  if (-not $node) { Fail "Node.js всё ещё не в PATH после установки — перезапустите скрипт в НОВОМ окне терминала (PATH обновится)." }
+  if (-not $node) {
+    # Та же ситуация, что с Python: свежая winget-установка не видна в ТЕКУЩЕМ
+    # процессе (PATH-снапшот зафиксирован до установки). Не просим вручную
+    # перезапускать терминал — автоматически перезапускаем себя в новом
+    # powershell.exe (чистый пост-установочный PATH), максимум 1 раз.
+    if (-not $env:AMT_BOOTSTRAP_RETRY) {
+      Write-Host "   Node.js установлен, но ещё не виден в этом сеансе — автоматически перезапущу скрипт в новом контексте (без вашего участия)..." -ForegroundColor Yellow
+      $env:AMT_BOOTSTRAP_RETRY = '1'
+      & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
+      exit $LASTEXITCODE
+    }
+    Fail "Node.js установлен через winget, но не обнаружен даже после автоматического перезапуска в новом контексте — возможно, установка не завершилась (проверьте winget-логи), или поставьте вручную (https://nodejs.org) и перезапустите скрипт."
+  }
 }
 $nodeVer = & node --version
 Write-Host "   Node.js найден/установлен: $nodeVer"

@@ -62,6 +62,34 @@ npm run build:win
 
 ## Устранение неполадок (Windows)
 
+### `spawn UNKNOWN` на шаге NSIS (electron-builder)
+Симптом — сборка падает именно при компиляции NSIS, в логе:
+```
+x spawn UNKNOWN  failedTask=build  stackTrace=Error: spawn UNKNOWN
+    at ChildProcess.spawn (node:internal/child_process:...)
+    at execFile (...node_modules\builder-util\src\util.ts:99:13)
+```
+`spawn UNKNOWN` = Windows не смог запустить `makensis.exe`. Две типичные
+причины (обе устранимы, скрипт `node scripts/build.js` учитывает обе):
+
+1. **Не-ASCII путь кэша** (напр. профиль с кириллицей: `C:\Users\юляещека`).
+   electron-builder скачивает/извлекает NSIS в кэш под этим путём, а
+   `child_process.spawn` на кириллическом пути падает с `UNKNOWN`.
+   **Автоматически:** `scripts/build.js` обнаруживает не-ASCII `HOME` /
+   `APPDATA` / `LOCALAPPDATA` / `TEMP` и переопределяет
+   `ELECTRON_BUILDER_CACHE` в чистый ASCII-каталог
+   (`C:\amt-builder-cache\<user>\`). Если запускаете `npm run build:win`
+   руками (не через `scripts/build.js`), задайте кэш сами:
+   ```powershell
+   $env:ELECTRON_BUILDER_CACHE = "C:\amt-builder-cache\user"
+   New-Item -ItemType Directory -Force $env:ELECTRON_BUILDER_CACHE | Out-Null
+   npm run build:win
+   ```
+2. **Антивирус/SmartScreen заблокировал только что извлечённый
+   `makensis.exe`.** Скрипт делает 1 retry через 2 сек. Если не помогло —
+   временно отключите антивирус на время сборки (кэш NSIS — ~13 МБ, быстро
+   переживает), затем `node scripts/build.js win`.
+
 ### `Cannot create symbolic link` при сборке winCodeSign
 7-Zip не может создать symlinks macOS-файлов в кэше winCodeSign. `build:win` уже передаёт `--config.win.signAndEditExecutable=false --config.win.sign=false` (без подписи), что в большинстве случаев обходит подготовку winCodeSign. Если сборка всё равно падает на этом:
 ```powershell
@@ -71,6 +99,22 @@ npm run build:win
 ```
 Если нужно **с подписью**: задайте `WIN_CSC_LINK` (pfx) и `WIN_CSC_PASSWORD` — тогда rcedit/winCodeSign реально используются, и symlinks-ошибка решается запуском PowerShell с правами администратора (для создания symlinks).
 
-## Подпись (signing)
+## Подпись (signing) и SmartScreen
 Опционально: добавьте `win.certificateFile` / `win.certificatePassword` в
-`build` блока `package.json`. Без подписи — Windows SmartScreen предупредит.
+`build` блока `package.json`. Без подписи — Windows SmartScreen предупредит
+при первом запуске инсталлятора: «"Интеллектуальное управление
+приложениями" заблокировало приложение… не удалось проверить издателя».
+
+Это **ожидаемо**: AMT Chat не подписан (code-signing сертификат —
+платный, DigiCert/GlobalSign). Способы для конечного пользователя:
+- **Обойти SmartScreen (безопасно):** в окне предупреждения нажмите
+  «Подробнее» → в раскрытом списке появится «Выполнить в любом случае» →
+  подтвердите. Приложение при этом то же самое, что без предупреждения.
+- **Запустить портативную копию без NSIS:** `release\win-unpacked\AMT
+  Chat.exe` не устанавливается через NSIS-инсталлятор, поэтому SmartScreen
+  его, как правило, не блокирует.
+
+Для **корпоративного развёртывания** подпишите `AMT Chat Setup.exe` и
+uninstaller сертификатом организации (выдайте доменное/корпоративное
+доверие через GPO или добавьте издателя в «Надоверенные»). Тогда
+SmartScreen предупреждать не будет.

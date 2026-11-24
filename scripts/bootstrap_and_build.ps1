@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     AMT Chat — «с нуля» бутстрап + сборка. Один скрипт: проверит/поставит Python и Node.js

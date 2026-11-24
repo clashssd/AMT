@@ -10,8 +10,11 @@ node_modules/
 
 # Build artifacts (regenerable via scripts/build.js)
 dist/
-build/
-!build/nsis-clean.nsh
+# Exclude ONLY PyInstaller's transient intermediate output directory. Do NOT exclude
+# the whole "build/" dir: that would make it impossible to commit build/nsis-clean.nsh
+# (a source-of-truth NSIS include electron-builder's "nsis.include" config requires),
+# since git cannot re-include a file inside an already-excluded directory.
+build/amt-backend/
 release/
 
 # Ready-made distributable installer (too large for Git; distribute via GitHub

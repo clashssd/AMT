@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMT Chat</title>
+    <link rel="icon" href="./assets/icon.svg">
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <!-- Свой тайтлбар (frameless-окно): заменяет нативную серую полосу.
+         Фон/граница подхватывают активную тему приложения (CSS-переменные). -->
+    <div id="winTitlebar">
+        <div class="win-tb-drag"></div>
+        <div class="win-tb-title">
+            <img src="./assets/icon.svg" alt="" class="win-tb-icon" width="18" height="18">
+            <span class="win-tb-name">AMT Chat</span>
+        </div>
+        <div class="win-tb-btns">
+            <button class="win-tb-btn" id="winBtnMin" title="Свернуть">&#8212;</button>
+            <button class="win-tb-btn" id="winBtnMax" title="Развернуть / Свернуть">&#9633;</button>
+            <button class="win-tb-btn win-tb-close" id="winBtnClose" title="Закрыть">&#10005;</button>
+        </div>
+    </div>
+
+    <div class="bg-media" id="bgMedia"></div>
+    <div class="bg-image"></div>
+
+    <!-- Sidebar -->
+    <header>
+        <h1>AMT</h1>
+        <nav>
+            <a href="#" class="active" data-page="home" data-i18n="nav_home" data-i18n-ru="Главная">Главная</a>
+            <a href="#" data-page="chat" data-i18n="nav_chat" data-i18n-ru="Чат">Чат</a>
+
+            <a href="#" data-page="settings" data-i18n="nav_settings" data-i18n-ru="Настройки">Настройки</a>
+            <a href="#" data-page="docs" data-i18n="nav_docs" data-i18n-ru="Справка">Справка</a>
+            <a href="#" data-page="storage" data-i18n="nav_storage" data-i18n-ru="Хранилище">Хранилище</a>
+            <a href="#" data-page="logs" data-i18n="nav_logs" data-i18n-ru="Логи">Логи</a>
+        </nav>
+        <button class="new-chat-btn" id="newChatBtn" data-i18n="new_chat" data-i18n-ru="+ Новый чат">+ Новый чат</button>
+
+        <!-- Группы чатов -->
+        <div class="group-controls">
+            <button class="group-add-btn" id="addGroupBtn" title="Создать группу" data-i18n="add_group" data-i18n-ru="＋ Группа">＋ Группа</button>
+        </div>
+
+        <div class="chats-list" id="chatsList"></div>
+
+        <div class="sidebar-footer">
+            <span class="status-dot" id="statusDot"></span>
+            <span class="status-text" id="statusText" data-i18n="status_ready" data-i18n-ru="Готов">Готов</span>
+        </div>
+    </header>
+
+    <!-- Main area: Home (главная — создать чат) -->
+    <main id="homePage" class="page active">
+        <div class="home-container">
+            <div class="home-hero">
+                <div class="home-hero-icon">AMT</div>
+                <h2 data-i18n="home_start" data-i18n-ru="С чего начнём?">С чего начнём?</h2>
+                <p class="home-hero-sub" data-i18n="home_sub" data-i18n-ru="Создайте чат — просто, или с личностью: агент, оркестратор, скиллы, системный промпт. Все детали можно настроить прямо здесь.">Создайте чат — просто, или с личностью: агент, оркестратор, скиллы, системный промпт. Все детали можно настроить прямо здесь.</p>
+            </div>
+
+            <div class="home-card" id="homeCard">
+                <div class="home-card-head">
+                    <span class="home-card-title">Настройка чата</span>
+                    <button class="home-reset" id="homeResetBtn" data-i18n-en="Reset">Сбросить</button>
+                </div>
+
+                <!-- 1. Тип -->
+                <div class="home-field">
+                    <label class="home-label" data-i18n-en="Chat type">Тип чата</label>
+                    <div class="seg-group" id="homeTypeSeg">
+                        <button class="seg-btn active" data-home-type="plain" data-i18n-en="No persona">Без личности</button>
+                        <button class="seg-btn" data-home-type="personality" data-i18n-en="With persona">С личностью</button>
+                        <button class="seg-btn" data-home-type="custom" data-i18n-en="Custom prompt">Свой промпт</button>
+                    </div>
+                </div>
+
+                <!-- 2. Связанная сетка «Личность» (единая композиция) -->
+                <div class="home-field" id="homePersonalityBlock">
+                    <div class="home-conn-grid">
+                        <div class="home-conn-cell">
+                            <label class="home-sublabel" for="homeAgentSel" data-i18n-en="Agent">Агент</label>
+                            <div class="home-combo">
+                                <select id="homeAgentSel" class="opt-select"><option value="">— без агента —</option></select>
+                                <button class="home-quickcreate" data-open="agent" title="Прописать нового агента">＋</button>
+                            </div>
+                        </div>
+                        <div class="home-conn-cell">
+                            <label class="home-sublabel" data-i18n-en="Skills">Скиллы</label>
+                            <div class="home-combo">
+                                <div id="homeSkillsPicker" class="picker-list picker-list-compact"></div>
+                                <button class="home-quickcreate" data-open="skill" title="Прописать новый скилл">＋</button>
+                            </div>
+                        </div>
+                        <div class="home-conn-cell">
+                            <label class="home-sublabel" for="homeOrchSel" data-i18n-en="Orchestrator">Оркестратор</label>
+                            <select id="homeOrchSel" class="opt-select">
+                                <option value="">Без оркестратора</option>
+                                <option value="base">Базовый</option>
+                                <option value="custom">Свой</option>
+                            </select>
+                            <textarea id="homeOrchRules" class="opt-input home-orch-rules" rows="2" placeholder="Свои правила оркестратора..." data-i18n-en-ph="Your orchestrator rules..." hidden></textarea>
+                        </div>
+                        <div class="home-conn-cell">
+                            <label class="home-sublabel" for="homeKeySel" data-i18n-en="API key">API-ключ</label>
+                            <select id="homeKeySel" class="opt-select"><option value="">Активный</option></select>
+                        </div>
+                        <div class="home-conn-cell">
+                            <label class="home-sublabel" for="homeModelInput" data-i18n-en="Model">Модель</label>
+                            <input id="homeModelInput" class="opt-input" placeholder="по умолчанию" data-i18n-en-ph="default">
+                        </div>
+                        <div class="home-conn-cell">
+                            <label class="home-sublabel" for="homeBaseUrl">Base URL</label>
+                            <input id="homeBaseUrl" class="opt-input" placeholder="https://api.ВАШ-ПРОВАЙДЕР.ком/v1">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Свой системный промпт -->
+                <div class="home-field" id="homeCustomBlock">
+                    <label class="home-label">Системный промпт</label>
+                    <textarea id="homeSystemPrompt" class="opt-input" rows="4" placeholder="Ты — ... (пропишите роль и поведение)"></textarea>
+                </div>
+
+                <div class="home-actions">
+                    <button class="home-create" id="homeCreateBtn">Создать чат →</button>
+                </div>
+            </div>
+
+            <!-- Модалка быстрого «прописать» агента/скилла -->
+            <div class="modal-overlay hidden" id="homeEntityModal">
+                <div class="modal-glass">
+                    <h3 id="homeEntityTitle">Прописать</h3>
+                    <div class="form-group">
+                        <label data-i18n-en="Name">Название</label>
+                        <input type="text" id="homeEntityName" class="opt-input" placeholder="Название агента / скилла" data-i18n-en-ph="Agent / skill name">
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n-en="Description / prompt">Описание / промпт</label>
+                        <textarea id="homeEntityDesc" class="opt-input" rows="4" placeholder="Что делает / системный промпт" data-i18n-en-ph="What it does / system prompt"></textarea>
+                    </div>
+                    <div class="form-group" id="homeEntityModelRow">
+                        <label data-i18n-en="Model">Модель</label>
+                        <input type="text" id="homeEntityModel" class="opt-input" placeholder="по умолчанию" data-i18n-en-ph="default">
+                    </div>
+                    <div class="btn-row">
+                        <button class="test-btn" id="homeEntityCancel" data-i18n-en="Cancel">Отмена</button>
+                        <button class="test-btn primary" id="homeEntitySave" data-i18n-en="Create">Создать</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модалка сценария (создание/редактирование) -->
+            <div class="modal-overlay hidden" id="scenarioModal">
+                <div class="modal-glass">
+                    <h3 id="scenarioModalTitle" data-i18n-en="Scenario">Сценарий</h3>
+                    <p class="block-desc" data-i18n-en="Set up a bundle of parameters. On click, the scenario applies them to the &laquo;Chat setup&raquo; form. E.g. prompt &laquo;Answer briefly and to the point&raquo; + type &laquo;Custom prompt&raquo;.">Настройте набор параметров. При клике сценарий применит их к форме «Настройка чата». Пример: промпт «Отвечай кратко и по делу» + тип «Свой промпт».</p>
+                    <div class="param-grid">
+                        <div class="form-group">
+                            <label data-i18n-en="Name">Название</label>
+                            <input type="text" id="scName" class="opt-input" placeholder="Например: Быстрый вопрос" data-i18n-en-ph="e.g. Quick question">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n-en="Group">Группа</label>
+                            <input type="text" id="scGroup" class="opt-input" placeholder="Чат / Работа / Обучение" data-i18n-en-ph="Chat / Work / Learning">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n-en="Description">Описание</label>
+                        <input type="text" id="scDesc" class="opt-input" placeholder="Что делает этот сценарий" data-i18n-en-ph="What does this scenario do">
+                    </div>
+                    <div class="param-grid">
+                        <div class="form-group">
+                            <label data-i18n-en="Type">Тип</label>
+                            <select id="scType" class="opt-select">
+                                <option value="plain" data-i18n-en="No persona">Без личности</option>
+                                <option value="custom" data-i18n-en="Custom prompt">Свой промпт</option>
+                                <option value="personality" data-i18n-en="With persona (agent)">С личностью (агент)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n-en="Agent">Агент</label>
+                            <select id="scAgent" class="opt-select"><option value="" data-i18n-en="— no agent —">— без агента —</option></select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n-en="System prompt">Системный промпт</label>
+                        <textarea id="scPrompt" class="opt-input" rows="3" placeholder="Ты — ... (пример: «Отвечай максимально кратко» / «Переводи тексты»)" data-i18n-en-ph="You are ... (e.g. &laquo;Answer maximally briefly&raquo; / &laquo;Translate texts&raquo;)"></textarea>
+                    </div>
+                    <div class="param-grid">
+                        <div class="form-group">
+                            <label data-i18n-en="Model">Модель</label>
+                            <input type="text" id="scModel" class="opt-input" placeholder="по умолчанию" data-i18n-en-ph="default">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n-en="Base URL">Base URL</label>
+                            <input type="text" id="scBaseUrl" class="opt-input" placeholder="по умолчанию" data-i18n-en-ph="default">
+                        </div>
+                    </div>
+                    <div class="btn-row">
+                        <button class="test-btn" id="scCancel" data-i18n-en="Cancel">Отмена</button>
+                        <button class="test-btn primary" id="scSave" data-i18n-en="Save scenario">Сохранить сценарий</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Быстрые сценарии (создаваемые + группировка) -->
+            <div class="home-quick" id="homeQuick">
+                <div class="home-quick-head">
+                    <div class="home-quick-title">Быстрые сценарии</div>
+                    <div class="home-quick-controls">
+                        <select id="homeQuickGroup" class="opt-select opt-select-sm"><option value="">Все группы</option></select>
+                        <button class="home-scenario-btn" id="homeScenarioAddBtn" title="Создать сценарий">＋ Сценарий</button>
+                    </div>
+                </div>
+                <div class="home-quick-list" id="homeQuickList"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Main area: Chat -->
+    <main id="chatPage" class="page">
+        <div class="chat-container">
+            <div class="chat-glass">
+                <!-- Баннер о недоступности бэкенда (показывается автоматически) -->
+                <div class="backend-offline-banner hidden" id="backendOfflineBanner">
+                    <span class="backend-banner-icon">⚠</span>
+                    <div class="backend-banner-text">
+                        <strong>Локальный бэкенд не отвечает.</strong>
+                        <span>Кнопки инструментов, список агентов и скиллы недоступны. Запусти/перезапусти приложение или проверь, что Python-сидер запущен на <code>127.0.0.1:8000</code>. <a href="#" id="backendRetryLink">Повторить проверку</a></span>
+                    </div>
+                </div>
+                <div class="chat-header">
+                    <!-- Слева: название чата -->
+                    <div class="chat-header-left">
+                        <input type="text" id="chatTitle" class="chat-title-input" value="Новый чат" data-i18n-en-title="Rename chat" title="Переименовать чат">
+                    </div>
+
+                    <!-- По центру: поиск -->
+                    <div class="chat-search-center">
+                        <div class="search-box">
+                            <span class="search-icon" aria-hidden="true"></span>
+                            <input type="text" id="chatSearchInput" class="search-field"
+                                placeholder="Поиск по чатам..." autocomplete="off" data-i18n-en-ph="Search chats...">
+                            <button class="icon-btn small" id="chatSearchClose" title="Сбросить" data-i18n-en-title="Reset">✕</button>
+                        </div>
+                    </div>
+
+                    <!-- Справа: токены + статус backend + общая кнопка опций -->
+                    <div class="chat-header-right">
+                        <span class="token-counter" id="tokenCounter">0 токенов</span>
+                        <span class="backend-status" id="backendStatus" title="Статус локального бэкенда (127.0.0.1:8000)">
+                            <span class="backend-dot" id="backendStatusDot"></span>
+                            <span class="backend-status-label" id="backendStatusLabel">Проверка…</span>
+                        </span>
+                        <button class="icon-btn" id="chatMoreBtn" title="Опции" data-i18n-en-title="Options" aria-expanded="false">⋯</button>
+                    </div>
+                </div>
+
+                <!-- Панель опций: раскрывается вниз -->
+                <div class="chat-actions-bar" id="chatHeaderExtras">
+                    <div class="actions-section">
+                        <label class="actions-label" data-i18n-en="Group">Группа</label>
+                        <select id="chatGroupSelect" class="opt-select"></select>
+                    </div>
+                    <div class="actions-section">
+                        <label class="actions-label" data-i18n-en="Agent">Агенты</label>
+                        <div class="msel" id="chatAgentMsel" data-empty="Без агента">
+                            <button type="button" class="msel-btn" id="chatAgentMselBtn"><span class="msel-label">Без агента</span><span class="msel-caret">▾</span></button>
+                            <div class="msel-pop hidden" id="chatAgentMselPop"></div>
+                        </div>
+                        <select id="chatAgentSelect" class="opt-select hidden" aria-hidden="true">
+                            <option value="">Без агента</option>
+                        </select>
+                    </div>
+                    <div class="actions-section">
+                        <label class="actions-label" data-i18n-en="API key">API-ключи</label>
+                        <div class="msel" id="chatKeyMsel" data-empty="Активный ключ">
+                            <button type="button" class="msel-btn" id="chatKeyMselBtn"><span class="msel-label">Активный ключ</span><span class="msel-caret">▾</span></button>
+                            <div class="msel-pop hidden" id="chatKeyMselPop"></div>
+                        </div>
+                        <select id="chatKeySelect" class="opt-select hidden" aria-hidden="true">
+                            <option value="">Активный ключ</option>
+                        </select>
+                    </div>
+                    <div class="actions-section">
+                        <label class="actions-label" data-i18n-en="System prompt">Системный промпт</label>
+                        <div class="msel" id="chatPromptMsel" data-empty="Без промпта">
+                            <button type="button" class="msel-btn" id="chatPromptMselBtn"><span class="msel-label">Без промпта</span><span class="msel-caret">▾</span></button>
+                            <div class="msel-pop hidden" id="chatPromptMselPop"></div>
+                        </div>
+                        <input type="text" id="chatPromptCustom" class="opt-input" placeholder="Свой промпт (или выберите из списка)" style="margin-top:4px;width:100%" data-i18n-en-ph="Custom prompt (or pick from list)">
+                    </div>
+                    <div class="actions-divider"></div>
+                    <div class="actions-row">
+                        <button class="action-chip" id="newSessionBtn">＋ Сессия</button>
+                        <button class="action-chip" id="copyAllBtn">⧉ Копировать</button>
+                        <button class="action-chip" id="clearBtn">Очистить</button>
+                        <button class="action-chip danger" id="deleteBtn">Удалить</button>
+                    </div>
+                </div>
+
+                <!-- Результаты поиска -->
+                <div class="chat-search-results hidden" id="chatSearchResults"></div>
+
+                <!-- Закреплённые сообщения -->
+                <div class="pinned-section hidden" id="pinnedSection">
+                    <div class="pinned-header">
+                        <span>Закрепленные</span>
+                    </div>
+                    <div class="pinned-list" id="pinnedList"></div>
+                </div>
+                <!-- Композер нового чата убран: создание чата теперь на странице «Главная» -->
+                <div class="chat-messages" id="chatMessages">
+                    <div class="welcome-screen" id="welcomeScreen">
+                        <div class="welcome-icon">AMT</div>
+                        <h3>Чем я могу помочь?</h3>
+                        <p>Задай вопрос — я отвечу на основе подключённой модели.</p>
+                    </div>
+                </div>
+
+                <div class="chat-input-box">
+                    <div class="attachment-area" id="attachmentArea"></div>
+                    <input type="file" id="fileInput" multiple hidden>
+                    <div class="composer-tools-wrap">
+                        <button class="attach-btn composer-master" id="composerToolsBtn" title="Инструменты" aria-label="Инструменты"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M12 4l8 14H4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+                        <div class="composer-tools-pop hidden" id="composerToolsPop">
+                            <button class="attach-btn" id="attachBtn" title="Прикрепить файл" data-i18n-en-title="Attach file"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M8 12l4 4 8-8a4 4 0 0 0-6-6l-8 8a4 4 0 0 0 6 6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+                            <button class="attach-btn" id="toolBtn" title="Инструменты (безопасно)" data-i18n-en-title="Tools (safe)" aria-label="Инструменты"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M14 6l4 4-8 8-4-4zM14 6l-3-3-3 3M10 10l3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg></button>
+                            <button class="attach-btn agent-toggle" id="webAgentToggle" title="Веб-агент: поиск, парсинг, ссылки" data-i18n-en-title="Web agent" aria-label="Веб-агент"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>
+                            <button class="attach-btn agent-toggle" id="thinkerToggle" title="Глубокий аналитик: рассуждения, анализ" data-i18n-en-title="Deep thinker" aria-label="Глубокий аналитик"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M9 3a4 4 0 00-4 4v1a4 4 0 004 4h2a4 4 0 004-4V7a4 4 0 00-4-4h-2z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 12v4a4 4 0 004 4h2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="19" cy="5" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+                            <button class="attach-btn agent-toggle" id="jailbreakToggle" title="Без фильтров: обходит все ограничения" data-i18n-en-title="No filters" aria-label="Без фильтров"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M12 3l7 4v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V7l7-4z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+                            <button class="attach-btn agent-toggle" id="sysInteractionToggle" title="Взаимодействие с системой (безопасно: только разрешённые действия, без слива данных)" data-i18n-en-title="System interaction (safe)" aria-label="Взаимодействие с системой"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 12h4M12 8v4M12 16v0M16 12h0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="16" cy="16" r="1.4" fill="currentColor"/></svg></button>
+                        </div>
+                    </div>
+                    <textarea 
+                        class="chat-input" 
+                        placeholder="Напиши сообщение или прикрепи файл..."
+                        data-i18n-en-ph="Write a message or attach a file..."
+                        id="messageInput"
+                        rows="1"
+                        autocomplete="off"
+                    ></textarea>
+                    <button class="input-btn stop-btn hidden" id="stopBtn" title="Остановить" data-i18n-en-title="Stop">⏹</button>
+                    <button class="input-btn send-btn" id="sendBtn" title="Отправить" data-i18n-en-title="Send">➤</button>
+                </div>
+                <!-- Быстрый выбор инструмента -->
+                <div class="tool-picker hidden" id="toolPicker">
+                    <button class="tool-picker-item" data-tool="read_file"><svg class="ic" viewBox="0 0 24 24" width="16" height="16"><path d="M7 3h7l4 4v14H7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3v4h4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg> Прочитать файл</button>
+                    <button class="tool-picker-item" data-tool="list_dir"><svg class="ic" viewBox="0 0 24 24" width="16" height="16"><path d="M3 6h6l2 2h10v10H3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg> Показать каталог</button>
+                    <button class="tool-picker-item" data-tool="run_command"><svg class="ic" viewBox="0 0 24 24" width="16" height="16"><path d="M5 8l4 4-4 4M11 16h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> Запустить команду (whitelist)</button>
+                    <button class="tool-picker-item" data-tool="open_url"><svg class="ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" fill="none" stroke="currentColor" stroke-width="1.3"/></svg> Открыть ссылку</button>
+                    <button class="tool-picker-item" data-tool="write_file"><svg class="ic" viewBox="0 0 24 24" width="16" height="16"><path d="M14 3v5h5M7 3h8l4 4v14H7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg> Записать файл</button>
+                    <button class="tool-picker-item" data-tool="create_dir"><svg class="ic" viewBox="0 0 24 24" width="16" height="16"><path d="M3 6h6l2 2h10v10H3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg> С��здать папку</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+
+
+    <!-- Main area: Хранилище (все данные пользователя) -->
+    <main id="storagePage" class="page">
+        <div class="storage-container">
+            <div class="storage-glass">
+                <div class="storage-header">
+                    <div>
+                        <h2 data-i18n="storage_title" data-i18n-ru="Хранилище">Хранилище</h2>
+                        <p class="settings-desc" data-i18n="storage_desc" data-i18n-ru="Все данные, которые вы добавили: чаты, агенты, скиллы, ключи, сессии, файлы и память. Просматривайте, копируйте и управляйте.">Все данные, которые вы добавили: чаты, агенты, скиллы, ключи, сессии, файлы и память. Просматривайте, копируйте и управляйте.</p>
+                    </div>
+                    <div class="storage-tools">
+                        <button class="test-btn" id="storageRefreshBtn" data-i18n="storage_refresh" data-i18n-ru="↻ Обновить">↻ Обновить</button>
+                        <button class="test-btn primary" id="storageExportBtn" data-i18n="storage_export" data-i18n-ru="⬇ Экспорт всего">⬇ Экспорт всего</button>
+                    </div>
+                </div>
+                <div class="storage-stats" id="storageStats"></div>
+                <div class="storage-sections" id="storageSections"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Main area: Logs -->
+    <main id="logsPage" class="page">
+        <div class="logs-container">
+            <div class="logs-glass">
+                <div class="logs-header">
+                    <div>
+                        <h2 data-i18n-en="Today's logs">Логи за сегодня</h2>
+                        <p class="settings-desc" data-i18n-en="Detailed info about AI API requests and orchestrator events">Детальная информация о запросах к AI API и событиях оркестратора</p>
+                    </div>
+                    <div class="logs-header-actions">
+                        <button class="test-btn" id="refreshLogsBtn" data-i18n-en="↻ Refresh">↻ Обновить</button>
+                        <button class="test-btn test-btn--danger" id="clearLogsBtn" data-i18n-en="🗑 Clear">🗑 Очистить</button>
+                    </div>
+                </div>
+
+                <div class="dash-tabs" id="dashTabs">
+                    <button class="dash-tab active" data-mode="dash" data-i18n-en="Dashboard">Дашборд</button>
+                    <button class="dash-tab" data-mode="raw" data-i18n-en="Raw logs">Логи</button>
+                </div>
+
+                <div id="dashWrap">
+                    <div class="dash-stats" id="dashStats"></div>
+                    <div class="dash-filter-chips" id="dashFilterChips">
+                        <button class="chip active" data-dashfilter="all">Все</button>
+                        <button class="chip" data-dashfilter="orchestrator">Оркестратор</button>
+                        <button class="chip" data-dashfilter="agents">Агенты</button>
+                        <button class="chip" data-dashfilter="skills">Скиллы</button>
+                        <button class="chip" data-dashfilter="error">Ошибки</button>
+                    </div>
+                    <div class="dash-table-wrap">
+                        <table class="dash-table">
+                            <thead>
+                                <tr><th>Задача</th><th>Статус</th><th>Агент / Скиллы</th><th>Длительн.</th><th>Создано</th><th></th></tr>
+                            </thead>
+                            <tbody id="dashTable"></tbody>
+                        </table>
+                        <div class="dash-empty" id="dashEmpty" hidden>Нет задач за сегодня</div>
+                    </div>
+                    <div class="dash-event" id="dashEvent" hidden></div>
+                </div>
+
+                <div id="rawLogsWrap" class="raw-logs-wrap" hidden>
+                    <div class="log-filters">
+                        <button class="filter-btn active" data-filter="all" data-i18n-en="All">Все</button>
+                        <button class="filter-btn" data-filter="chat" data-i18n-en="Chat">Чат</button>
+                        <button class="filter-btn" data-filter="orchestrator" data-i18n-en="Orchestrator">Оркестратор</button>
+                        <button class="filter-btn" data-filter="error" data-i18n-en="Errors">Ошибки</button>
+                    </div>
+                    <div class="log-list" id="logViewer">
+                        <div class="log-empty" data-i18n-en="Press "Refresh" to load logs">Нажмите «Обновить» для загрузки логов</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Main area: Settings -->
+    <main id="settingsPage" class="page">
+        <div class="settings-container">
+            <div class="settings-glass">
+                <div class="settings-layout">
+                    <!-- Под-навигация по страницам настроек -->
+                    <aside class="settings-subnav">
+                        <h2 data-i18n="settings_title" data-i18n-ru="Настройки">Настройки</h2>
+                        <nav class="settings-subnav-links" id="settingsSubnav">
+                            <a href="#" class="active" data-sec="sec-connect" data-i18n="s_connect" data-i18n-ru="Подключение">Подключение</a>
+                            <a href="#" data-sec="sec-model" data-i18n="s_model" data-i18n-ru="Модель">Модель</a>
+                            <a href="#" data-sec="sec-net" data-i18n="s_net" data-i18n-ru="Сеть">Сеть</a>
+                            <a href="#" data-sec="sec-agents" data-i18n="s_agents" data-i18n-ru="Агенты/Скиллы">Агенты/Скиллы</a>
+                            <a href="#" data-sec="sec-keys" data-i18n="s_keys" data-i18n-ru="Ключи">Ключи</a>
+                            <a href="#" data-sec="sec-tools" data-i18n="s_tools" data-i18n-ru="Инструменты">Инструменты</a>
+                            <a href="#" data-sec="sec-projects" data-i18n="s_projects" data-i18n-ru="Проекты">Проекты</a>
+                            <a href="#" data-sec="sec-media" data-i18n="s_media" data-i18n-ru="Медиа-ключи">Медиа-ключи</a>
+                            <a href="#" data-sec="sec-orch" data-i18n="s_orch" data-i18n-ru="Оркестратор">Оркестратор</a>
+                            <a href="#" data-sec="sec-memory" data-i18n="s_memory" data-i18n-ru="Память">Память</a>
+                            <a href="#" data-sec="sec-personality" class="subnav-special" data-i18n="s_personality" data-i18n-ru="Личность">Личность</a>
+                            <a href="#" data-sec="sec-docs" class="subnav-special" data-i18n="s_docs" data-i18n-ru="Docs">Docs</a>
+                            <a href="#" data-sec="sec-themes" class="subnav-special" data-i18n="s_themes" data-i18n-ru="Темы и конфиги">Темы и конфиги</a>
+                        </nav>
+                    </aside>
+
+                    <div class="settings-pages">
+                <div class="settings-form">
+                    <!-- Страница: Подключение -->
+                    <div class="settings-page active" id="sec-connect" data-page-key="connect">
+                        <div class="settings-block">
+                            <h3>Подключение</h3>
+                            <p class="block-desc">Адрес API и ключ. Проверьте доступные модели.</p>
+
+                            <div class="form-group">
+                                <label for="baseUrl">Base URL</label>
+                                <input type="text" id="baseUrl" placeholder="https://api.ВАШ-ПРОВАЙДЕР.ком/v1 или http://localhost:8000/v1" value="">
+                                <small>Адрес API. Для локальных моделей: http://localhost:8080/v1</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="apiKey">API Key</label>
+                                <div class="input-with-toggle">
+                                    <input type="password" id="apiKey" placeholder="ВАШ_API_KEY" autocomplete="off">
+                                    <button type="button" class="toggle-pass" id="togglePass" title="Показать/скрыть">Показать</button>
+                                </div>
+                                <small>Ключ хранится зашифрованно и уходит только на указанный сервер</small>
+                            </div>
+
+                            <div class="connection-check">
+                                <div class="btn-row">
+                                    <button class="test-btn primary" id="testConnectionBtn">Проверить подключение</button>
+                                    <button class="test-btn" id="testModelsBtn">Модели и возможности</button>
+                                </div>
+                                <div id="testResult" class="test-result"></div>
+                                <div id="modelsList" class="models-list"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Страница: Модель -->
+                    <div class="settings-page" id="sec-model" data-page-key="model">
+                        <div class="settings-block">
+                            <h3>Модель и параметры</h3>
+                            <p class="block-desc">Поведение модели и лимиты</p>
+
+                            <div class="form-group">
+                                <label for="model">Модель</label>
+                                <input type="text" id="model" placeholder="например: gpt-4o-mini, qwen2.5…" value="">
+                                <small>имя модели вашего провайдера</small>
+                            </div>
+
+                            <div class="param-grid">
+                                <div class="form-group">
+                                    <label for="maxTokens">Max Tokens</label>
+                                    <input type="number" id="maxTokens" min="1" max="200000" value="4096">
+                                    <small>Максимум токенов в ответе</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="contextWindow">Context Window</label>
+                                    <input type="number" id="contextWindow" min="1024" max="200000" value="128000">
+                                    <small>Сколько контекста видит модель</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="topP">Top P</label>
+                                    <input type="number" id="topP" min="0" max="1" step="0.05" value="1">
+                                    <small>Ядерная выборка (0–1)</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="frequencyPenalty">Frequency Penalty</label>
+                                    <input type="number" id="frequencyPenalty" min="-2" max="2" step="0.1" value="0">
+                                    <small>Штраф за повторение (−2..2)</small>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label-with-toggle">
+                                    <span>Temperature</span>
+                                    <label class="auto-switch"><input type="checkbox" id="autoTemp" checked> Авто</label>
+                                </label>
+                                <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7">
+                                <span class="range-value" id="tempValue">0.7</span>
+                                <small>0 — строго, 1 — разнообразно, 2 — свободно. «Авто» подбирает по типу вопроса.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="stopSequences">Stop-последовательности</label>
+                                <input type="text" id="stopSequences" placeholder="например: END, |||">
+                                <small>Через запятую. Модель остановится, встретив их</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="responseFormat">Формат ответа</label>
+                                <select id="responseFormat">
+                                    <option value="text">Обычный текст</option>
+                                    <option value="json">JSON</option>
+                                </select>
+                                <small>Для структурированных ответов</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="systemPrompt">Системный промпт</label>
+                                <textarea id="systemPrompt" rows="3" placeholder="Ты — полезный ассистент..."></textarea>
+                                <small>Определяет роль и стиль ответов</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Страница: Сеть -->
+                    <div class="settings-page" id="sec-net" data-page-key="net">
+                        <div class="settings-block">
+                            <h3>Сеть и прокси</h3>
+                            <p class="block-desc">Опционально. Пусто — прямое соединение. Поддерживаются HTTP, HTTPS, SOCKS5 и WireGuard-туннель (как локальный прокси-порт).</p>
+                            <div class="form-group">
+                                <label for="proxyType">Тип прокси</label>
+                                <select id="proxyType" class="opt-select">
+                                    <option value="">Без прокси (прямое)</option>
+                                    <option value="http">HTTP</option>
+                                    <option value="https">HTTPS</option>
+                                    <option value="socks5">SOCKS5</option>
+                                    <option value="wireguard">WireGuard (туннель)</option>
+                                </select>
+                                <small>Выберите тип, затем впишите адрес ниже</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="proxyUrl">Адрес прокси</label>
+                                <input type="text" id="proxyUrl" placeholder="socks5://127.0.0.1:1080">
+                                <small>Примеры: http://proxy:8080 · socks5://127.0.0.1:1080 · для WireGuard — локальный порт туннеля (http://127.0.0.1:port)</small>
+                            </div>
+                            <div class="param-grid">
+                                <div class="form-group">
+                                    <label for="httpProxy">HTTP Proxy (просто)</label>
+                                    <input type="text" id="httpProxy" placeholder="http://proxy:8080">
+                                    <small>Альтернатива — отдельный HTTP-прокси</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="httpsProxy">HTTPS Proxy (просто)</label>
+                                    <input type="text" id="httpsProxy" placeholder="https://proxy:8080">
+                                    <small>Альтернатива — отдельный HTTPS-прокси</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="timeout">Timeout (с)</label>
+                                    <input type="number" id="timeout" min="5" max="600" value="120">
+                                    <small>Предел ожидания ответа</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="retries">Повторные попытки</label>
+                                    <input type="number" id="retries" min="0" max="10" value="4">
+                                    <small>Сколько повторять при сбое</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Страница: Агенты и скиллы -->
+                    <div class="settings-page" id="sec-agents" data-page-key="agents">
+                    <div class="settings-block">
+                        <h3>Агенты и скиллы</h3>
+                        <p class="block-desc">Создавайте агентов (роль + модель + промпт) и скиллы (готовые инструкции). Агенты применяют свои промпты и скиллы к чату — для общения и для работы.</p>
+
+                        <div class="import-row">
+                            <button class="test-btn" id="importAgentsBtn">Импортировать агенты/скиллы из файла</button>
+                            <input type="file" id="importAgentsFile" accept=".json,.jsonl,.ndjson" hidden multiple>
+                            <small>JSON: {"agents":[...], "skills":[...]}  или JSONL (по одному в строке)</small>
+                        </div>
+
+                        <div class="agent-editor">
+                            <div class="form-group">
+                                <label>Имя агента</label>
+                                <input type="text" id="agentName" placeholder="Например: Архитектор">
+                            </div>
+                            <div class="form-group">
+                                <label>Описание</label>
+                                <input type="text" id="agentDesc" placeholder="Зачем этот агент">
+                            </div>
+                            <div class="form-group">
+                                <label>Системный промпт</label>
+                                <textarea id="agentPrompt" rows="2" placeholder="Ты — ..."></textarea>
+                            </div>
+                            <div class="param-grid">
+                                <div class="form-group">
+                                    <label>Модель (опц.)</label>
+                                    <input type="text" id="agentModel" placeholder="по умолчанию">
+                                </div>
+                                <div class="form-group">
+                                    <label>Temperature (опц.)</label>
+                                    <input type="number" id="agentTemp" min="0" max="2" step="0.1" placeholder="по умолчанию">
+                                </div>
+                                <div class="form-group">
+                                    <label>Группа (папка)</label>
+                                    <input type="text" id="agentGroup" placeholder="например: разработка">
+                                </div>
+                            </div>
+                            <button class="test-btn" id="addAgentBtn">Добавить агента</button>
+                        </div>
+
+                        <div class="agent-list" id="agentList"></div>
+
+                        <div class="skill-editor">
+                            <div class="section-subtitle">Скиллы</div>
+                            <div class="form-group">
+                                <label>Имя скилла</label>
+                                <input type="text" id="skillName" placeholder="Например: Код-ревью">
+                            </div>
+                            <div class="form-group">
+                                <label>Промпт скилла (инструкция)</label>
+                                <textarea id="skillPrompt" rows="2" placeholder="Опиши, что должен делать этот скилл..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Группа (папка)</label>
+                                <input type="text" id="skillGroup" placeholder="например: разработка">
+                            </div>
+                            <button class="test-btn" id="addSkillBtn">Добавить скилл</button>
+                        </div>
+
+                        <div class="group-filter-row">
+                            <label class="filter-label">Группа (фильтр списка):</label>
+                            <input type="text" id="entityGroupFilter" placeholder="имя группы" class="opt-input" style="max-width:220px">
+                        </div>
+
+                        <div class="skill-list" id="skillList"></div>
+                    </div>
+                    </div><!-- /settings-page agents -->
+
+                    <!-- Блок: Мульти-API-ключи -->
+                    <div class="settings-page" id="sec-keys" data-page-key="keys">
+                    <div class="settings-block">
+                        <h3>API Ключи (мультисессия)</h3>
+                        <p class="block-desc">Держите несколько ключей. При лимите (429) система автоматически переключится на следующий. Можно вручную активировать ключ для новой сессии.</p>
+
+                        <div class="key-editor">
+                            <div class="param-grid">
+                                <div class="form-group">
+                                    <label>Метка</label>
+                                    <input type="text" id="keyLabel" placeholder="OpenAI основной">
+                                </div>
+                                <div class="form-group">
+                                    <label>Base URL</label>
+                                    <input type="text" id="keyBaseUrl" placeholder="https://api.ВАШ-ПРОВАЙДЕР.ком/v1">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>API Key</label>
+                                <input type="password" id="keyApi" placeholder="ВАШ_API_KEY">
+                            </div>
+                            <div class="param-grid">
+                                <div class="form-group">
+                                    <label>Модель</label>
+                                    <input type="text" id="keyModel" placeholder="имя модели провайдера">
+                                </div>
+                                <div class="form-group">
+                                    <label>Temperature</label>
+                                    <input type="number" id="keyTemp" min="0" max="2" step="0.1" value="0.7">
+                                </div>
+                            </div>
+                            <div class="btn-row">
+                                <button class="test-btn" id="addKeyBtn">Добавить ключ</button>
+                                <label class="orch-toggle">
+                                    <input type="checkbox" id="keyRoundRobin">
+                                    <span>Круговое переключение (round-robin)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="key-list" id="keyList"></div>
+                    </div>
+                    </div><!-- /settings-page keys -->
+
+                    <!-- Страница: Инструменты (безопасное взаимодействие с компом) -->
+                    <div class="settings-page" id="sec-tools" data-page-key="tools">
+                        <div class="settings-block">
+                            <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span> Безопасные инструменты</h3>
+                            <p class="block-desc">ИИ может читать и записывать файлы, создавать папки, смотреть каталоги, открывать ссылки и запускать команды из белого списка. Всё — только в разрешённых папках (проект). Запись требует подтверждения, пока включено авто-разрешение выключено. Команды по умолчанию запрещены, пока вы явно не разрешите их здесь. Каждое действие логируется.</p>
+                            <div class="form-group">
+                                <label class="toggle-row">
+                                    <input type="checkbox" id="toolsEnabled"> Включить инструменты
+                                </label>
+                                <small>Выключено — все инструменты недоступны</small>
+                            </div>
+                            <div class="form-group">
+                                <label class="toggle-row">
+                                    <input type="checkbox" id="toolsAutoApprove"> Авто-разрешение (без подтверждения)
+                                </label>
+                                <small>Если выкл — перед каждым действием всплывает подтверждение (approve / deny)</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Разрешённые каталоги (по одному, через запятую)</label>
+                                <textarea id="toolsAllowedDirs" rows="3" placeholder="папка проекта, C:\Users\..."></textarea>
+                                <small>Инструменты не выходят за эти каталоги</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Белый список команд (по одной в строке)</label>
+                                <textarea id="toolsCmdWhitelist" rows="4" placeholder="git&#10;node --check&#10;python -V"></textarea>
+                                <small>Только эти команды можно запускать (с таймаутом). Пусто — команды запрещены</small>
+                            </div>
+                            <div class="param-grid">
+                                <div class="form-group">
+                                    <label>Таймаут команды (сек)</label>
+                                    <input type="number" id="toolsCmdTimeout" min="5" max="120" value="30">
+                                </div>
+                            </div>
+                            <div class="btn-row">
+                                <button class="test-btn primary" id="toolsSaveBtn">Сохранить</button>
+                                <button class="test-btn" id="toolsTestRead">Тест: прочитай файл</button>
+                                <button class="test-btn" id="toolsTestWrite">Тест: запиши файл</button>
+                                <button class="test-btn" id="toolsTestCmd">Тест: команда</button>
+                            </div>
+                        </div>
+                        <div class="settings-block">
+                            <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M6 3h9l4 4v14H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 10h6M9 14h6M9 18h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span> Журнал инструментов</h3>
+                            <p class="block-desc">Последние действия инструментов.</p>
+                            <div id="toolsLogList" class="storage-items"></div>
+                            <button class="test-btn" id="toolsRefreshLog">↻ Обновить</button>
+                        </div>
+                    </div><!-- /settings-page tools -->
+
+                    <!-- Страница: Проекты (рабочая папка для ИИ-инструментов) -->
+                    <div class="settings-page" id="sec-projects" data-page-key="projects">
+                        <div class="settings-block">
+                            <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span> Проект (рабочая папка)</h3>
+                            <p class="block-desc">Выберите папку, в которой будет работать ИИ. Инструменты (чтение/запись/создание папок) будут работать только внутри неё. Без проекта — доступ к дефолтным папкам.</p>
+                            <div class="form-group">
+                                <label>Текущий проект</label>
+                                <div id="projCurrent" class="gen-result-name" style="font-family:monospace; font-size:13px; word-break:break-all;">(нет)</div>
+                            </div>
+                            <div class="btn-row">
+                                <button class="test-btn primary" id="projSelectBtn">Выбрать папку…</button>
+                                <button class="test-btn" id="projClearBtn">Снять проект</button>
+                            </div>
+                            <div id="projResult" class="test-result"></div>
+                        </div>
+                    </div><!-- /settings-page projects -->
+
+                    <!-- Страница: Медиа-ключи (ключи под картинки/видео/голос) -->
+                    <div class="settings-page" id="sec-media" data-page-key="media">
+                        <div class="settings-block">
+                            <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></span> Ключи по функциям</h3>
+                            <p class="block-desc">Можно задать отдельный ключ/эндпоинт под картинки, видео и голос. Если поле пустое — используется общий ключ из «Подключение». Так вы можете держать разные ключи (картинки, видео, голос) в одном приложении.</p>
+                            <div class="form-group">
+                                <label>Картинки</label>
+                                <input type="text" id="imageKey" class="opt-input" placeholder="ВАШ_API_KEY (пусто = общий ключ)">
+                                <input type="text" id="imageBaseUrl" class="opt-input" style="margin-top:8px" placeholder="Base URL (пусто = общий)">
+                                <input type="text" id="imageModel" class="opt-input" style="margin-top:8px" placeholder="Модель картинок (например, gpt-image-1)">
+                            </div>
+                            <div class="form-group">
+                                <label>Видео</label>
+                                <input type="text" id="videoKey" class="opt-input" placeholder="ключ для видео (пусто = общий)">
+                                <input type="text" id="videoBaseUrl" class="opt-input" style="margin-top:8px" placeholder="Base URL (пусто = общий)">
+                                <input type="text" id="videoModel" class="opt-input" style="margin-top:8px" placeholder="Модель видео">
+                            </div>
+                            <div class="form-group">
+                                <label>Голос</label>
+                                <input type="text" id="audioKey" class="opt-input" placeholder="API-ключ (например, ev_c80e6a2...)">
+                                <input type="text" id="audioBaseUrl" class="opt-input" style="margin-top:8px" placeholder="Base URL (например, https://easyvoice.ae/api/v1)">
+                                <input type="text" id="audioModel" class="opt-input" style="margin-top:8px" placeholder="Модель (например, kokoro-82m)">
+                                <input type="text" id="audioVoiceId" class="opt-input" style="margin-top:8px" placeholder="Голос (например, af_aoede)">
+                            </div>
+                            <div class="form-group">
+                                <label>Коддинг</label>
+                                <input type="text" id="codingKey" class="opt-input" placeholder="API-ключ для кода (пусто = общий ключ)">
+                                <input type="text" id="codingBaseUrl" class="opt-input" style="margin-top:8px" placeholder="Base URL (пусто = общий)">
+                                <input type="text" id="codingModel" class="opt-input" style="margin-top:8px" placeholder="Модель для кода (например, claude-sonnet, gpt-4o)">
+                                <small>Если указан — используется при запросах на кодинг. Иначе — базовый ключ из «Подключение».</small>
+                            </div>
+                            <button class="test-btn primary" id="mediaKeysSaveBtn">Сохранить медиа-ключи</button>
+                        </div>
+                    </div><!-- /settings-page media -->
+
+                    <!-- Страница: Оркестратор -->
+                    <div class="settings-page" id="sec-orch" data-page-key="orch">
+                    <div class="settings-block">
+                        <h3>Оркестратор (контроллер AI)</h3>
+                        <p class="block-desc">Следит за ролью и контекстом, умно сохраняет чаты, мониторит модель. Логи помечаются как [Orchestrator].</p>
+
+                        <div class="orch-config-grid">
+                            <label class="orch-toggle">
+                                <input type="checkbox" id="orchEnabled" checked>
+                                <span>Включён</span>
+                            </label>
+                            <label class="orch-toggle">
+                                <input type="checkbox" id="orchAuto" checked>
+                                <span>Авто — подстраивать параметры под чат</span>
+                            </label>
+                            <label class="orch-toggle">
+                                <input type="checkbox" id="orchRoleDrift" checked>
+                                <span>Контроль дрейфа роли</span>
+                            </label>
+                            <label class="orch-toggle">
+                                <input type="checkbox" id="orchKeepContext" checked>
+                                <span>Сохранять весь контекст</span>
+                            </label>
+                            <label class="orch-field">
+                                <span>Автосейв каждые (сообщений):</span>
+                                <input type="number" id="orchAutoSave" value="10">
+                            </label>
+                            <label class="orch-field">
+                                <span>Глагозность логов:</span>
+                                <select id="orchLogVerbosity">
+                                    <option value="compact">Кратко</option>
+                                    <option value="detailed">Подробно</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div class="btn-row">
+                            <button class="test-btn" id="saveOrchBtn">Сохранить</button>
+                            <button class="test-btn" id="orchHealthBtn">Мониторинг</button>
+                        </div>
+                        <div id="orchHealth" class="test-result"></div>
+                    </div>
+                    </div><!-- /settings-page orch -->
+
+                    <!-- Страница: Память -->
+                    <div class="settings-page" id="sec-memory" data-page-key="memory">
+                    <div class="settings-block">
+                        <h3>Память AI</h3>
+                        <p class="block-desc">AI запоминает важные факты между чатами. Очистите, чтобы начать с чистого листа.</p>
+                        <div class="form-group">
+                            <label class="orch-toggle">
+                                <input type="checkbox" id="memoryEnabled" checked>
+                                <span>Включена персистентная память</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="memoryMaxFacts">Максимум сохраняемых фактов</label>
+                            <input type="number" id="memoryMaxFacts" min="5" max="500" value="100">
+                            <small>Больше — точнее, но длиннее системный промпт</small>
+                        </div>
+                        <button class="test-btn danger" id="wipeMemoryBtn">Очистить память</button>
+                        <div id="memoryResult" class="test-result"></div>
+                    </div>
+                    </div><!-- /settings-page memory -->
+
+                    <!-- Страница: Личность (композиция) -->
+                    <div class="settings-page" id="sec-personality" data-page-key="personality">
+                        <div class="settings-block">
+                            <h3>Создание личности</h3>
+                            <p class="block-desc">Личность = API-ключ + модель + агенты + скиллы + оркестратор. Можно прописать что угодно или оставить минимум. Несколько агентов работают параллельно (конcurrentIndex задаёт сколько).</p>
+
+                            <div class="form-group">
+                                <label for="persName">Имя личности</label>
+                                <input type="text" id="persName" placeholder="Например: Рабочий ассистент">
+                            </div>
+
+                            <!-- Части личности (каждая вкл/выкл) -->
+                            <div class="pers-part-row">
+                                <label class="pers-part">
+                                    <input type="checkbox" id="persUseKey" checked>
+                                    <span>API-ключ</span>
+                                </label>
+                                <div class="pers-part-field">
+                                    <select id="persKey" class="opt-select"><option value="">Активный</option></select>
+                                </div>
+                            </div>
+                            <div class="pers-part-row">
+                                <label class="pers-part">
+                                    <input type="checkbox" id="persUseModel">
+                                    <span>Модель</span>
+                                </label>
+                                <div class="pers-part-field">
+                                    <input type="text" id="persModel" class="opt-input" placeholder="имя модели провайдера">
+                                </div>
+                            </div>
+                            <div class="pers-part-row">
+                                <label class="pers-part">
+                                    <input type="checkbox" id="persUseAgent">
+                                    <span>Агенты</span>
+                                </label>
+                                <div class="pers-part-field">
+                                    <div id="persAgentsList" class="picker-list"></div>
+                                    <small>Можно выбрать несколько — применяются вместе</small>
+                                </div>
+                            </div>
+                            <div class="pers-part-row">
+                                <label class="pers-part">
+                                    <input type="checkbox" id="persUseSkills">
+                                    <span>Скиллы</span>
+                                </label>
+                                <div class="pers-part-field">
+                                    <div id="persSkillsList" class="picker-list"></div>
+                                    <small>Можно выбрать несколько</small>
+                                </div>
+                            </div>
+                            <div class="pers-part-row">
+                                <label class="pers-part">
+                                    <input type="checkbox" id="persUseOrch" checked>
+                                    <span>Оркестратор</span>
+                                </label>
+                                <div class="pers-part-field">
+                                    <select id="persOrch" class="opt-select">
+                                        <option value="base">Базовый</option>
+                                        <option value="custom">Свой (прописать)</option>
+                                    </select>
+                                    <textarea id="persOrchCustom" rows="2" placeholder="Пример: «Следуй за ролью, при дрейфе возвращай к цели, сохраняй чат каждые 10 сообщений»" class="opt-input pers-orch-custom" style="display:none"></textarea>
+                                    <small class="pers-orch-hint">Базовый — стандартный контроллер. Свой — заполните свои правила ниже (по примеру).</small>
+                                </div>
+                            </div>
+
+                            <div class="param-grid">
+                                <div class="form-group">
+                                    <label for="persParallel">Параллельных агентов</label>
+                                    <input type="number" id="persParallel" min="1" max="10" value="1">
+                                    <small>Сколько агентов отвечать одновременно (1–10)</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="persPrompt">Свой промпт (опц.)</label>
+                                    <input type="text" id="persPrompt" placeholder="дополнительная роль">
+                                    <small>Дополняет промпты агентов</small>
+                                </div>
+                            </div>
+
+                            <div class="btn-row">
+                                <button class="test-btn primary" id="createPersonalityBtn">Создать личность</button>
+                                <button class="test-btn" id="previewPersonalityBtn">Предпросмотр</button>
+                            </div>
+                            <div id="personalityPreview" class="personality-preview"></div>
+                        </div>
+
+                        <!-- Как начать чат с личностью -->
+                        <div class="settings-block" style="margin-top:20px">
+                            <h3>Новый чат с личностью</h3>
+                            <p class="block-desc">Выберите тип: с личностью, без, только со скиллами и т.д. Личность можно применить к текущему или новому чату.</p>
+                            <div class="form-group">
+                                <label for="chatModeSelect">С чем начать чат</label>
+                                <select id="chatModeSelect" class="opt-select">
+                                    <option value="plain">Без личности (стандарт)</option>
+                                    <option value="personality">С личностью</option>
+                                    <option value="skills_only">Только со скиллами</option>
+                                    <option value="agents_only">Только с агентами</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="chatModePersonality">Личность</label>
+                                <select id="chatModePersonality" class="opt-select"><option value="">— выберите —</option></select>
+                            </div>
+                            <div class="btn-row">
+                                <button class="test-btn primary" id="startChatWithBtn">Создать чат</button>
+                            </div>
+                            <div id="chatModeResult" class="test-result"></div>
+                        </div>
+                    </div>
+
+                                        <!-- Страница: Docs -->
+                    <div class="settings-page" id="sec-docs" data-page-key="docs">
+                        <div class="settings-block">
+                            <h3>Docs — примеры и справочник</h3>
+                            <p class="block-desc">Подробные примеры. В каждом файле <b>только промпты и ключи</b> подставляете свои — остальное опционально. Импорт: «Агенты/Скиллы» → «Импортировать из файла».</p>
+
+                            <div class="docs-example">
+                                <div class="docs-example-head">
+                                    <span class="docs-head-title">1. Агенты + скиллы</span>
+                                    <button class="icon-btn small" data-docs-copy="docsEx1">Копировать</button>
+                                </div>
+                                <div class="docs-fields">
+                                    <div class="docs-field"><code>agents[].systemPrompt</code><span>роль агента — <b>подставляете свой текст</b></span></div>
+                                    <div class="docs-fields-note">показываемое имя: <code>agents[].name</code> · модель: <code>agents[].model</code> · креативность: <code>agents[].temperature</code> (0–2) · группа: <code>agents[].group</code> · параллельно: <code>agents[].parallel</code> · макс. ответ: <code>agents[].maxTokens</code> · окно контекста: <code>agents[].contextWindow</code> · свой Base URL: <code>agents[].baseUrl</code> · привязанный ключ: <code>agents[].keyId</code> · свой оркестратор: <code>agents[].orchestrator</code> ("base"/"custom") + <code>agents[].orchestratorRules</code></div>
+                                    <div class="docs-field"><code>skills[].prompt</code><span>инструкция скилла — <b>подставляете свой текст</b></span></div>
+                                    <div class="docs-field"><code>skills[].name</code><span>видимое имя скилла в списке</span></div>
+                                    <div class="docs-fields-note">опционально у скилла: <code>skills[].enabled</code> (по умолчанию true) · <code>skills[].group</code></div>
+                                </div>
+                                <pre id="docsEx1" class="docs-pre">{
+  "agents": [
+    { "id": "architect", "name": "Архитектор",
+      "systemPrompt": "Ты — senior-архитектор. Оценивай решения, давай trade-offs.",   /* <- ваш промпт */
+      "model": "ВАША-МОДЕЛЬ", "temperature": 0.3,
+      "maxTokens": 8000, "contextWindow": 128000,
+      "skills": ["code-review", "design-doc"],
+      "group": "разработка", "parallel": 2,
+      "keyId": "", "orchestrator": "base", "orchestratorRules": "" }
+  ],
+  "skills": [
+    { "id": "code-review", "name": "Код-ревью",
+      "prompt": "Найди баги, нарушение стиля, уязвимости. Дай правки с кодом.", "enabled": true },   /* <- ваш промпт */
+    { "id": "design-doc", "name": "Дизайн-доки",
+      "prompt": "Описывай: контекст → варианты → решение → риски.", "enabled": true }
+  ]
+}</pre>
+                                <small class="docs-note">Сохраните как agents.json. Можно менять только systemPrompt и prompt — остальное опционально, по желанию.</small>
+                            </div>
+
+                            <div class="docs-example">
+                                <div class="docs-example-head">
+                                    <span class="docs-head-title">2. Мульти-ключи (авто-переключение при 429)</span>
+                                    <button class="icon-btn small" data-docs-copy="docsEx2">Копировать</button>
+                                </div>
+                                <div class="docs-fields">
+                                    <div class="docs-field"><code>keys[].apiKey</code><span>ключ провайдера — <b>подставляете свой</b></span></div>
+                                    <div class="docs-field"><code>keys[].priority</code><span>основной = 2, бэкап = 1 (при лимите переключится на нижний)</span></div>
+                                    <div class="docs-field"><code>keys[].baseUrl</code><span>адрес API провайдера</span></div>
+                                </div>
+                                <pre id="docsEx2" class="docs-pre">{
+  "keys": [
+    { "label": "Основной", "baseUrl": "https://api.ПРОВАЙДЕР-1.ком/v1",
+      "apiKey": "ВАШ-КЛЮЧ-1", "model": "имя-модели-1", "priority": 2 },
+    { "label": "Бэкап", "baseUrl": "https://api.ПРОВАЙДЕР-2.ком/v1",
+      "apiKey": "ВАШ-КЛЮЧ-2", "model": "имя-модели-2", "priority": 1 }
+  ]
+}</pre>
+                                <small class="docs-note">При 429 у основного — автоматически переключится на бэкап. Ключи не показываются в UI.</small>
+                            </div>
+
+                            <div class="docs-example">
+                                <div class="docs-example-head">
+                                    <span class="docs-head-title">3. Личности-сессии (JSONL)</span>
+                                    <button class="icon-btn small" data-docs-copy="docsEx3">Копировать</button>
+                                </div>
+                                <div class="docs-fields">
+                                    <div class="docs-field"><code>mode</code><span>continue / new_personality / reuse_key</span></div>
+                                    <div class="docs-field"><code>agent_id</code><span>id агента-личности (из примера 1)</span></div>
+                                    <div class="docs-field"><code>systemPromptOverride</code><span>своя роль поверх — <b>подставляете свой текст</b></span></div>
+                                </div>
+                                <pre id="docsEx3" class="docs-pre">{"name":"Режим кода","mode":"new_personality","agent_id":"architect","systemPromptOverride":"Работай в режиме code-review, не отходи от кода"}
+{"name":"Быстрый чат","mode":"continue"}</pre>
+                                <small class="docs-note">JSONL = по одной записи в строку. Каждая строка — отдельная сессия.</small>
+                            </div>
+
+                            <div class="docs-example">
+                                <div class="docs-example-head">
+                                    <span class="docs-head-title">4. Оркестратор (параметры)</span>
+                                    <button class="icon-btn small" data-docs-copy="docsEx4">Копировать</button>
+                                </div>
+                                <div class="docs-fields">
+                                    <div class="docs-field"><code>enabled</code><span>оркестратор включён вообще (по умолчанию true)</span></div>
+                                    <div class="docs-field"><code>auto_mode</code><span>лимит контекста считается от окна модели (90%), а не фиксированно</span></div>
+                                    <div class="docs-field"><code>role_drift_check</code><span>ловить «дрейф» системного промпта, подсовывать напоминание</span></div>
+                                    <div class="docs-field"><code>monitor_latency</code><span>писать логи/статистику по задержкам и ошибкам (видно в «Логи» + «Мониторинг»)</span></div>
+                                    <div class="docs-field"><code>auto_save_threshold</code><span>каждое N-е сообщение чата — автосохранение</span></div>
+                                    <div class="docs-field"><code>keep_full_context</code><span>не сжимать историю, пока реально не упрётся в окно модели</span></div>
+                                </div>
+                                <pre id="docsEx4" class="docs-pre">{
+  "orchestrator": {
+    "enabled": true,
+    "auto_mode": true,
+    "role_drift_check": true,
+    "monitor_latency": true,
+    "auto_save_threshold": 10,
+    "keep_full_context": true
+  }
+}</pre>
+                                <small class="docs-note">Это не импортируемый «файл личности», а живые настройки из «Настройки → Оркестратор» — те же поля, просто показаны для справки. Когда выключать: см. «Справка → Как писать» (раздел про оркестратора).</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Страница: Темы и конфиги -->
+                    <div class="settings-page" id="sec-themes" data-page-key="themes">
+                        <div class="settings-block">
+                            <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 3a9 9 0 0 0 0 18M3 12h18" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></span> Темы и конфиги</h3>
+                            <p class="block-desc">Выбор темы, шрифта и фона (картинка/видео), создание своих тем и конфиги: импорт, экспорт, добавление и удаление.</p>
+
+                            <!-- Блок 1: Основная тема -->
+                            <div class="themes-section">
+                                <div class="themes-section-head">Основная тема</div>
+                                <div class="form-group">
+                                    <label>Выбор темы</label>
+                                    <div id="themeSwatches" class="theme-swatches"></div>
+                                    <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+                                        <select id="themePick" class="opt-select" style="flex:1"></select>
+                                        <button class="test-btn" id="themePreviewBtn">Предпросмотр</button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Язык интерфейса</label>
+                                    <select id="langSelect" class="opt-select">
+                                        <option value="ru">Русский</option>
+                                        <option value="en">English</option>
+                                    </select>
+                                </div>
+                                <!-- Переключатели -->
+                                <div class="toggle-row">
+                                    <div class="toggle-row-label">
+                                        <span class="toggle-title">Плавные анимации</span>
+                                        <span class="toggle-desc">Скролл-анимации и переходы</span>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="tAnim" checked>
+                                        <span class="toggle-knob"></span>
+                                    </label>
+                                </div>
+                                <div class="toggle-row">
+                                    <div class="toggle-row-label">
+                                        <span class="toggle-title">Подсветка фокуса</span>
+                                        <span class="toggle-desc">Контур вокруг активного элемента</span>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="tFocus" checked>
+                                        <span class="toggle-knob"></span>
+                                    </label>
+                                </div>
+                                <div class="toggle-row">
+                                    <div class="toggle-row-label">
+                                        <span class="toggle-title">Компактный сайдбар</span>
+                                        <span class="toggle-desc">Скрыть названия, только иконки</span>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="tSidebar">
+                                        <span class="toggle-knob"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Блок 2: Своя тема -->
+                            <div class="themes-section">
+                                <div class="themes-section-head">Своя тема (градиент)</div>
+                                <div class="form-group">
+                                    <div class="param-grid" style="grid-template-columns:repeat(3,1fr)">
+                                        <div><label class="home-sublabel">Фон 1</label><input type="color" id="ctBg1" value="#0a0f1a"></div>
+                                        <div><label class="home-sublabel">Фон 2</label><input type="color" id="ctBg2" value="#1a2340"></div>
+                                        <div><label class="home-sublabel">Фон 3</label><input type="color" id="ctBg3" value="#0a1420"></div>
+                                        <div><label class="home-sublabel">Акцент</label><input type="color" id="ctAccent" value="#8b86c9"></div>
+                                        <div><label class="home-sublabel">Акцент 2</label><input type="color" id="ctAccent2" value="#aba5c9"></div>
+                                        <div><label class="home-sublabel">Название</label><input type="text" id="ctName" class="opt-input" placeholder="Моя тема"></div>
+                                    </div>
+                                    <button class="test-btn primary" id="ctCreateBtn">Создать тему</button>
+                                </div>
+                            </div>
+
+                            <!-- Блок 3: Шрифт и фон -->
+                            <div class="themes-section">
+                                <div class="themes-section-head">Шрифт и фон</div>
+                                <div class="form-group">
+                                    <label>Шрифт интерфейса</label>
+                                    <select id="fontPick" class="opt-select"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Плотность интерфейса</label>
+                                    <input type="range" id="densitySlider" min="0" max="2" step="1" value="1">
+                                    <div class="density-ticks"><span>Компакт</span><span>Стандарт</span><span>Просторно</span></div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Фон приложения (картинка или видео, адаптивно)</label>
+                                    <input type="file" id="bgFile" accept="image/*,video/*">
+                                    <div class="bg-controls">
+                                        <button class="test-btn" id="bgClearBtn">Убрать фон</button>
+                                        <div class="bg-dim">
+                                            <span class="home-sublabel">Затемнение: <span id="bgDimVal">55%</span></span>
+                                            <input type="range" id="bgDim" min="0" max="90" value="55">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Блок 4: Конфиги -->
+                            <div class="themes-section">
+                                <div class="themes-section-head">Конфиги (тема + фон + шрифт + язык + ключи)</div>
+                                <div class="form-group">
+                                    <div class="cfg-row">
+                                        <input type="text" id="cfgName" class="opt-input" placeholder="Имя конфига (например, «Рабочий»)" style="flex:2;min-width:160px">
+                                        <button class="test-btn primary" id="cfgSaveBtn">Сохранить конфиг</button>
+                                        <button class="test-btn" id="cfgExportBtn">Экспорт .json</button>
+                                    </div>
+                                    <div class="cfg-row">
+                                        <button class="test-btn" id="cfgImportBtn">Импорт конфига (.json)</button>
+                                        <button class="test-btn" id="cfgImportPaste">Импорт из текста</button>
+                                    </div>
+                                    <textarea id="cfgImportTextarea" class="opt-input" rows="2" placeholder='Вставьте JSON конфига сюда (тема+фон+шрифт+язык+ключи)'></textarea>
+                                    <input type="file" id="cfgImportFile" accept="application/json,.json" style="display:none">
+                                    <div id="cfgList" class="storage-items"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- /settings-page themes -->
+
+                </div><!-- /settings-form -->
+                </div><!-- /settings-pages -->
+
+                <div class="settings-footer">
+                    <button class="save-btn" id="saveSettingsBtn" data-i18n="save_all" data-i18n-ru="Сохранить все настройки">Сохранить все настройки</button>
+                </div>
+
+            </div><!-- /settings-layout -->
+
+        </div>
+    </main>
+
+    <!-- Main area: Docs / Справка (about + extensions hub + authoring) -->
+    <main id="docsPage" class="page">
+        <div class="settings-glass">
+            <div class="settings-layout">
+                <aside class="settings-subnav">
+                    <h2 data-i18n="docs_title" data-i18n-ru="Справка">Справка</h2>
+                    <nav class="settings-subnav-links" id="docsSubnav">
+                        <a href="#" class="active" data-docs-sec="docs-about" data-i18n="docs_about" data-i18n-ru="Об app">Об app</a>
+                        <a href="#" data-docs-sec="docs-ext" data-i18n="docs_ext" data-i18n-ru="Расширения">Расширения</a>
+                        <a href="#" data-docs-sec="docs-author" data-i18n="docs_author" data-i18n-ru="Как писать">Как писать</a>
+                        <a href="#" data-docs-sec="docs-updates" data-i18n="docs_updates" data-i18n-ru="Апдейты">Апдейты</a>
+                    </nav>
+                </aside>
+
+                <div class="settings-pages">
+                    <div class="settings-form">
+
+                        <!-- Справка: Об app -->
+                        <div class="settings-page active" id="docs-about">
+                            <div class="settings-block">
+                                <h3>О приложении</h3>
+                                <p class="block-desc">AMT Chat — локальный (desktop) ИИ-ассистент: чат с любой OpenAI-совместимой или локальной моделью, генерация медиа и файлов, система агентов/скиллов/личностей, оркестратор качества диалога, лонг-терм-память, безопасные инструменты (файлы/команды), встроенный медиа-плеер и расширяемая система плагинов. Бэкенд — FastAPI (Python), фронтенд — vanilla JS, оболочка — Electron. Все ключи и данные — только у вас локально.</p>
+
+                                <h4 class="docs-h4">Архитектура</h4>
+                                <pre class="docs-code">Electron (main.js)
+   ├── Python-sidecar: FastAPI (backend/main.py + ai_engine/*) — порт 127.0.0.1:8000
+   └── Frontend (frontend/) — vanilla JS, без фреймворков, грузится с http://127.0.0.1:8000/
+
+Бэкенд модули (backend/ai_engine/):
+   • agents.py        — CRUD агентов/скиллов, seed-ядро, сборка системного промпта
+   • orchestrator.py  — контроль контекста/роли, умное сохранение, мониторинг
+   • memory.py        — лонг-терм факты между чатами
+   • media.py         — генерация картинок/видео/аудио/файлов (любой провайдер)
+   • tools.py         — песочница ИИ-инструментов (файлы, команды, whitelist)
+   • web_scraper.py   — реальный веб-поиск (тёплые [[WEBSEARCH:…]] токены)
+   • keymanager.py    — мульти-ключи, авто-переключение при 429
+   • extensions.py    — загрузка/управление плагинов
+   • filegen.py       — генерация файлов (docx/xlsx/pptx и др.)
+   • sysinteraction.py — системные промпты-предусловия (MEDIA_CAPABILITY и др.)</pre>
+
+                                <h4 class="docs-h4">Что умеет</h4>
+                                <div class="docs-about-grid">
+                                    <div class="docs-card">
+                                        <h4>Чат</h4>
+                                        <ul class="docs-list">
+                                            <li>Любой OpenAI-совместимый API или локальная модель (Base URL + ключ + модель).</li>
+                                            <li>Выбор агента/скиллов/личности прямо в чате (⋯ → параметры).</li>
+                                            <li>Вставка картинок/скриншотов/файлов (Ctrl+V) — миниатюры-чипы, содержимое файла попадает в контекст ИИ.</li>
+                                            <li>Markdown в ответах: заголовки, списки, код, таблицы, ссылки.</li>
+                                            <li>Голосовой чат: STT (распознавание) + TTS (синтез) через любой провайдер.</li>
+                                        </ul>
+                                    </div>
+                                    <div class="docs-card">
+                                        <h4>Медиа-генерация</h4>
+                                        <ul class="docs-list">
+                                            <li><code>[[GEN:image|…]]</code>, <code>[[GEN:video|…]]</code>, <code>[[GEN:audio|…]]</code>, <code>[[GEN:file|…]]</code> — ИИ вставляет готовый элемент прямо в сообщение (картинка/видео/аудио/файл, не ссылка-заглушка).</li>
+                                            <li>Работает с любым провайдером через OpenAI-совместимые эндпоинты (<code>/v1/images</code>, <code>/v1/audio</code>, <code>/v1/videos</code>) — не только OpenAI.</li>
+                                            <li>Файлы (xlsx/docx/pptx): бэкенд открывает реальный файл и ИИ видит данные, а не «бинарный файл».</li>
+                                        </ul>
+                                    </div>
+                                    <div class="docs-card">
+                                        <h4>Агенты, скиллы, личности</h4>
+                                        <ul class="docs-list">
+                                            <li><b>Агент</b> = роль + системный промпт + модель/температура + набор скиллов. Ядро: «Веб-агент», «Глубокий аналитик», «Без фильтров» — создаются автоматически при старте, но можно править/добавлять свои.</li>
+                                            <li><b>Скилл</b> = готовая инструкция («Как вести код-ревью», «Как планировать») — подключается к агенту или в чате отдельно.</li>
+                                            <li><b>Личность</b> = готовый профиль: API-ключ + модель + агенты + скиллы + оркестратор. Можно создать несколько и переключать их как пресеты.</li>
+                                        </ul>
+                                    </div>
+                                    <div class="docs-card">
+                                        <h4>Оркестратор</h4>
+                                        <ul class="docs-list">
+                                            <li>Контроль контекста: сжимает историю (summary), если она реально упирается в окно модели.</li>
+                                            <li>Контроль роли: ловит «дрейф» (модель забыла системный промпт) и подсовывает напоминание.</li>
+                                            <li>Умное сохранение: маркирует чат к сохранению по порогу сообщений.</li>
+                                            <li>Мониторинг: задержка/ошибки/среднее по последним 100 запросам — видно в «Логи» (фильтр «Оркестратор») и в кнопке «Мониторинг» на странице оркестратора.</li>
+                                        </ul>
+                                    </div>
+                                    <div class="docs-card">
+                                        <h4>Память</h4>
+                                        <ul class="docs-list">
+                                            <li>Лонг-терм факты («Пользователь пред��очитает тёмную тему») — сохраняются между чатами, автоматически подставляются в системный промпт.</li>
+                                            <li>Управляется в «Настройки → Память»: лимит фактов, кнопка «Очистить память».</li>
+                                        </ul>
+                                    </div>
+                                    <div class="docs-card">
+                                        <h4>Инструменты (tool-calling)</h4>
+                                        <ul class="docs-list">
+                                            <li>ИИ может читать/писать файлы, создавать папки, листинг каталогов, запускать команды — только в выбранной «рабочей папке» (проект).</li>
+                                            <li>Запись и команды требуют подтверждения (auto-approve выкл по умолчанию); команды — только из белого списка. Всё логируется.</li>
+                                        </ul>
+                                    </div>
+                                    <div class="docs-card">
+                                        <h4>Медиа-плеер</h4>
+                                        <ul class="docs-list">
+                                            <li>Видео (YouTube/Twitch embeds, прямые .mp4/.m3u8), фото, аудио — воспроизводятся прямо в чате/плеере, fullscreen, фильтры (яркость/контраст/детализация/шум/улучшение).</li>
+                                            <li>Веб-сайты, блокирующие iframe (X-Frame-Options) — открываются во встроенном frameless-браузере (не отдельное ОС-окно).</li>
+                                            <li><code>[[SCREENSHOT:url]]</code> — реальный скриншот страницы через Electron capturePage, не og:image.</li>
+                                        </ul>
+                                    </div>
+                                    <div class="docs-card">
+                                        <h4>Расширения</h4>
+                                        <ul class="docs-list">
+                                            <li>Папка в <code>extensions/</code> + <code>manifest.json</code> (+ опционально <code>index.js</code>, <code>backend.py</code>) — без перекомпиляции приложения.</li>
+                                            <li>Управление прямо в приложении: «Справка → Расширения» (вкл/выкл/добавить/обновить список).</li>
+                                        </ul>
+                                    </div>
+                                    <div class="docs-card">
+                                        <h4>Как начать</h4>
+                                        <ol class="docs-list">
+                                            <li>«Настройки → Подключение»: Base URL + API-ключ (или локальная модель) → «Проверить».</li>
+                                            <li>(Опц.) «Настройки → Агенты/Скиллы» — свои агенты/скиллы; «Мульти-ключи» — резервные ключи.</li>
+                                            <li>«Чат» — напишите вопрос; «⋯» в шапке чата — выбрать агента/скиллы/личность/промпт.</li>
+                                        </ol>
+                                    </div>
+                                    <div class="docs-card">
+                                        <h4>Где что находится</h4>
+                                        <ul class="docs-list">
+                                            <li>«Главная» — создать чат / группу / личность</li>
+                                            <li>«Чат» — диалог с ИИ + инструменты + медиа</li>
+                                            <li>«Генерация» — файлы / фото / видео / голос (прямая генерация)</li>
+                                            <li>«Настройки» — API, модель, агенты/скиллы, ключи, инструменты, проекты, оркестратор, память, темы</li>
+                                            <li>«Хранилище» — все сущности (агенты/скиллы/ключи/темы/расширения) + экспорт</li>
+                                            <li>«Логи» — события по API/оркестратору/инструментам</li>
+                                            <li>«Справка» (эта страница) — об app, хаб расширений, гайды «как писать», история обновлений</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+<!-- Справка: Расширения (хаб управления) -->
+                        <div class="settings-page" id="docs-ext">
+                            <div class="settings-block">
+                                <h3>Расширения</h3>
+                                <p class="block-desc">Управляйте расширениями: включайте, выключайте и добавляйте свои. Выключенные не грузятся в приложение. Добавлять можно папку с manifest.json в <code>extensions/</code> и пересоздать список.</p>
+                                <div class="btn-row">
+                                    <button class="test-btn" id="extRefreshBtn">↻ Обновить список</button>
+                                    <button class="test-btn primary" id="extAddBtn">+ Добавить расширение</button>
+                                </div>
+                                <div id="extHubList" class="ext-hub-list"></div>
+                                <p class="block-desc" id="extAddHint" style="display:none">Положите папку с manifest.json в каталог extensions/ (путь показан ниже), затем нажмите «Обновить список».</p>
+                                <div class="form-group" style="display:none" id="extDirBox">
+                                    <label>Каталог расширений</label>
+                                    <div id="extDirPath" class="gen-result-name" style="font-family:monospace;font-size:12px;word-break:break-all;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Справка: Как писать (агенты, скиллы, оркестратор, личности, расширения) -->
+                        <div class="settings-page" id="docs-author">
+                            <div class="settings-block">
+                                <h3>Как писать: агенты, скиллы, оркестратор, личности, расширения</h3>
+                                <p class="block-desc">Всё, что можно расширять в AMT Chat, — это данные (JSON) или папки с кодом (расширения). Никакого перекомпилирования приложения не нужно: кладёте файл/папку, нажимаете «Импортировать» / «Обновить» — и оно уже работает. Ниже — шаблоны для каждого вида.</p>
+
+                                <h4 class="docs-h4">1. Агент</h4>
+                                <p class="block-desc">Агент = роль + системный промпт + (опц.) модель/температура + набор скиллов. Хранится в <code>agents.json</code> (или создаётся прямо в UI: «Настройки → Агенты/Скиллы → Добавить агента»).</p>
+                                <pre class="docs-code">{
+  "id": "architect",
+  "name": "Архитектор",
+  "description": "Оценивает решения, даёт trade-offs",
+  "systemPrompt": "Ты — senior-архитектор. Оценивай решения, давай trade-offs, всегда показывай риски.",
+  "model": "gpt-4o",            /* опц. — иначе берётся активная модель из ключа */
+  "temperature": 0.3,          /* опц. 0–2 */
+  "maxTokens": 8000,          /* опц. */
+  "contextWindow": 128000,    /* опц. */
+  "baseUrl": "",              /* опц. — перекрывает Base URL активного ключа */
+  "skills": ["code-review", "design-doc"],   /* id-скиллы из этого же файла */
+  "group": "разработка",      /* папка для группировки в UI (опц.) */
+  "parallel": 1,             /* сколько агентов одной личности работать одновременно (опц.) */
+  "keyId": "",               /* привязанный API-ключ (опц.) */
+  "orchestrator": "base",    /* "base" | "custom" | "" (опц.) */
+  "orchestratorRules": "Мои собственные правила, если orchestrator = custom"
+}</pre>
+                                <p class="block-desc"><b>Установка:</b> добавьте объект в массив <code>agents</code> файла <code>agents.json</code> и сохраните (или создайте через UI), либо импортируйте целым файлом: «Настройки → Агенты/Скиллы → Импортировать из файла» (JSON с <code>{"agents":[…]}</code>). Ядровые агенты (<code>core_web</code>, <code>core_thinker</code>, <code>core_jailbreak</code>) создаются автоматически при старте и не удаляются — но их промпты/скиллы можно править как обычные.</p>
+
+                                <h4 class="docs-h4">2. Скилл</h4>
+                                <p class="block-desc">Скилл = готовая инструкция, которую можно подключить к любому агенту или использовать отдельно в чате.</p>
+                                <pre class="docs-code">{
+  "id": "code-review",
+  "name": "Код-ревью",
+  "description": "Проверяет код на баги и стиль",
+  "prompt": "Найди баги, нарушение стиля, уязвимости. Дай правки с кодом, не просто список.",
+  "enabled": true,
+  "group": "разработка"
+}</pre>
+                                <p class="block-desc"><b>Установка:</b> то же — массив <code>skills</code> в <code>agents.json</code> или импортом из файла (JSONL = по одной записи на строку). Чтобы скилл реально повлиял на ответ — он должен быть включён (<code>enabled: true</code>) И подключён к активному агенту (поле <code>skills</code> агента) или выбран вручную в чате.</p>
+
+                                <h4 class="docs-h4">3. Оркестратор (настройка, не «кодинг»)</h4>
+                                <p class="block-desc">Оркестратор — это не файл, который вы пишете, а набор параметров (в «Настройки → Оркестратор»):</p>
+                                <pre class="docs-code">{
+  "orchestrator": {
+    "enabled": true,             /* оркестратор включён вообще */
+    "auto_mode": true,          /* подстраивать лимит контекста от окна модели */
+    "role_drift_check": true,   /* ловить «дрейф» системного промпта, напоминать роль */
+    "monitor_latency": true,    /* писать логи/статистику по задержкам и ошибкам */
+    "auto_save_threshold": 10,  /* сколько сообщений в чате — автосохранение */
+    "keep_full_context": true   /* не сжимать, пока реально не упёрся в окно модели */
+  }
+}</pre>
+                                <p class="block-desc">Когда стоит выключать: <code>role_drift_check</code> — если чат намеренно «переключает» роль (модель должна отклоняться, а не «возвращаться»); <code>monitor_latency</code> — в очень тяжёлых сессиях, чтобы не тормозить; <code>auto_mode</code> — если нужно жёстко зафиксировать лимит вручную. Остальные параметры обычно оставляют по умолчанию.</p>
+
+                                <h4 class="docs-h4">4. Личность (сессия-пресет)</h4>
+                                <p class="block-desc">Личность = готовый профиль: API-ключ + модель + агенты + скиллы + оркестратор. Создаётся в UI («Настройки → Личность (композиция)») или импортом JSONL-файла (по одной строке = одна личность-сессия):</p>
+                                <pre class="docs-code">{"name":"Режим кода","mode":"new_personality","agent_id":"architect","systemPromptOverride":"Работай в режиме code-review, не отходи от кода"}
+{"name":"Быстрый чат","mode":"continue"}</pre>
+                                <p class="block-desc"><code>mode</code>: <code>continue</code> (продолжить текущий чат), <code>new_personality</code> (свой промпт поверх), <code>reuse_key</code> (новый ключ/настройки, та ��е роль).</p>
+
+                                <h4 class="docs-h4">5. Расширение (код, не данные)</h4>
+                                <p class="block-desc">Расширение — папка в <code>extensions/</code> с обязательным <code>manifest.json</code>. Фронтенд-часть — <code>index.js</code> (обязательный <code>init(ctx)</code>), backend-часть — <code>backend.py</code> (опциональный <code>init(ctx)</code>). Без сборки: кладёте папку, нажимаете «Обновить».</p>
+
+                                <h5>Структура папки</h5>
+                                <pre class="docs-code">extensions/
+  my-ext/
+    manifest.json   # метаданные (обязательно)
+    index.js        # фронтенд (опц.)
+    backend.py      # бэкенд (опц.)</pre>
+
+                                <h5>manifest.json</h5>
+                                <pre class="docs-code">{
+  "name": "my-ext",
+  "version": "1.0.0",
+  "description": "Что делает расширение",
+  "frontend": true,
+  "backend": false
+}</pre>
+                                <p class="block-desc"><code>frontend: true</code> — грузить index.js. <code>backend: true</code> — загружать backend.py на сервере.</p>
+
+                                <h5>index.js (фронтенд)</h5>
+                                <pre class="docs-code">function init(ctx) {
+  // ctx.ui.registerPage(id, label, mainId, html)
+  const html = `
+    &lt;div class="docs-card"&gt;
+      &lt;h4&gt;Моё расширение&lt;/h4&gt;
+      &lt;button class="test-btn primary" id="myExtBtn"&gt;Клик&lt;/button&gt;
+      &lt;div id="myExtOut"&gt;&lt;/div&gt;
+    &lt;/div&gt;`;
+  const main = ctx.ui.registerPage('my_ext', 'Моё ext', 'myExtPage', html);
+  document.getElementById('myExtBtn').addEventListener('click', async () =&gt; {
+    // доступ к бэкенду:
+    const r = await ctx.api.fetch('/api/extensions/list');
+    document.getElementById('myExtOut').textContent = JSON.stringify(r);
+  });
+}</pre>
+
+                                <h5>backend.py (бэкенд, опц.)</h5>
+                                <pre class="docs-code">def init(ctx):
+    # ctx['tools'] — ToolSandbox (read/write/commands)
+    # ctx['extensions_dir'] — путь к каталогу расширений
+    print('my-ext backend initialized')
+</pre>
+
+                                <h5>Как добавить расширение</h5>
+                                <ol class="docs-list">
+                                    <li>Создайте папку <code>extensions/my-ext/</code> (путь — на вкладке «Расширения»).</li>
+                                    <li>Добавьте <code>manifest.json</code> + нужные <code>index.js</code> / <code>backend.py</code>.</li>
+                                    <li>Перезапустите бэкенд (или нажмите «Обновить список», если расширение уже в каталоге при старте).</li>
+                                    <li>На вкладке «Расширения» включите его переключателем.</li>
+                                </ol>
+
+                                <h4 class="docs-h4">Безопасность</h4>
+                                <ul class="docs-list">
+                                    <li>Расширения работают в песочнице. backend-код не роняет app при ошибках (лог + skip).</li>
+                                    <li>Инструменты ИИ — только в разрешённых папках проекта, команды — только из белого списка.</li>
+                                    <li>Всякое действие инструментов требует подтверждения (если авто-разрешение выключено).</li>
+                                    <li>Агенты/скиллы — это данные, не код: импортируемый файл не исполняется, просто добавляет промпты.</li>
+                                </ul>
+                            </div>
+                        </div>
+
+<!-- Страница: Апдейты (чейнджлог) -->
+                        <div class="settings-page" id="docs-updates">
+                            <div class="settings-block">
+                                <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M21 12a9 9 0 11-3-6.7M21 3v6h-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span> История обновлений</h3>
+                                <p class="block-desc">Версии приложения и что изменилось. Текущая версия: <b id="changelogVersion">…</b></p>
+                                <button class="test-btn" id="changelogRefreshBtn">↻ Проверить обновления</button>
+                                <div id="changelogList"></div>
+                            </div>
+                        </div>
+
+                    </div><!-- /settings-form -->
+                </div><!-- /settings-pages -->
+            </div><!-- /settings-layout -->
+        </div>
+    </main>
+
+    <!-- Модалка: новая сессия -->
+    <div class="modal-overlay hidden" id="sessionModal">
+        <div class="modal-glass">
+            <h3>Новая сессия</h3>
+            <p class="block-desc">Выберите тип сессии и параметры.</p>
+            <div class="form-group">
+                <label>Тип сессии</label>
+                <select id="sessionMode">
+                    <option value="continue">Продолжить текущий чат</option>
+                    <option value="new_personality">Новая личность (свой промпт)</option>
+                    <option value="reuse_key">Новый ключ / новые настройки</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Имя сессии</label>
+                <input type="text" id="sessionName" placeholder="Например: Рабочая сессия">
+            </div>
+            <div class="form-group">
+                <label>API-ключ</label>
+                <select id="sessionKey">
+                    <option value="">Использовать активный</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Агент (личность)</label>
+                <select id="sessionAgent">
+                    <option value="">Без агента</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Свой системный промпт (для «Новая личность»)</label>
+                <textarea id="sessionPrompt" rows="2" placeholder="Ты — ..."></textarea>
+            </div>
+            <div class="btn-row">
+                <button class="test-btn" id="cancelSessionBtn">Отмена</button>
+                <button class="test-btn primary" id="createSessionBtn">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка: создание группы -->
+    <div class="modal-overlay hidden" id="groupModal">
+        <div class="modal-glass">
+            <h3>Новая группа</h3>
+            <p class="block-desc">Группа для организации чатов, агентов и скиллов.</p>
+            <div class="form-group">
+                <label>Название</label>
+                <input type="text" id="groupName" class="opt-input" placeholder="Например: Разработка">
+            </div>
+            <div class="btn-row">
+                <button class="test-btn" id="groupCancel">Отмена</button>
+                <button class="test-btn primary" id="groupSave">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка: универсальный ввод (замена prompt()) -->
+    <div class="modal-overlay hidden" id="amtInputModal">
+        <div class="modal-glass">
+            <h3 id="amtInputTitle">Ввод</h3>
+            <div class="form-group">
+                <label id="amtInputLabel">Значение</label>
+                <input type="text" id="amtInputValue" class="opt-input" />
+            </div>
+            <div class="btn-row">
+                <button class="test-btn" id="amtInputCancel">Отмена</button>
+                <button class="test-btn primary" id="amtInputOk">ОК</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка: переименование / группа чата -->
+    <div class="modal-overlay hidden" id="chatMetaModal">
+        <div class="modal-glass">
+            <h3 id="chatMetaTitle">Чат</h3>
+            <div class="form-group">
+                <label>Название</label>
+                <input type="text" id="chatMetaName" class="opt-input" placeholder="Имя чата">
+            </div>
+            <div class="form-group">
+                <label>Группа</label>
+                <select id="chatMetaGroup" class="opt-select"><option value="">Без группы</option></select>
+            </div>
+            <div class="btn-row">
+                <button class="test-btn" id="chatMetaCancel">Отмена</button>
+                <button class="test-btn primary" id="chatMetaSave">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка: редактирование сообщения -->
+    <div class="modal-overlay hidden" id="msgEditModal">
+        <div class="modal-glass">
+            <h3>Редактировать сообщение</h3>
+            <p class="block-desc msg-edit-role">Сообщение</p>
+            <div class="form-group">
+                <label>Текст</label>
+                <textarea class="msg-edit-text" rows="5" placeholder="Введите текст..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Файлы к сообщению</label>
+                <div class="msg-edit-files attachment-area"></div>
+                <input type="file" class="msg-edit-fileinput" multiple hidden>
+                <button class="test-btn" type="button" id="msgEditAddFileBtn">Прикрепить файл</button>
+            </div>
+            <div class="btn-row">
+                <button class="test-btn" id="msgEditCancelBtn">Отмена</button>
+                <button class="test-btn primary" id="msgEditSaveBtn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка: универсальное подтверждение (заменяет системный confirm) -->
+    <div class="modal-overlay hidden" id="amtConfirmModal">
+        <div class="modal-glass">
+            <h3 id="amtConfirmTitle">Подтвердите</h3>
+            <p class="block-desc" id="amtConfirmText"></p>
+            <div class="btn-row">
+                <button class="test-btn" id="amtConfirmNo" type="button">Отмена</button>
+                <button class="test-btn danger" id="amtConfirmYes" type="button">Удалить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка: подтверждение действия инструмента -->
+    <div class="modal-overlay hidden" id="toolConfirmModal">
+        <div class="modal-glass">
+            <h3>Инструмент ИИ</h3>
+            <p class="block-desc">ИИ просит выполнить действие. Проверьте параметры перед подтверждением.</p>
+            <div class="tool-confirm-detail" id="toolConfirmDetail"></div>
+            <div class="btn-row">
+                <button class="test-btn" id="toolConfirmDeny">Отклонить</button>
+                <button class="test-btn primary" id="toolConfirmApprove">Разрешить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Контекстное меню чатов (ПКМ) -->
+    <div class="ctx-menu hidden" id="ctxMenu"></div>
+
+    <script src="./js/token-estimator.js"></script>
+    <script src="./js/secure-store.js"></script>
+
+    <script src="./js/i18n.js"></script>
+    <script src="./js/themes.js"></script>
+    <script src="./js/extensions.js"></script>
+    <script>
+        // После полной загрузки — инициализируем frontend-расширения
+        window.addEventListener('load', function () {
+            if (window.AMTExtensions) {
+                window.AMTExtensions.loadAll().then(function (done) {
+                    if (done && done.length) console.info('[ext] loaded:', done);
+                });
+            }
+        });
+    </script>
+
+    <!-- ===== МЕДИА-ОВЕРЛЕЙ (видео/фото/аудио/файлы) ===== -->
+    <div id="mediaOverlay" class="media-overlay hidden">
+        <div class="media-overlay-drag" id="mediaOverlayDrag" title="Перетащить окно"></div>
+        <div class="media-overlay-close" id="mediaOverlayClose" title="Закрыть (Esc)">✕</div>
+        <button class="media-overlay-minimize" id="mediaOverlayMinimize" title="Свернуть (работать с чатом)">⊟</button>
+        <!-- Табы: Видео / Стримы / Поиск / Каналы (SVG-иконки) -->
+        <div class="player-tabs" id="playerTabs">
+            <button class="player-tab active" data-tab="video"><svg class="ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 8.5v7l6-3.5z" fill="currentColor"/></svg> Видео</button>
+            <button class="player-tab" data-tab="stream"><svg class="ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M7.5 7.5a6 6 0 000 9M16.5 7.5a6 6 0 010 9M4.8 4.8a9 9 0 000 14.4M19.2 4.8a9 9 0 010 14.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> Стримы</button>
+            <button class="player-tab" data-tab="search"><svg class="ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> Поиск</button>
+            <button class="player-tab" data-tab="channel"><svg class="ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 3l4 3 4-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> Каналы</button>
+        </div>
+        <div class="media-overlay-body">
+            <div class="player-main" id="playerMain">
+                <!-- Вкладывается JS'ом: video / img / audio / file preview -->
+            </div>
+            <div class="player-sidebar hidden" id="playerSidebar"></div>
+        </div>
+        <div class="media-overlay-content" id="mediaOverlayContent" style="display:none">
+            <!-- Legacy: Вкладывается JS'ом: video / img / audio / file preview -->
+        </div>
+        <!-- Контроллы видеоплеера -->
+        <div class="media-player-controls" id="mediaPlayerControls">
+            <div class="player-timeline">
+                <input type="range" id="playerSeek" min="0" max="100" value="0" step="0.1">
+                <span class="player-time" id="playerTime">0:00 / 0:00</span>
+            </div>
+            <div class="player-btns">
+                <button id="playerPlayPause" title="Пауза/Пуск">▶</button>
+                <button id="playerVolumeMute" title="Громкость">🔊</button>
+                <input type="range" id="playerVolume" min="0" max="100" value="100" step="1" class="player-volume">
+                <button id="playerSubtitles" title="Субтитры">CC</button>
+                <select id="playerQuality" title="Качество">
+                    <option value="auto">Авто</option>
+                    <option value="2160">4K</option>
+                    <option value="1440">QHD</option>
+                    <option value="1080">1080p</option>
+                    <option value="720">720p</option>
+                </select>
+                <button id="playerFullscreen" title="На весь экран">⛶</button>
+                <button id="playerPip" class="player-pip hidden" title="Picture-in-Picture">⧉</button>
+                <button id="playerFiltersToggle" title="Фильтры видео">🎛</button>
+            </div>
+        </div>
+        <!-- Панель фильтров видео -->
+        <div class="media-filters hidden" id="mediaFiltersPanel">
+            <div class="media-filters-head">
+                <span class="media-filters-title">Фильтры</span>
+                <button id="mediaFiltersReset" title="Сбросить фильтры">Сброс</button>
+            </div>
+            <div class="media-filters-grid">
+                <label>Яркость<input type="range" id="filterBrightness" min="0" max="200" value="100" step="1"><span data-out>100%</span></label>
+                <label>Контраст<input type="range" id="filterContrast" min="0" max="200" value="100" step="1"><span data-out>100%</span></label>
+                <label>Насыщенность<input type="range" id="filterSaturate" min="0" max="300" value="100" step="1"><span data-out>100%</span></label>
+                <label>Тон (оттенок)<input type="range" id="filterHue" min="-180" max="180" value="0" step="1"><span data-out>0°</span></label>
+                <label>Размытие<input type="range" id="filterBlur" min="0" max="20" value="0" step="0.5"><span data-out>0px</span></label>
+                <label>Детализация (resonance)<input type="range" id="filterDetail" min="0" max="200" value="100" step="1"><span data-out>100%</span></label>
+                <label>Шум (grain)<input type="range" id="filterNoise" min="0" max="100" value="0" step="1"><span data-out>0%</span></label>
+                <label>Улучшение (sharpen)<input type="range" id="filterSharp" min="0" max="200" value="100" step="1"><span data-out>100%</span></label>
+            </div>
+        </div>
+    </div>
+    <script src="./js/player-browser.js"></script>
+    <script src="./js/main.js"></script>
+</body>
+</html>

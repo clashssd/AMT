@@ -1,0 +1,10 @@
+{
+  "orchestrator": {
+    "enabled": true,
+    "auto_mode": true,
+    "role_drift_check": true,
+    "monitor_latency": true,
+    "auto_save_threshold": 5,
+    "keep_full_context": true
+  }
+}

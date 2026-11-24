@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a0f1a"/>
+      <stop offset="100%" stop-color="#1a2340"/>
+    </linearGradient>
+    <linearGradient id="robotGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d6e0ee"/>
+      <stop offset="100%" stop-color="#a8b6cd"/>
+    </linearGradient>
+  </defs>
+  <!-- Circular badge (fully round, not a rounded-rect tile) -->
+  <circle cx="128" cy="128" r="124" fill="url(#bgGrad)" stroke="#8b86c9" stroke-width="5"/>
+
+  <!-- Robot head: pale bluish-white oval, shifted up to leave room for "AMT" below -->
+  <ellipse cx="128" cy="106" rx="74" ry="60" fill="url(#robotGrad)"/>
+
+  <!-- Two side "ear" nubs (accent rings, like a cute robot's side handles) -->
+  <circle cx="45"  cy="106" r="13" fill="#8b86c9"/>
+  <circle cx="211" cy="106" r="13" fill="#8b86c9"/>
+
+  <!-- Two big glossy black eyes -->
+  <circle cx="100" cy="100" r="22" fill="#0a0f1a"/>
+  <circle cx="156" cy="100" r="22" fill="#0a0f1a"/>
+  <!-- Small glossy highlight on each eye (upper-left) -->
+  <circle cx="94"  cy="92"  r="6" fill="#ebf0ff"/>
+  <circle cx="150" cy="92"  r="6" fill="#ebf0ff"/>
+
+  <!-- Small antenna on top of the head -->
+  <line x1="128" y1="42" x2="128" y2="26" stroke="#8b86c9" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="128" cy="24" r="6" fill="#8b86c9"/>
+
+  <!-- "AMT" wordmark, centered below the robot (system font stack, no external .ttf) -->
+  <text x="128" y="226" text-anchor="middle"
+        font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif"
+        font-weight="800" font-size="34" letter-spacing="5"
+        fill="#aba5c9">AMT</text>
+</svg>

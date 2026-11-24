@@ -1,0 +1,7 @@
+{
+  "name": "example",
+  "version": "1.0.0",
+  "description": "Пример расширения: добавляет страницу «Пример» и endpoint /api/ext/example.",
+  "frontend": true,
+  "backend": true
+}

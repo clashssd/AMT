@@ -1,0 +1,6 @@
+{
+  "keys": [],
+  "activeKeyId": "",
+  "roundRobin": false,
+  "_note": "Provider-neutral seed: no API keys ship with the app. Add your keys via Настройки → API-ключи. This file is redirected to %APPDATA%\\AMT Chat\\keys.json in the frozen desktop build."
+}

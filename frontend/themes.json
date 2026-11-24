@@ -1,0 +1,11 @@
+{
+  "ocean":   { "label": "Океан (дефолт)", "bg": ["#05050a", "#11131a", "#0b0f14"], "glass": "rgba(255,255,255,0.02)", "border": "rgba(255,255,255,0.06)", "accent": "#8b86c9", "accent2": "#aba5c9", "text": "#d0d0d0", "textDim": "#8a8a9a", "font": "system" },
+  "kettle":  { "label": "Kettle Black", "bg": ["#141214", "#302f33", "#464c55"], "glass": "rgba(48,47,51,0.20)", "border": "rgba(127,183,153,0.10)", "accent": "#7fb399", "accent2": "#9eab33", "text": "#c2c7cf", "textDim": "#636d79", "font": "system" },
+  "sea":     { "label": "Sea Lion", "bg": ["#0a1620", "#1f3a44", "#2f4a52"], "glass": "rgba(31,58,68,0.22)", "border": "rgba(140,200,210,0.10)", "accent": "#8ccdd9", "accent2": "#9eab33", "text": "#d5e2e5", "textDim": "#5f7d84", "font": "system" },
+  "emerald": { "label": "Emerald Lux", "bg": ["#071410", "#1e3a2d", "#16241b"], "glass": "rgba(30,58,45,0.22)", "border": "rgba(120,200,150,0.10)", "accent": "#5aa07a", "accent2": "#d9b877", "text": "#d4e6dc", "textDim": "#5c7a6a", "font": "system" },
+  "crimson": { "label": "Crimson Lux", "bg": ["#150408", "#3a0a14", "#2a0810"], "glass": "rgba(58,10,20,0.24)", "border": "rgba(232,142,188,0.12)", "accent": "#e88ebc", "accent2": "#f0d8dd", "text": "#f0d8dd", "textDim": "#8a4a55", "font": "system" },
+  "gold":    { "label": "Gold Lux", "bg": ["#12100a", "#3a3325", "#1d1d1d"], "glass": "rgba(216,177,146,0.14)", "border": "rgba(221,208,192,0.14)", "accent": "#d8b192", "accent2": "#efe4d4", "text": "#efe4d4", "textDim": "#8a7f6e", "font": "system" },
+  "rust":    { "label": "Rust Lux", "bg": ["#180a04", "#2f1211", "#4a1a12"], "glass": "rgba(47,18,17,0.22)", "border": "rgba(216,54,39,0.14)", "accent": "#d83627", "accent2": "#f4c448", "text": "#f0d4cd", "textDim": "#8a5a4a", "font": "system" },
+  "teal":    { "label": "Teal Lux", "bg": ["#04141a", "#12232d", "#1c3a48"], "glass": "rgba(18,35,45,0.22)", "border": "rgba(115,203,245,0.12)", "accent": "#73cbf5", "accent2": "#2a8339", "text": "#d4eef0", "textDim": "#4a6a75", "font": "system" },
+  "violet":  { "label": "Violet Lux", "bg": ["#0e0a1a", "#310b3d", "#1a0a2a"], "glass": "rgba(49,11,61,0.24)", "border": "rgba(102,0,124,0.16)", "accent": "#6f0a44", "accent2": "#e04f74", "text": "#e8d4f0", "textDim": "#6a3a7a", "font": "system" }
+}

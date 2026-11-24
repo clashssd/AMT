@@ -1,0 +1,661 @@
+"""
+Генерация картинок / видео / аудио через API провайдера, указанного пользователем.
+
+Подход: пользователь задаёт (на странице Генерации)
+  - провайдер (или произвольный base_url + модель + ключ),
+  - описание (prompt) и параметры.
+Мы вызываем соответствующий endpoint провайдера. Если ключ/провайдер
+НЕ поддерживает функцию — честно вернём "unsupported", чтобы фронт
+показал «Ваш ключ не поддерживает данную функцию, укажите другой».
+
+Встроенные профили провайдеров (можно переопределить base_url/ключ):
+  - image:  картинки (OpenAI-совместимый /images/generations или любой compatible-endpoint)
+  - video:  видео (видео-API, text2video)
+  - audio:  голос (TTS-API)
+
+Все профили можно заменить произвольным OpenAI-совместимым endpoint.
+"""
+import os
+import time
+import json
+from typing import Optional
+
+import httpx
+
+# Известные профили (структура эндпоинтов). Ключ, модель И base_url — от пользователя.
+# Provider-neutral: default_base оставлен ПУСТЫМ для всех профилей — приложение
+# НЕ предполагает конкретный хост провайдера, если пользователь не указал base_url.
+# Конкретные адреса (OpenAI/Kling/ElevenLabs/Agnes) теперь вставляются пользователем
+# в настройках или через «Хранилище» API-ключей.
+PROVIDERS = {
+    # картинки: OpenAI-совместимый /images/generations (любой compatible-endpoint)
+    "image": {
+        "label": "Картинка (OpenAI-совместимый)",
+        "default_base": "",
+        "endpoint": "images/generations",
+        "kind": "image",
+    },
+    # видео: видео-API
+    "video": {
+        "label": "Видео (видео-API)",
+        "default_base": "",
+        "endpoint": "v1/videos/text2video",
+        "kind": "video",
+    },
+    # аудио: TTS-API
+    "audio": {
+        "label": "Голос (TTS-API)",
+        "default_base": "",
+        "endpoint": "v1/text-to-speech/{voice_id}",
+        "kind": "audio",
+    },
+    # Agnes (OpenAI-совместимый хаб): картинки + видео (асинхронные, возвращают URL)
+    "agnes": {
+        "label": "Agnes (картинки + видео)",
+        "default_base": "",
+        "endpoint": "images/generations",
+        "kind": "image",
+        "video_endpoint": "video/generations",  # видео: POST /v1/video/generations (нужен mode)
+        "async_url": True,  # результат — URL, а не b64
+    },
+}
+# Автоопределение провайдера по base_url. Оставляем пустым по умолчанию: приложение
+# не «узнаёт» конкретные хосты провайдеров, если пользователь не указал base_url.
+# (Подключите адрес через Настройки/Хранилище — автоопределение заработает по нему.)
+_BASE_PROVIDER_HINTS = {}
+# Provider-neutral: запасные имена моделей, используемые ТОЛЬКО когда пользователь
+# не указал model. По умолчанию ПУСТЫЕ — приложение не «угадывает» модель провайдера.
+# При желании их можно задать через env AMT_DEFAULT_MEDIA_MODELS (JSON: {"image":"","audio":"","video":""}).
+_FALLBACK_MODELS = {}
+try:
+    _FALLBACK_MODELS = json.loads(os.environ.get("AMT_DEFAULT_MEDIA_MODELS", "{}"))
+except Exception:
+    _FALLBACK_MODELS = {}
+# Запасные модели: image / audio / video (пустые = не передавать, провайдер выберет дефолт)
+_FB_IMAGE_MODEL = _FALLBACK_MODELS.get("image", "")
+_FB_AUDIO_MODEL = _FALLBACK_MODELS.get("audio", "")
+_FB_VIDEO_MODEL = _FALLBACK_MODELS.get("video", "")
+# ElevenLabs: отдельный протокол (заголовок xi-api-key, path /v1/text-to-speech/{voice},
+# body model_id, ответ voices[]). Автоопределение по base_url.
+_ELEVENLABS_HOST = "elevenlabs.io"
+
+
+def provider_profile(kind: str, base_url: str = "", api_key: str = "", model: str = "",
+                     voice_id: str = "", proxy: str = "") -> dict:
+    p = dict(PROVIDERS.get(kind, {}))
+    base = (base_url or p.get("default_base", "")).rstrip("/")
+    p["base"] = base
+    # base без хвоста /v1 — чтобы не получалось /v1/v1/...
+    p["api_base"] = base[: -len("/v1")] if base.endswith("/v1") else base
+    p["key"] = api_key
+    p["model"] = model
+    p["voice_id"] = voice_id
+    p["proxy"] = proxy
+    return p
+
+
+def _missing_base_error(p: dict, feature: str) -> dict:
+    """Provider-neutral guard: если base_url не задан — честный отказ, а не «случайный» хост."""
+    if not (p.get("base") or "").strip():
+        return {
+            "ok": False,
+            "code": "no_base_url",
+            "error": f"Для {feature} нужен Base URL провайдера. Укажите адрес в Настройках или выберите ключ с адресом в «Хранилище».",
+        }
+    return None
+
+
+def _gen_video_body(prompt: str, duration: str, aspect_ratio: str, model: str, extra: dict) -> dict:
+    """Generic text2video body. Provider-neutral: forward user's model only if set.
+    Extra merges last (user can override)."""
+    body = {"prompt": prompt, "duration": duration, "aspect_ratio": aspect_ratio}
+    if (model or "").strip():
+        body["model"] = model
+    if extra:
+        body.update({k: v for k, v in extra.items()})
+    return body
+
+
+def _client(proxy: str, timeout: float = 120.0):
+    kwargs = {"timeout": timeout}
+    if proxy:
+        try:
+            kwargs["proxy"] = proxy
+        except Exception:
+            kwargs["proxies"] = proxy
+    return httpx.Client(**kwargs)
+
+
+# ===== Проверка: поддерживает ли ключ функцию =====
+def check_capability(kind: str, base_url: str = "", api_key: str = "", model: str = "",
+                      voice_id: str = "", proxy: str = "") -> dict:
+    """
+    Универсальная проверка: пробуем несколько OpenAI-совместимых эндпоинтов
+    и возвращаем {ok, reason, endpoints} — какие работают.
+    Это позволяет ЛЮБОМУ провайдеру (не только Agnes/ElevenLabs) работать
+    с base_url + api_key + model.
+    """
+    p = provider_profile(kind, base_url, api_key, model, voice_id, proxy)
+    if not p["key"]:
+        return {"ok": False, "reason": "Ключ не указан"}
+    base = p["base"]
+    api_base = p["api_base"]
+    key = p["key"]
+    results = {}
+    # OpenAI-compatible image endpoint
+    try:
+        with _client(proxy, timeout=30.0) as c:
+            r = c.post(f"{base}/images/generations",
+                       headers={"Authorization": f"Bearer {key}"},
+                       json={"model": model or _FB_IMAGE_MODEL, "prompt": "test", "n": 1, "size": "256x256"})
+            results["image"] = (r.status_code in (200, 201, 202),
+                                "поддерживается" if r.status_code in (200, 201, 202) else f"HTTP {r.status_code}")
+    except Exception as e:
+        results["image"] = (False, str(e)[:80])
+    # OpenAI-compatible audio endpoint
+    try:
+        with _client(proxy, timeout=30.0) as c:
+            r = c.post(f"{api_base}/v1/audio/speech",
+                       headers={"Authorization": f"Bearer {key}"},
+                       json={"model": model or _FB_AUDIO_MODEL, "voice": voice_id or "alloy", "input": "test"})
+            results["audio"] = (r.status_code in (200, 201, 202),
+                                "поддерживается" if r.status_code in (200, 201, 202) else f"HTTP {r.status_code}")
+    except Exception as e:
+        results["audio"] = (False, str(e)[:80])
+    # Video endpoint (Agnes-style or OpenAI-style)
+    is_agnes = any(h in base for h in _BASE_PROVIDER_HINTS)
+    if is_agnes:
+        try:
+            with _client(proxy, timeout=30.0) as c:
+                _vid_model = model if "video" in (model or "").lower() else (_FB_VIDEO_MODEL or model or "video")
+                r = c.post(f"{base}/videos",
+                           headers={"Authorization": f"Bearer {key}"},
+                           json={"model": _vid_model, "prompt": "test",
+                                  "mode": "text", "seconds": "5", "size": "720P", "aspect_ratio": "16:9"})
+                results["video"] = (r.status_code in (200, 201, 202),
+                                    "поддерживается" if r.status_code in (200, 201, 202) else f"HTTP {r.status_code}")
+        except Exception as e:
+            results["video"] = (False, str(e)[:80])
+    else:
+        try:
+            with _client(proxy, timeout=30.0) as c:
+                r = c.post(f"{api_base}/v1/videos/text2video",
+                           headers={"Authorization": f"Bearer {key}"},
+                           json={"prompt": "test", "duration": "5", "aspect_ratio": "16:9"})
+                results["video"] = (r.status_code in (200, 201, 202),
+                                    "поддерживается" if r.status_code in (200, 201, 202) else f"HTTP {r.status_code}")
+        except Exception as e:
+            results["video"] = (False, str(e)[:80])
+    any_ok = any(v[0] for v in results.values())
+    working = [k for k, v in results.items() if v[0]]
+    reason = "поддерживается" if any_ok else "ни один эндпоинт не работает"
+    return {"ok": any_ok, "reason": reason, "endpoints": results, "working": working}
+
+
+def generate_image(base_url: str = "", api_key: str = "", model: str = "", prompt: str = "",
+                   size: str = "1024x1024", proxy: str = "", extra: dict = None) -> dict:
+    """Обычная генерация картинки (по промпту). Для рефа — generate_image_ref."""
+    return generate_image_ref(base_url, api_key, model, prompt, size, "", proxy, extra)
+
+
+def check_video_task(base_url: str = "", api_key: str = "", task_id: str = "", proxy: str = "") -> dict:
+    p = provider_profile("video", base_url, api_key, proxy=proxy)
+    _nb = _missing_base_error(p, "видео (статус задачи)")
+    if _nb:
+        # check_video_task возвращает dict со полем "status" — сохраняем контракт.
+        return {"ok": False, "status": "error", "code": "no_base_url",
+                "error": _nb["error"]}
+    is_agnes = any(h in p["base"] for h in _BASE_PROVIDER_HINTS)
+    try:
+        with _client(proxy) as c:
+            if is_agnes:
+                # Agnes (документированный): GET <host>/agnesapi?video_id=<ID>&model_name=<model>
+                # host = base без /v1. При status=completed — top-level url.
+                host = p["base"]
+                if host.endswith("/v1"):
+                    host = host[: -len("/v1")]
+                model = _FB_VIDEO_MODEL  # provider-neutral: пустая = использовать дефолт провайдера
+                url = f"{host}/agnesapi?video_id={task_id}&model_name={model}"
+                r = c.get(url, headers={"Authorization": f"Bearer {p['key']}"})
+                if r.status_code >= 400:
+                    return {"status": "error", "error": f"{r.status_code} {r.text[:200]}"}
+                d = r.json()
+                st = d.get("status", "")  # queued|processing|completed|failed
+                out = {"status": st, "progress": d.get("progress", "")}
+                if st in ("completed", "succeeded"):
+                    out["url"] = d.get("url", "") or ""
+                if st in ("failed", "error"):
+                    out["error"] = (d.get("error") or "Видео не удалось сгенерировать")
+                return out
+            r = c.get(f"{p['api_base']}/v1/videos/text2video/{task_id}",
+                       headers={"Authorization": f"Bearer {p['key']}"})
+        if r.status_code >= 400:
+            return {"status": "error", "error": f"{r.status_code} {r.text[:200]}"}
+        d = r.json()
+        data = d.get("data") or {}
+        st = data.get("task_status", "")
+        out = {"status": st}
+        if st == "succeed":
+            out["url"] = (data.get("task_result") or [{}])[0].get("url", "")
+        return out
+    except Exception as e:
+        return {"status": "error", "error": str(e)[:200]}
+
+
+def generate_audio(base_url: str = "", api_key: str = "", model: str = "", text: str = "",
+                   voice_id: str = "", proxy: str = "", voice_settings: dict = None, extra: dict = None) -> dict:
+    """TTS → audio bytes. voice_settings: скорость/стабильность/стиль/сходство.
+
+    Универсально по провайдеру (base_url + api_key + model):
+      * OpenAI-совместимый endpoint /v1/audio/speech (Bearer) — по умолчанию;
+      * ElevenLabs-диалект (xi-api-key + /v1/text-to-speech/{voice} + model_id),
+        если base_url указывает на elevenlabs.io — сохраняя дефолтный голос/параметры.
+    """
+    p = provider_profile("audio", base_url, api_key, model, voice_id=voice_id, proxy=proxy)
+    is_eleven = _ELEVENLABS_HOST in (p["base"] or "")
+    if is_eleven:
+        return _generate_audio_elevenlabs(p, text, proxy, voice_settings, extra)
+    # ---- Универсальный OpenAI-совместимый TTS ----
+    if not p["key"]:
+        return {"ok": False, "code": "no_key", "error": "Укажите API-ключ для генерации голоса"}
+    _nb = _missing_base_error(p, "голоса")
+    if _nb:
+        return _nb
+    # api_base — base без хвоста /v1, чтобы не получалось /v1/v1
+    vid = voice_id  # provider-neutral: пустая = провайдер выберет голос по умолчанию
+    body = {"model": model or _FB_AUDIO_MODEL, "voice": vid, "input": text}
+    if extra:
+        for k, v in extra.items():
+            if k not in body:
+                body[k] = v
+    if voice_settings:
+        # Универсальные подсказки (не все провайдеры поддерживают; безвредно)
+        if voice_settings.get("speed") is not None:
+            body["speed"] = voice_settings["speed"]
+        if voice_settings.get("stability") is not None:
+            body["stability"] = voice_settings["stability"]
+        if voice_settings.get("style") is not None:
+            body["style"] = voice_settings["style"]
+        if voice_settings.get("similarity") is not None:
+            body["use_speaker_boost"] = bool(voice_settings["similarity"])
+        if voice_settings.get("output_format"):
+            body["response_format"] = voice_settings["output_format"]
+    try:
+        with _client(proxy, timeout=300.0) as c:
+            r = c.post(f"{p['api_base']}/v1/audio/speech",
+                       headers={"Authorization": f"Bearer {p['key']}"}, json=body)
+        if r.status_code >= 400:
+            return {"ok": False, "code": "unsupported", "error": f"Провайдер: {r.status_code} {r.text[:200]}"}
+        return {"ok": True, "mime": "audio/mpeg", "b64": _b64_bytes(r.content), "voice_id": vid}
+    except Exception as e:
+        return {"ok": False, "code": "error", "error": str(e)[:200]}
+
+
+def _generate_audio_elevenlabs(p: dict, text: str, proxy: str, voice_settings: dict, extra: dict) -> dict:
+    """ElevenLabs-диалект TTS (для base_url = elevenlabs.io). Дефолт-голос/параметры."""
+    vid = p.get("voice_id") or "21m00Tcm4TlvDq8ikT7d"
+    if not p["key"]:
+        return {"ok": False, "code": "no_key", "error": "Укажите API-ключ для генерации голоса"}
+    body = {"text": text, "model_id": p.get("model") or "eleven_multilingual_v2"}
+    if extra:
+        for k, v in extra.items():
+            if k not in body:
+                body[k] = v
+    if voice_settings:
+        vs = {}
+        if voice_settings.get("speed") is not None:
+            vs["speed"] = voice_settings["speed"]            # ~0.7..1.2
+        if voice_settings.get("stability") is not None:
+            vs["stability"] = voice_settings["stability"]    # 0..1
+        if voice_settings.get("style") is not None:
+            vs["style"] = voice_settings["style"]            # 0..1
+        if voice_settings.get("similarity") is not None:
+            vs["use_speaker_boost"] = bool(voice_settings["similarity"])
+        if vs:
+            body["voice_settings"] = vs
+        if voice_settings.get("output_format"):
+            body["output_format"] = voice_settings["output_format"]
+    # p["api_base"] — base без хвоста /v1, чтобы не получалось /v1/v1.
+    try:
+        with _client(proxy, timeout=300.0) as c:
+            r = c.post(f"{p['api_base']}/v1/text-to-speech/{vid}",
+                       headers={"xi-api-key": p["key"]}, json=body)
+        if r.status_code >= 400:
+            return {"ok": False, "code": "unsupported", "error": f"Провайдер: {r.status_code} {r.text[:200]}"}
+        return {"ok": True, "mime": "audio/mpeg", "b64": _b64_bytes(r.content), "voice_id": vid}
+    except Exception as e:
+        return {"ok": False, "code": "error", "error": str(e)[:200]}
+
+
+def transcribe_audio(base_url: str = "", api_key: str = "", model: str = "",
+                      audio_b64: str = "", mime: str = "audio/webm", proxy: str = "",
+                      fallback_key: str = "", fallback_base: str = "",
+                      fallback_model: str = "whisper-1") -> dict:
+    """STT (Whisper/аудио-модель) → текст. audio_b64: base64 аудио.
+
+    Провайдер — OpenAI-совместимый endpoint /v1/audio/transcriptions.
+    Если основной запрос вернул 4xx/5xx, а передан fallback (ключ+адрес+модель
+    из глобальных настроек) — пробуем его. Это спасает от провайдеров,
+    у которых нет STT (например, Agnes-хаб с audio-ключом).
+
+    ВАЖНО: webm-записи от MediaRecorder конвертируются в mp3 перед отправкой,
+    т.к. большинство STT-провайдеров не поддерживают webm (opus codec).
+    """
+    p = provider_profile("audio", base_url, api_key, model, proxy=proxy)
+    if not p["key"]:
+        return {"ok": False, "code": "no_key", "error": "Укажите API-ключ для распознавания голоса"}
+    if not audio_b64:
+        return {"ok": False, "code": "no_audio", "error": "Пустое аудио"}
+    import base64, io
+    raw = base64.b64decode(audio_b64)
+    ext = {"audio/wav": "wav", "audio/mp3": "mp3", "audio/mpeg": "mp3",
+           "audio/ogg": "ogg", "audio/x-wav": "wav", "audio/webm": "webm",
+           "audio/flac": "flac"}.get(mime, "webm")
+    fname = f"audio.{ext}"
+
+    # Webm → MP3 конвертация (MediaRecorder записывает webm/opus,
+    # большинство STT-провайдеров принимают только mp3/wav/ogg/flac)
+    if ext == "webm":
+        try:
+            raw, mime, ext, fname = _webm_to_mp3(raw, proxy)
+        except Exception as e:
+            return {"ok": False, "code": "convert_error",
+                    "error": f"Не удалось конвертировать webm→mp3: {str(e)[:150]}"}
+
+    def _post(base, key, model_name):
+        """Один запрос к /v1/audio/transcriptions. Возвращает (ok, text, error)."""
+        if not key:
+            return False, "", "no key"
+        api_base = base.rstrip("/")
+        if api_base.endswith("/v1"):
+            api_base = api_base[: -len("/v1")]
+        try:
+            with _client(proxy, timeout=300.0) as c:
+                fields = {"model": model_name or "whisper-1", "language": "ru"}
+                files = {"file": (fname, io.BytesIO(raw), mime)}
+                r = c.post(f"{api_base}/v1/audio/transcriptions",
+                           headers={"Authorization": f"Bearer {key}"},
+                           files=files, data=fields)
+            if r.status_code >= 400:
+                # Parse error message from JSON if available
+                err_msg = f"Провайдер: {r.status_code}"
+                try:
+                    j = r.json()
+                    if isinstance(j, dict):
+                        err = j.get("error") or j.get("message") or ""
+                        if isinstance(err, str) and err:
+                            err_msg += f" — {err[:200]}"
+                        elif isinstance(err, dict):
+                            err_msg += f" — {str(err)[:200]}"
+                except Exception:
+                    err_body = r.text[:200]
+                    if "<html" in err_body.lower() or "<!doctype" in err_body.lower():
+                        err_body = "(HTML-страница, endpoint не поддерживает STT)"
+                    err_msg += f" {err_body}"
+                return False, "", err_msg
+            try:
+                j = r.json()
+                return True, (j.get("text") or "").strip(), ""
+            except Exception:
+                return True, r.text.strip(), ""
+        except Exception as e:
+            return False, "", f"Сетевая ошибка: {str(e)[:200]}"
+
+    ok, text, err = _post(p["api_base"], p["key"], model or "whisper-1")
+    if ok:
+        return {"ok": True, "text": text, "provider": "primary"}
+    # fallback: глобальный ключ/адрес/модель из настроек
+    if fallback_key and fallback_base:
+        ok2, text2, err2 = _post(fallback_base, fallback_key, fallback_model or "whisper-1")
+        if ok2:
+            return {"ok": True, "text": text2, "provider": "fallback",
+                    "note": f"Первичный провайдер не поддержал STT ({err}); использован запасной ключ"}
+        return {"ok": False, "code": "unsupported",
+                "error": f"STT недоступен: основной — {err}; запасной — {err2}"}
+    return {"ok": False, "code": "unsupported", "error": err}
+
+
+def _webm_to_mp3(webm_bytes: bytes, proxy: str = "") -> tuple:
+    """Конвертирует webm/opus → mp3 через ffmpeg (если установлен).
+
+    Возвращает (mp3_bytes, 'audio/mp3', 'mp3', 'audio.mp3').
+    Если ffmpeg не найден — возвращает (webm_bytes, 'audio/webm', 'webm', 'audio.webm')
+    и даёт провайдеру шанс обработать webm как есть.
+    """
+    import subprocess, shutil, tempfile, os
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        # Try common Windows locations
+        for path in [
+            r"C:\ffmpeg\bin\ffmpeg.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links\ffmpeg.exe"),
+        ]:
+            if os.path.isfile(path):
+                ffmpeg = path
+                break
+    if not ffmpeg:
+        # No ffmpeg — return original webm (provider might still handle it)
+        return webm_bytes, "audio/webm", "webm", "audio.webm"
+
+    tmp_in = tempfile.mktemp(suffix=".webm")
+    tmp_out = tempfile.mktemp(suffix=".mp3")
+    try:
+        with open(tmp_in, "wb") as f:
+            f.write(webm_bytes)
+        cmd = [ffmpeg, "-y", "-i", tmp_in, "-acodec", "libmp3lame", "-ab", "128k",
+               "-ar", "16000", "-ac", "1", tmp_out]
+        if proxy:
+            env = os.environ.copy()
+            env["http_proxy"] = proxy
+            env["https_proxy"] = proxy
+        else:
+            env = None
+        subprocess.run(cmd, capture_output=True, timeout=60, env=env)
+        if os.path.isfile(tmp_out):
+            with open(tmp_out, "rb") as f:
+                mp3 = f.read()
+            if mp3 and len(mp3) > 100:
+                return mp3, "audio/mpeg", "mp3", "audio.mp3"
+    finally:
+        for p in (tmp_in, tmp_out):
+            try:
+                if os.path.exists(p): os.unlink(p)
+            except OSError:
+                pass
+    # ffmpeg failed — return original
+    return webm_bytes, "audio/webm", "webm", "audio.webm"
+
+
+def _b64_bytes(b: bytes) -> str:
+    import base64
+    return base64.b64encode(b).decode("ascii")
+
+
+# ===== Голоса: список + клонирование =====
+def list_voices(base_url: str = "", api_key: str = "", proxy: str = "") -> dict:
+    p = provider_profile("audio", base_url, api_key, "", proxy=proxy)
+    if not p["key"]:
+        return {"ok": False, "code": "no_key", "error": "Нужен ключ для голоса"}
+    # ElevenLabs: GET /v1/voices, заголовок xi-api-key, ответ voices[]
+    if _ELEVENLABS_HOST in (p["base"] or ""):
+        try:
+            with _client(proxy) as c:
+                r = c.get(f"{p['base']}/v1/voices", headers={"xi-api-key": p["key"]})
+            if r.status_code >= 400:
+                return {"ok": False, "code": "unsupported", "error": f"{r.status_code} {r.text[:200]}"}
+            data = r.json()
+            voices = data.get("voices", [])
+            return {"ok": True, "voices": [
+                {"id": v.get("voice_id"), "name": v.get("name"), "category": v.get("category"),
+                 "labels": v.get("labels", {})} for v in voices]}
+        except Exception as e:
+            return {"ok": False, "code": "error", "error": str(e)[:200]}
+    # Универсальный OpenAI-совместимый: GET /v1/voices (Bearer). Не все провайдеры
+    # имеют такой эндпоинт — честно вернём unsupported.
+    try:
+        with _client(proxy) as c:
+            r = c.get(f"{p['api_base']}/v1/voices", headers={"Authorization": f"Bearer {p['key']}"})
+        if r.status_code >= 400:
+            return {"ok": False, "code": "unsupported", "error": f"{r.status_code} {r.text[:200]}"}
+        data = r.json()
+        voices = data.get("voices", []) if isinstance(data, dict) else data
+        return {"ok": True, "voices": voices}
+    except Exception as e:
+        return {"ok": False, "code": "error", "error": str(e)[:200]}
+
+
+def clone_voice(base_url: str = "", api_key: str = "", audio_b64: str = "",
+                name: str = "", proxy: str = "") -> dict:
+    """Клонирование голоса: из аудио-файла → новый голос."""
+    p = provider_profile("audio", base_url, api_key, "", proxy=proxy)
+    if not p["key"]:
+        return {"ok": False, "code": "no_key", "error": "Нужен ключ для голоса"}
+    try:
+        import base64 as _b64
+        raw = _b64.b64decode(audio_b64)
+        if len(raw) < 10_000:
+            return {"ok": False, "code": "error", "error": "Аудио слишком короткое для клонирования (нужно > 10 КБ)"}
+        if _ELEVENLABS_HOST in (p["base"] or ""):
+            # ElevenLabs: POST /v1/voices/add (xi-api-key)
+            with _client(proxy, timeout=300.0) as c:
+                r = c.post(f"{p['base']}/v1/voices/add",
+                           headers={"xi-api-key": p["key"], "Content-Type": "application/json"},
+                           json={"name": name or "Cloned voice", "files": [audio_b64], "description": "Instant clone"})
+        else:
+            # Универсальный OpenAI-совместимый: POST /v1/voices (Bearer).
+            with _client(proxy, timeout=300.0) as c:
+                r = c.post(f"{p['api_base']}/v1/voices",
+                           headers={"Authorization": f"Bearer {p['key']}", "Content-Type": "application/json"},
+                           json={"name": name or "Cloned voice", "audio": audio_b64, "type": "clone"})
+        if r.status_code >= 400:
+            return {"ok": False, "code": "unsupported", "error": f"{r.status_code} {r.text[:200]}"}
+        d = r.json()
+        return {"ok": True, "voice_id": d.get("id"), "name": d.get("name", name)}
+    except Exception as e:
+        return {"ok": False, "code": "error", "error": str(e)[:200]}
+
+
+# ===== Изображения: по промпту + примерам (reference) =====
+def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
+                       prompt: str = "", size: str = "1024x1024",
+                       ref_image_b64: str = "", proxy: str = "", extra: dict = None) -> dict:
+    """Генерация с примером (reference). Для OpenAI DALL·E-3 / Sora — ref через images.edit."""
+    p = provider_profile("image", base_url, api_key, model, proxy=proxy)
+    if not p["key"]:
+        return {"ok": False, "code": "no_key", "error": "Укажите API-ключ для картинок"}
+    _nb = _missing_base_error(p, "картинок")
+    if _nb:
+        return _nb
+    try:
+        import base64 as _b64
+        with _client(proxy, timeout=300.0) as c:
+            if ref_image_b64:
+                raw = _b64.b64decode(ref_image_b64)
+                import urllib3, io as _io
+                # OpenAI /images/edits (multipart)
+                from urllib3.filepost import encode_multipart_formdata
+                fields = {"model": model or _FB_IMAGE_MODEL, "prompt": prompt, "size": size}
+                if extra:
+                    fields.update({k: str(v) for k, v in extra.items()})
+                files = {"image[]": ("ref.png", raw, "image/png")}
+                body, content_type = encode_multipart_formdata(
+                    {**files, **{k: (k, v) for k, v in fields.items()}})
+                r = c.post(f"{p['base']}/images/edits",
+                           headers={"Authorization": f"Bearer {p['key']}", "Content-Type": content_type},
+                           content=body)
+            else:
+                jbody = {"model": model, "prompt": prompt, "n": 1, "size": size}
+                if extra:
+                    jbody.update(extra)
+                r = c.post(f"{p['base']}/images/generations",
+                           headers={"Authorization": f"Bearer {p['key']}"} ,
+                           json=jbody)
+        if r.status_code >= 400:
+            return {"ok": False, "code": "unsupported", "error": f"{r.status_code} {r.text[:200]}"}
+        data = r.json()
+        item = data.get("data", [{}])[0] if isinstance(data.get("data"), list) else {}
+        b64 = item.get("b64_json", "")
+        url = item.get("url", "")
+        if b64:
+            return {"ok": True, "mime": "image/png", "b64": b64}
+        if url:
+            return {"ok": True, "mime": "image/png", "url": url}
+        return {"ok": False, "code": "error", "error": "Не получено изображение"}
+    except Exception as e:
+        return {"ok": False, "code": "error", "error": str(e)[:200]}
+
+
+# ===== Видео: aspect ratio (16:9, 9:16) =====
+def generate_video(base_url: str = "", api_key: str = "", model: str = "", prompt: str = "",
+                   duration: str = "5", aspect_ratio: str = "16:9", proxy: str = "", extra: dict = None) -> dict:
+    """Видео text2video. aspect_ratio: 16:9 (обычное) или 9:16 (кружок/вертикаль).
+    Agnes-хаб → POST /v1/videos (создаёт задачу, возвращает video_id). Поллинг — check_video_task_agnes."""
+    p = provider_profile("video", base_url, api_key, model, proxy=proxy)
+    if not p["key"]:
+        return {"ok": False, "code": "no_key", "error": "Укажите API-ключ для генерации видео"}
+    _nb = _missing_base_error(p, "видео")
+    if _nb:
+        return _nb
+    is_agnes = any(h in p["base"] for h in _BASE_PROVIDER_HINTS)
+    try:
+        with _client(proxy, timeout=300.0) as c:
+            if is_agnes:
+                # Agnes (OpenAI Videos): POST /v1/videos, нужен mode. seconds 4-12. size 720P/1080P.
+                # Модель должна быть видеомоделью Agnes — чат-модель (agnes-3.0-flash) отклоняется.
+                _vid_model = model if "video" in (model or "").lower() else (_FB_VIDEO_MODEL or model or "video")
+                body = {**{"model": _vid_model, "prompt": prompt,
+                           "mode": "text", "seconds": duration or "5",
+                           "size": "720P", "aspect_ratio": aspect_ratio},
+                        **({} if not extra else extra)}
+                r = c.post(f"{p['base']}/videos",
+                           headers={"Authorization": f"Bearer {p['key']}", "Content-Type": "application/json"},
+                           json=body)
+            else:
+                r = c.post(f"{p['api_base']}/v1/videos/text2video",
+                           headers={"Authorization": f"Bearer {p['key']}"},
+                           json=_gen_video_body(prompt, duration, aspect_ratio, model, extra))
+        if r.status_code in (200, 201, 202):
+            d = r.json()
+            # Agnes: video_id; OpenAI-style: task_id / data[]
+            vid = d.get("video_id") or d.get("task_id") or (d.get("data") or {}).get("task_id") or ""
+            url = d.get("url", "")
+            return {"ok": True, "task_id": vid, "video_id": vid, "url": url, "aspect_ratio": aspect_ratio,
+                    "raw": d, "agnes": is_agnes,
+                    "note": "Видео генерируется (задача создана)" + (" — URL готов" if url else "")}
+        return {"ok": False, "code": "unsupported", "error": f"Провайдер: {r.status_code} {r.text[:200]}"}
+    except Exception as e:
+        return {"ok": False, "code": "error", "error": str(e)[:200]}
+
+
+def generate_video_example(base_url: str = "", api_key: str = "", model: str = "", prompt: str = "",
+                           example_b64: str = "", duration: str = "5",
+                           aspect_ratio: str = "16:9", proxy: str = "", extra: dict = None) -> dict:
+    """Видео video2video: видео по промпту + примеру-видео."""
+    p = provider_profile("video", base_url, api_key, model, proxy=proxy)
+    if not p["key"]:
+        return {"ok": False, "code": "no_key", "error": "Укажите API-ключ для генерации видео"}
+    _nb = _missing_base_error(p, "видео")
+    if _nb:
+        return _nb
+    try:
+        import base64 as _b64
+        import urllib3
+        from urllib3.filepost import encode_multipart_formdata
+        raw = _b64.b64decode(example_b64)
+        files = {"video": ("example.mp4", raw, "video/mp4")}
+        fields = {"prompt": prompt, "duration": duration, "aspect_ratio": aspect_ratio}
+        if extra:
+            fields.update({k: str(v) for k, v in extra.items()})
+        body, content_type = encode_multipart_formdata({**files, **{k: (k, v) for k, v in fields.items()}})
+        with _client(proxy, timeout=300.0) as c:
+            r = c.post(f"{p['api_base']}/v1/videos/video2video",
+                       headers={"Authorization": f"Bearer {p['key']}", "Content-Type": content_type},
+                       content=body)
+        if r.status_code in (200, 201, 202):
+            d = r.json()
+            tid = (d.get("data") or {}).get("task_id") or d.get("task_id") or ""
+            return {"ok": True, "task_id": tid, "aspect_ratio": aspect_ratio, "raw": d,
+                    "note": "Видео по примеру создано — опрашиваем статус."}
+        return {"ok": False, "code": "unsupported", "error": f"Провайдер: {r.status_code} {r.text[:200]}"}
+    except Exception as e:
+        return {"ok": False, "code": "error", "error": str(e)[:200]}

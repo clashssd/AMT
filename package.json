@@ -1,0 +1,50 @@
+{
+  "name": "amt-chat",
+  "productName": "AMT Chat",
+  "version": "1.5.3",
+  "description": "Local AI assistant with desktop shell and extension system",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test:py": "pytest tests/",
+    "test:js": "node tests/run_js_tests.js",
+    "test": "pytest tests/ && node tests/run_js_tests.js",
+    "build:py": "python -m PyInstaller backend/amt-backend.spec --noconfirm",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:all": "node scripts/build.js all"
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.amt.chat",
+    "productName": "AMT Chat",
+    "win": {
+      "target": "nsis",
+      "icon": "frontend/assets/icon-256.png",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/nsis-clean.nsh"
+    },
+    "files": [
+      "main.js",
+      "electron/**"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/amt-backend",
+        "to": "amt-backend",
+        "filter": ["**/*"]
+      }
+    ],
+    "directories": {
+      "output": "release"
+    }
+  }
+}

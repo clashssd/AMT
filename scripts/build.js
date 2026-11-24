@@ -69,8 +69,7 @@ function hasNonAscii(s) {
  *   2. %ProgramData%\amt-builder-cache\<user>\
  *   3. ASCII-падение в temp (напр. C:\Temp)
  *
- * Возвращает null, если текущий кэш уже ASCII-безопасен (тогда менять ничего
- * не надо).
+ * Возвращает null, если ни один кандидат не получился.
  *
  * @param {{userHome?:string, localAppData?:string, temp?:string}} ctx
  * @returns {string|null}
@@ -106,7 +105,15 @@ function pickAsciiCacheDir(ctx = {}) {
  * ASCII-каталог (C:\amt-builder-cache\<user>\). Это безвредно для машин с
  * ASCII-профилем (кэш просто лежит в другом месте) и ЛЕЧИТ spawn UNKNOWN на
  * машинах с кириллическим профилем — makensis.exe извлекается и запускается
- * по ASCII-пути. На unix не трогаем (проблема специфична Windows).
+ * по ASCII-пути.
+ *
+ * Важно: при этом НЕ трогаем TEMP/TMP/APPDATA — makensis.exe запускается
+ * только через NSISDIR (эту переменную electron-builder сам выставляет на
+ * кэш NSIS), а не через TEMP, поэтому кириллица в TEMP не опасна. Лишний
+ * override TEMP/APPDATA, наоборот, ломает другие утилиты, которые честно
+ * читают эти переменные.
+ *
+ * На unix не трогаем (проблема специфична Windows).
  *
  * @returns {BuildEnv}
  */

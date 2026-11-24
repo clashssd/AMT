@@ -193,9 +193,94 @@ function findMakensis(cacheDir) {
 }
 
 /**
+ * Ищет 7z/7za бинарник. Порядок:
+ *   1. PATH (7za, 7z, 7zip, 7-zip)
+ *   2. C:\Program Files\7-Zip\7z.exe (стандартная установка)
+ *   3. C:\Program Files (x86)\7-Zip\7z.exe
+ *
+ * @returns {string|null}
+ */
+function find7za() {
+  const names = process.platform === 'win32' ? ['7za.exe', '7z.exe', '7zip.exe'] : ['7za', '7z'];
+  // 1. PATH — проверим через `where` (win) / `command -v` (unix).
+  if (process.platform === 'win32') {
+    const { execSync } = require('child_process');
+    for (const n of names) {
+      try {
+        const out = execSync(`where ${n}`, { shell: 'cmd', encoding: 'utf8' });
+        const first = out.trim().split(/\r?\n/)[0];
+        if (first && fs.existsSync(first)) return first;
+      } catch { /* not on PATH */ }
+    }
+  }
+  // 2. Стандартные локации 7-Zip.
+  const pfx = process.platform === 'win32'
+    ? [path.join(process.env['PROGRAMFILES'] || 'C:\\Program Files', '7-Zip', '7z.exe'),
+       path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', '7-Zip', '7z.exe')]
+    : ['/usr/bin/7z', '/usr/local/bin/7z'];
+  for (const p of pfx) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+/**
+ * Извлекает найденный .7z в целевой каталог, используя найденный 7z/7za.
+ *
+ * @param {string} archive
+ * @param {string} outDir
+ * @returns {boolean}
+ */
+function extract7z(archive, outDir) {
+  const seven = find7za();
+  if (!seven) {
+    console.warn(`[build.js] 7z/7za не найден — не могу распаковать ${archive}. Установите 7-Zip (winget install 7zip.7zip).`);
+    return false;
+  }
+  fs.mkdirSync(outDir, { recursive: true });
+  const { spawnSync } = require('child_process');
+  console.log(`[build.js] Распаковываю ${archive} → ${outDir} через ${seven}`);
+  const r = spawnSync(seven, ['x', `-y`, `-o${outDir}`, archive], {
+    stdio: 'inherit',
+    cwd: ROOT,
+  });
+  return r.status === 0;
+}
+
+/**
+ * Ищет уже скачанный NSIS-архив в кэше (hash-named .7z file).
+ *
+ * @param {string} cacheDir
+ * @returns {string|null}
+ */
+function findNsisArchive(cacheDir) {
+  if (!cacheDir || !fs.existsSync(cacheDir)) return null;
+  const stack = [path.join(cacheDir, 'nsis')];
+  const found = [];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) stack.push(full);
+      else if (/\.7z$/i.test(e.name)) found.push(full);
+    }
+  }
+  return found.length ? found[0] : null;
+}
+
+/**
  * Pre-загружает NSIS в заданный (ASCII) кэш ДО запуска electron-builder.
  * Это гарантирует, что makensis.exe будет лежать по ASCII-пути и
  * executeMakensis спавнит его от туда, даже если дефолтный кэш кириллический.
+ *
+ * Стратегия:
+ * 1. Сказать app-builder.exe скачать/извлечь NSIS-артефакт в кэш.
+ * 2. Если makensis.exe не появился (нет 7za в PATH, антивирус, нет сети) —
+ *    попробовать распаковать сам .7z найденный в кэше через 7-Zip из
+ *    стандартной локации C:\Program Files\7-Zip\7z.exe.
+ * 3. Вернуть true, если makensis.exe теперь на месте.
  *
  * @param {string} cacheDir — ASCII-каталог, куда положить кэш
  * @returns {Promise<boolean>} — true, если makensis.exe появился
@@ -221,7 +306,24 @@ async function preDownloadNsis(cacheDir) {
     p.on('close', () => resolve());
     p.on('error', () => resolve());
   });
-  return Boolean(findMakensis(cacheDir));
+  let p = findMakensis(cacheDir);
+  if (p) return true;
+  // Fallback: app-builder не смог распаковать 7z (нет 7za в PATH, антивирус,
+  // нет сети) — но сам .7z мог быть скачан (hash-named file). Ищем его и
+  // распаковываем через 7-Zip из стандартной локации.
+  const archive = findNsisArchive(cacheDir);
+  if (archive) {
+    console.log(`[build.js] makensis.exe не найден после download-artifact, но .7z скачан: ${archive}`);
+    const ok = extract7z(archive, cacheDir);
+    if (ok) {
+      p = findMakensis(cacheDir);
+      if (p) {
+        console.log(`[build.js] makensis.exe распакован вручную: ${p}`);
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -322,14 +424,15 @@ async function buildWin(envOverride) {
       console.error('\n[build.js] spawn UNKNOWN повторился даже после retry.');
       console.error('Скорее всего, антивирус/SmartScreen заблокировал makensis.exe, либо путь к кэшу не-ASCII.');
       console.error('Попробуйте:');
-      console.error('  1) обновить скрипт (git pull) — новая версия pre-загружает NSIS в ASCII-кэш и автоматически обходит не-ASCII путь');
-      console.error('  2) временно отключить антивирус и перезапустить:  node scripts/build.js win');
+      console.error('  1) обновить скрипт (git pull) — новая версия pre-загружает NSIS в ASCII-кэш, распаковывает 7z через 7-Zip и автоматически обходит не-ASCII путь');
+      console.error('  2) установить 7-Zip:  winget install 7zip.7zip  (нужен для распаковки NSIS-архива, если app-builder сам не смог)');
+      console.error('  3) временно отключить антивирус и перезапустить:  node scripts/build.js win');
       if (envOverride) {
-        console.error('  3) переопределить кэш в ASCII-путь вручную:');
+        console.error('  4) переопределить кэш в ASCII-путь вручную:');
         console.error(`       ${Object.entries(envOverride).map(([k, v]) => `${k}=${v}`).join(' ')}`);
         console.error(`       node scripts/build.js win`);
       }
-      console.error('  4) см. docs/BUILD.md — раздел "spawn UNKNOWN" / "SmartScreen".');
+      console.error('  5) см. docs/BUILD.md — раздел "spawn UNKNOWN" / "SmartScreen".');
     }
     return false;
   }
@@ -406,4 +509,7 @@ module.exports = {
   isSpawnUnknownOutput,
   preDownloadNsis,
   resolveMakensisPath,
+  find7za,
+  extract7z,
+  findNsisArchive,
 };

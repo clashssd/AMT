@@ -69,8 +69,8 @@ x spawn UNKNOWN  failedTask=build  stackTrace=Error: spawn UNKNOWN
     at ChildProcess.spawn (node:internal/child_process:...)
     at execFile (...node_modules\builder-util\src\util.ts:99:13)
 ```
-`spawn UNKNOWN` = Windows не смог запустить `makensis.exe`. Две типичные
-причины (обе устранимы, скрипт `node scripts/build.js` учитывает обе):
+`spawn UNKNOWN` = Windows не смог запустить `makensis.exe`. Три типичные
+причины (все устранимы, скрипт `node scripts/build.js` учитывает все три):
 
 1. **Не-ASCII путь кэша** (напр. профиль с кириллицей: `C:\Users\юляещека`).
    electron-builder скачивает/извлекает NSIS в кэш под этим путём, а
@@ -88,7 +88,19 @@ x spawn UNKNOWN  failedTask=build  stackTrace=Error: spawn UNKNOWN
    New-Item -ItemType Directory -Force $env:ELECTRON_BUILDER_CACHE | Out-Null
    npm run build:win
    ```
-2. **Антивирус/SmartScreen заблокировал только что извлечённый
+2. **Нет `7za` в PATH — `app-builder.exe` не может распаковать NSIS-архив.**
+   electron-builder скачивает NSIS как `.7z` (например
+   `nsis-3.0.4.1.7z`), затем `app-builder.exe` пытается распаковать его
+   через `7za` (из PATH). На корпоративных машинах (WDAC/SmartScreen)
+   `7za` часто отсутствует → `executable file not in %PATH%` → NSIS не
+   извлекается → `makensis.exe` не на месте → `spawn UNKNOWN`.
+   **Автоматически (с этой версии):** `scripts/build.js` после
+   `app-builder.exe download-artifact` ищет скачанный `.7z` в кэше и
+   распаковывает его через `7z.exe` из стандартной локации
+   `C:\Program Files\7-Zip\` (или PATH, если 7za там). Если 7-Zip не
+   установлен — поставьте: `winget install 7zip.7zip` (или
+   `choco install 7zip`) и перезапустите `node scripts/build.js win`.
+3. **Антивирус/SmartScreen заблокировал только что извлечённый
    `makensis.exe`.** Скрипт делает 1 retry через 2 сек. Если не помогло —
    временно отключите антивирус на время сборки (кэш NSIS — ~13 МБ, быстро
    переживает), затем `node scripts/build.js win`.

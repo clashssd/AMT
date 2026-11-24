@@ -144,6 +144,47 @@ t('isSpawnUnknownOutput: другой error (ENOENT) -> false', () => {
   assert.strictEqual(build.isSpawnUnknownOutput('Error: ENOENT no such file'), false);
 });
 
+// ---- find7za / extract7z / findNsisArchive: 7z- распаковка как fallback ----
+// (app-builder.exe ищет `7za` в PATH; на машине юляещеки её нет, есть только
+//  `7z.exe` в C:\Program Files\7-Zip — ищется через стандартную локацию.)
+t('find7za: возвращает путь к 7z-бинарнику (7z.exe в Program Files) или null', () => {
+  const seven = build.find7za();
+  // На машине без 7-Zip — null; с 7-Zip — путь к 7z.exe/7za.
+  // Не утверждаем строгое значение, проверяем, что тип строки или null.
+  assert.ok(seven === null || typeof seven === 'string');
+  if (seven !== null) {
+    assert.ok(require('fs').existsSync(seven), `найденный ${seven} должен существовать`);
+  }
+});
+t('find7za: win32, 7z.exe в Program Files -> найден', () => {
+  // Фиксированная проверка: если 7z.exe есть в стандартной локации — он вернётся.
+  const seven = build.find7za();
+  if (process.platform === 'win32') {
+    const expected = [
+      `${process.env['PROGRAMFILES']}\\7-Zip\\7z.exe`,
+      `${process.env['PROGRAMFILES(X86)']}\\7-Zip\\7z.exe`,
+    ];
+    for (const p of expected) {
+      if (require('fs').existsSync(p)) {
+        assert.strictEqual(seven, p, 'должен вернуть первый найденный путь');
+        return;
+      }
+    }
+  }
+  // Если ни одной стандартной локации нет — вернём null (PATH тоже проверен).
+});
+t('findNsisArchive: несуществующий кэш -> null', () => {
+  assert.strictEqual(build.findNsisArchive('C:/no-such-dir-xyz'), null);
+});
+t('findNsisArchive: пустой/undefined кэш -> null', () => {
+  assert.strictEqual(build.findNsisArchive(''), null);
+  assert.strictEqual(build.findNsisArchive(undefined), null);
+});
+t('extract7z: несуществующий архив -> false (без краша)', () => {
+  const ok = build.extract7z('C:/no-such-archive.7z', 'C:/no-such-out');
+  assert.strictEqual(ok, false);
+});
+
 restoreEnv();
-console.log(`\n${passed} build.js (spawn-UNKNOWN/ascii-cache) tests passed`);
+console.log(`\n${passed} build.js (spawn-UNKNOWN/ascii-cache/7z-fallback) tests passed`);
 if (passed === 0) process.exit(1);

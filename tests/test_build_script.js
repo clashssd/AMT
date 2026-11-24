@@ -66,12 +66,19 @@ t('cyrillic HOME -> asciiCache=true, ELECTRON_BUILDER_CACHE установлен
   assert.strictEqual(build.hasNonAscii(r.env.ELECTRON_BUILDER_CACHE), false);
 });
 
-// ---- resolveBuildEnv: все пути ASCII -> не трогаем кэш ----
-t('clean ASCII env -> asciiCache=false, env пуст', () => {
+// ---- resolveBuildEnv: все пути ASCII ----
+// На Windows теперь ВСЕГДА переопределяем кэш в ASCII (безвредно + предсказуемо).
+// На unix — не трогаем. Тест платформенно-зависимый.
+t('clean ASCII env: win32 -> asciiCache=true (всегда ASCII-кэш); unix -> false', () => {
   setEnv({ HOME: 'C:/Users/bob', USER: 'bob', LOCALAPPDATA: 'C:/Users/bob/AppData/Local', APPDATA: 'C:/Users/bob/AppData/Roaming', TEMP: 'C:/Users/bob/AppData/Local/Temp' });
   const r = build.resolveBuildEnv();
-  assert.strictEqual(r.asciiCache, false);
-  assert.deepStrictEqual(r.env, {});
+  if (process.platform === 'win32') {
+    assert.strictEqual(r.asciiCache, true, 'на Windows всегда ASCII-кэш');
+    assert.ok(r.env.ELECTRON_BUILDER_CACHE);
+    assert.strictEqual(build.hasNonAscii(r.env.ELECTRON_BUILDER_CACHE), false);
+  } else {
+    assert.strictEqual(r.asciiCache, false, 'на unix без не-ASCII — не трогаем');
+  }
 });
 
 // ---- resolveBuildEnv: кириллический LOCALAPPDATA (типично на Windows) ----

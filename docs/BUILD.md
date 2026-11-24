@@ -75,11 +75,14 @@ x spawn UNKNOWN  failedTask=build  stackTrace=Error: spawn UNKNOWN
 1. **Не-ASCII путь кэша** (напр. профиль с кириллицей: `C:\Users\юляещека`).
    electron-builder скачивает/извлекает NSIS в кэш под этим путём, а
    `child_process.spawn` на кириллическом пути падает с `UNKNOWN`.
-   **Автоматически:** `scripts/build.js` обнаруживает не-ASCII `HOME` /
-   `APPDATA` / `LOCALAPPDATA` / `TEMP` и переопределяет
-   `ELECTRON_BUILDER_CACHE` в чистый ASCII-каталог
-   (`C:\amt-builder-cache\<user>\`). Если запускаете `npm run build:win`
-   руками (не через `scripts/build.js`), задайте кэш сами:
+   **Автоматически (с этой версии):** `scripts/build.js` ВСЕГДА на Windows
+   переопределяет `ELECTRON_BUILDER_CACHE` в чистый ASCII-каталог
+   (`C:\amt-builder-cache\<user>\`) и pre-загружает NSIS туда, так что
+   `makensis.exe` извлекается и запускается по ASCII-пути. После сборки
+   скрипт печатает диагностическую строку `✓ NSIS-компилятор работал из:
+   <путь> (non-ASCII=false)` — если видите `(non-ASCII=true)`, обход не
+   сработал. Если запускаете `npm run build:win` руками (НЕ через
+   `scripts/build.js`), задайте кэш сами:
    ```powershell
    $env:ELECTRON_BUILDER_CACHE = "C:\amt-builder-cache\user"
    New-Item -ItemType Directory -Force $env:ELECTRON_BUILDER_CACHE | Out-Null

@@ -102,6 +102,12 @@ function pickAsciiCacheDir(ctx = {}) {
 /**
  * Решает, нужно ли переопределять ELECTRON_BUILDER_CACHE, и почему.
  *
+ * Стратегия: на Windows ВСЕГДА переопределяем кэш electron-builder в
+ * ASCII-каталог (C:\amt-builder-cache\<user>\). Это безвредно для машин с
+ * ASCII-профилем (кэш просто лежит в другом месте) и ЛЕЧИТ spawn UNKNOWN на
+ * машинах с кириллическим профилем — makensis.exe извлекается и запускается
+ * по ASCII-пути. На unix не трогаем (проблема специфична Windows).
+ *
  * @returns {BuildEnv}
  */
 function resolveBuildEnv() {
@@ -117,24 +123,43 @@ function resolveBuildEnv() {
     'TEMP': temp,
   };
   const offending = Object.entries(sources).filter(([, v]) => hasNonAscii(v));
+  const isWin = process.platform === 'win32';
 
-  if (offending.length === 0) {
-    // Все пути ASCII — кэш менять не нужно.
-    return { env: {}, reason: 'все пути ASCII — ELECTRON_BUILDER_CACHE не трогаем', asciiCache: false };
-  }
-
-  const target = pickAsciiCacheDir({ userHome: home });
-  if (!target) {
-    // Не нашли ASCII-каталог — вернём причину, но не меняем env (let it fail
-    // с понятным сообщением, не с тихим fallback в тот же кириллический кэш).
-    const names = offending.map(([k]) => k).join(', ');
+  // На Windows: всегда ASCII-кэш (лечит и кириллический профиль, и даёт
+  // предсказуемую локацию для pre-download NSIS).
+  if (isWin) {
+    const target = pickAsciiCacheDir({ userHome: home });
+    if (!target) {
+      const names = offending.map(([k]) => k).join(', ');
+      return {
+        env: {},
+        reason: `не удалось подобрать ASCII-каталог кэша (не-ASCII: ${names || '—'}) — сборка может упасть с spawn UNKNOWN.`,
+        asciiCache: false,
+      };
+    }
+    const why = offending.length
+      ? `не-ASCII пути (${offending.map(([k, v]) => `${k}=${v}`).join(', ')}) → spawn UNKNOWN`
+      : 'Windows: предсказуемая ASCII-локация кэша (обход кириллического профиля + pre-download NSIS)';
     return {
-      env: {},
-      reason: `не-ASCII пути: ${names}. Не удалось подобрать ASCII-каталог кэша — сборка может упасть с spawn UNKNOWN.`,
-      asciiCache: false,
+      env: { ELECTRON_BUILDER_CACHE: target },
+      reason: `переопределяю ELECTRON_BUILDER_CACHE=${target} — ${why}`,
+      asciiCache: true,
     };
   }
 
+  // unix: только если реально есть не-ASCII путь (иначе не трогаем).
+  if (offending.length === 0) {
+    return { env: {}, reason: 'все пути ASCII — ELECTRON_BUILDER_CACHE не трогаем', asciiCache: false };
+  }
+  const target = pickAsciiCacheDir({ userHome: home });
+  if (!target) {
+    const names = offending.map(([k]) => k).join(', ');
+    return {
+      env: {},
+      reason: `не-ASCII пути: ${names}. Не удалось подобрать ASCII-каталог кэша.`,
+      asciiCache: false,
+    };
+  }
   const reason = `переопределяю ELECTRON_BUILDER_CACHE=${target}, потому что не-ASCII пути: ${offending.map(([k, v]) => `${k}=${v}`).join(', ')}`;
   return { env: { ELECTRON_BUILDER_CACHE: target }, reason, asciiCache: true };
 }
@@ -143,16 +168,70 @@ function resolveBuildEnv() {
  * Проверяет, существует ли и запускается ли makensis.exe в заданном кэше.
  * Используется для pre-warm диагностики.
  *
+ * ВАЖНО: структура кэша зависит от версии/раскладки (например
+ * `<cache>/nsis/nsis-3.0.4.1/makensis.exe`). Поэтому ищем makensis.exe
+ * рекурсивно, а не по жёсткому пути.
+ *
  * @param {string} cacheDir
  * @returns {string|null} — путь к makensis.exe или null
  */
 function findMakensis(cacheDir) {
-  if (!cacheDir) return null;
-  const rel = process.platform === 'win32' ? path.join('nsis', 'nsis-3.0.4.1', 'Bin', 'makensis.exe')
-    : process.platform === 'darwin' ? 'nsis/macos/nsis-3.0.4.1/mac/makensis'
-    : 'nsis/linux/nsis-3.0.4.1/linux/makensis';
-  const p = path.join(cacheDir, rel);
-  return fs.existsSync(p) ? p : null;
+  if (!cacheDir || !fs.existsSync(cacheDir)) return null;
+  // Рекурсивный поиск makensis.exe (раскладка <cache>/nsis/<...>/может меняться)
+  const stack = [cacheDir];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) stack.push(full);
+      else if (e.name === (process.platform === 'win32' ? 'makensis.exe' : 'makensis')) return full;
+    }
+  }
+  return null;
+}
+
+/**
+ * Pre-загружает NSIS в заданный (ASCII) кэш ДО запуска electron-builder.
+ * Это гарантирует, что makensis.exe будет лежать по ASCII-пути и
+ * executeMakensis спавнит его от туда, даже если дефолтный кэш кириллический.
+ *
+ * @param {string} cacheDir — ASCII-каталог, куда положить кэш
+ * @returns {Promise<boolean>} — true, если makensis.exe появился
+ */
+async function preDownloadNsis(cacheDir) {
+  const { spawn } = require('child_process');
+  // app-builder.exe — нативный бинарник, который electron-builder использует
+  // для скачивания/извлечения. Платформенный путь:
+  const ab = path.join(ROOT, 'node_modules', 'app-builder-bin',
+    process.platform === 'win32' ? 'win' : process.platform === 'darwin' ? 'mac' : 'linux',
+    process.arch === 'arm64' ? 'arm64' : 'x64',
+    process.platform === 'win32' ? 'app-builder.exe' : 'app-builder');
+  if (!fs.existsSync(ab)) {
+    console.warn(`[build.js] preDownloadNsis: app-builder не найден в ${ab} — пропускаю pre-load (electron-builder скачает сам).`);
+    return false;
+  }
+  // sha512 nsis-3.0.4.1 — жёстко зашит в app-builder-lib/out/targets/nsis/nsisUtil.js
+  const NSIS_SHA512 = 'VKMiizYdmNdJOWpRGz4trl4lD++BvYP2irAXpMilheUP0pc93iKlWAoP843Vlraj8YG19CVn0j+dCo/hURz9+Q==';
+  const NSIS_URL = 'https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z';
+  await new Promise((resolve) => {
+    const p = spawn(ab, ['download-artifact', '--name', 'nsis', '--url', NSIS_URL, '--sha512', NSIS_SHA512],
+      { env: { ...process.env, ELECTRON_BUILDER_CACHE: cacheDir }, stdio: 'inherit' });
+    p.on('close', () => resolve());
+    p.on('error', () => resolve());
+  });
+  return Boolean(findMakensis(cacheDir));
+}
+
+/**
+ * Возвращает путь к makensis.exe в кэше (для диагностического лога) или null.
+ *
+ * @param {string} cacheDir
+ * @returns {string|null}
+ */
+function resolveMakensisPath(cacheDir) {
+  return findMakensis(cacheDir);
 }
 
 function run(cmd, args, opts = {}) {
@@ -200,13 +279,33 @@ function buildPy() {
  * Запускает electron-builder, при `spawn UNKNOWN` (антивирус / блокировка)
  * делает 1 retry. Возвращает true, если сборка успешна.
  */
-function buildWin(envOverride) {
+async function buildWin(envOverride) {
   const spawnOpts = envOverride ? { env: { ...process.env, ...envOverride } } : {};
+  // Если активен ASCII-обход кэша — заранее скачаем NSIS в этот кэш, чтобы
+  // makensis.exe гарантированно лежал по ASCII-пути. Это убирает spawn UNKNOWN
+  // из-за кириллического кэша даже при запуске npm run build:win напрямую.
+  if (envOverride && envOverride.ELECTRON_BUILDER_CACHE) {
+    console.log(`\n[build.js] Pre-загружаю NSIS в ASCII-кэш: ${envOverride.ELECTRON_BUILDER_CACHE}`);
+    const ok = await preDownloadNsis(envOverride.ELECTRON_BUILDER_CACHE);
+    const p = resolveMakensisPath(envOverride.ELECTRON_BUILDER_CACHE);
+    if (ok && p) {
+      console.log(`[build.js] makensis.exe готов по ASCII-пути: ${p} (non-ASCII=${hasNonAscii(p)})`);
+    } else {
+      console.warn('[build.js] NSIS не смог предзагрузить в ASCII-кэш (нет сети?). electron-builder попробует сам — если снова spawn UNKNOWN, см. docs/BUILD.md.');
+    }
+  }
   let attempt = 0;
   for (;;) {
     attempt++;
     const r = run('npm', ['run', 'build:win'], spawnOpts);
-    if (r.status === 0) return true;
+    if (r.status === 0) {
+      // Пост-верификация: куда реально положился makensis.exe, ASCII ли путь.
+      if (envOverride && envOverride.ELECTRON_BUILDER_CACHE) {
+        const p = resolveMakensisPath(envOverride.ELECTRON_BUILDER_CACHE);
+        if (p) console.log(`[build.js] ✓ NSIS-компилятор работал из: ${p} (non-ASCII=${hasNonAscii(p)})`);
+      }
+      return true;
+    }
 
     const stdoutStr = r.stdout && r.stdout.toString ? r.stdout.toString() : '';
     const stderrStr = r.stderr && r.stderr.toString ? r.stderr.toString() : '';
@@ -223,13 +322,14 @@ function buildWin(envOverride) {
       console.error('\n[build.js] spawn UNKNOWN повторился даже после retry.');
       console.error('Скорее всего, антивирус/SmartScreen заблокировал makensis.exe, либо путь к кэшу не-ASCII.');
       console.error('Попробуйте:');
-      console.error('  1) временно отключить антивирус и перезапустить:  node scripts/build.js win');
+      console.error('  1) обновить скрипт (git pull) — новая версия pre-загружает NSIS в ASCII-кэш и автоматически обходит не-ASCII путь');
+      console.error('  2) временно отключить антивирус и перезапустить:  node scripts/build.js win');
       if (envOverride) {
-        console.error('  2) переопределить кэш в ASCII-путь вручную:');
+        console.error('  3) переопределить кэш в ASCII-путь вручную:');
         console.error(`       ${Object.entries(envOverride).map(([k, v]) => `${k}=${v}`).join(' ')}`);
         console.error(`       node scripts/build.js win`);
       }
-      console.error('  3) см. docs/BUILD.md — раздел "spawn UNKNOWN" / "SmartScreen".');
+      console.error('  4) см. docs/BUILD.md — раздел "spawn UNKNOWN" / "SmartScreen".');
     }
     return false;
   }
@@ -269,27 +369,41 @@ const target = process.argv[2] || 'all';
 // require() из тестов. Без этого `require('./build.js')` в тестах бы начал
 // собирать дистрибутив.
 if (require.main === module) {
-  if (target === 'py') {
-    buildPy();
-    console.log('\nBuild complete.');
-  } else {
-    // win или all: сначала (при all) PyInstaller, затем electron-builder.
-    if (target === 'all') buildPy();
+  (async () => {
+    if (target === 'py') {
+      buildPy();
+      console.log('\nBuild complete.');
+    } else {
+      // win или all: сначала (при all) PyInstaller, затем electron-builder.
+      if (target === 'all') buildPy();
 
-    const { env, reason, asciiCache } = resolveBuildEnv();
-    if (asciiCache) {
-      console.log(`\n[build.js] ${reason}`);
-      fs.mkdirSync(env.ELECTRON_BUILDER_CACHE, { recursive: true });
-    } else if (reason) {
-      console.log(`[build.js] ${reason}`);
+      const { env, reason, asciiCache } = resolveBuildEnv();
+      if (asciiCache) {
+        console.log(`\n[build.js] ${reason}`);
+        fs.mkdirSync(env.ELECTRON_BUILDER_CACHE, { recursive: true });
+      } else if (reason) {
+        console.log(`[build.js] ${reason}`);
+      }
+
+      const ok = await buildWin(asciiCache ? env : undefined);
+      if (!ok) process.exit(1);
+      console.log('electron-builder OK -> release/');
+      printSmartScreenNote();
+      console.log('\nBuild complete.');
     }
-
-    if (!buildWin(asciiCache ? env : undefined)) process.exit(1);
-    console.log('electron-builder OK -> release/');
-    printSmartScreenNote();
-    console.log('\nBuild complete.');
-  }
+  })().catch((e) => {
+    console.error('[build.js] unexpected error:', e);
+    process.exit(1);
+  });
 }
 
 // Export for tests (не влияет на CLI-режим благодаря require.main guard выше)
-module.exports = { hasNonAscii, pickAsciiCacheDir, resolveBuildEnv, findMakensis, isSpawnUnknownOutput };
+module.exports = {
+  hasNonAscii,
+  pickAsciiCacheDir,
+  resolveBuildEnv,
+  findMakensis,
+  isSpawnUnknownOutput,
+  preDownloadNsis,
+  resolveMakensisPath,
+};

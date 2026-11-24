@@ -111,7 +111,7 @@ backend/              FastAPI-бэкенд
   agents.json         seed-ядро агентов/скиллов (создаётся при старте)
   keys.json           ваши API-ключи (пустой шаблон, не коммитится)
   settings.json       конфиг оркестратора
-  changelog.json      история вер��ий (показывается в «Справк�� → Апдейты»)
+  changelog.json      история версий (показывается в «Справка → Апдейты»)
 frontend/             HTML/JS/CSS (vanilla, без фреймворков)
   home.html           основной UI (SPA)
   js/                 main.js и вспомогательные модули
@@ -141,7 +141,7 @@ cd backend && ..\.venv\Scripts\uvicorn main:app --port 8000
 ## Desktop (Electron)
 
 ```bash
-npm install            # у��тановит electron + electron-builder
+npm install            # установит electron + electron-builder
 npm start              # запустит Electron: поднимет Python-бэкенд, откроет окно
 ```
 

@@ -11,5 +11,14 @@ markdown>=3.5
 pygments>=2.17
 pillow>=10.0.0
 comtypes>=1.1.0
+# Playwright — для CDP-автоматизации браузеров (browser_cdp.py:
+# connect_over_cdp к Chromium-браузерам через --remote-debugging-port=9222).
+# Без этой зависимости токены browser_*_cdp деградируют до httpx page_recon.
+# После pip install playwright нужно отдельно скачать браузер:
+#   python -m playwright install
+playwright>=1.40.0
 # build tooling (для PyInstaller sidecar; не нужен в runtime)
 pyinstaller>=6.0
+# dev / testing (нужны для запуска тест-сьюта backend/tests/, не для runtime)
+pytest>=8.0
+pytest-asyncio>=0.23

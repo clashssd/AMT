@@ -277,6 +277,79 @@ class DesktopSandbox:
             pass
         return ""
 
+    # ---------- Window health check (Layer 3: hung detection) ----------
+    def _is_window_hung(self, hwnd: int, timeout_ms: int = 1000) -> bool:
+        """Проверяет, отвечает ли окно (не зависо).
+
+        Использует SendMessageTimeoutW с WM_NULL — если окно не отвечает
+        за timeout_ms миллисекунд, оно считается зависшим.
+
+        Returns:
+            True если окно ЗАВИСЛО (не отвечает), False если работает.
+        """
+        import platform
+        if platform.system() != "Windows":
+            return False
+        try:
+            import ctypes
+            import ctypes.wintypes as wt
+            user32 = ctypes.windll.user32
+            user32.SendMessageTimeoutW.argtypes = [
+                wt.HWND,      # hWnd
+                ctypes.c_uint,  # uMsg
+                wt.WPARAM,     # wParam
+                wt.LPARAM,     # lParam
+                ctypes.c_uint,  # uFlags
+                ctypes.c_uint,  # uTimeout (ms)
+                ctypes.POINTER(ctypes.c_ulong),  # pResult
+            ]
+            user32.SendMessageTimeoutW.restype = ctypes.c_ulong
+
+            WM_NULL = 0x0000
+            SMTO_ABORTIFHUNG = 0x0002
+            result = ctypes.c_ulong(0)
+            ret = user32.SendMessageTimeoutW(
+                hwnd, WM_NULL, 0, 0,
+                SMTO_ABORTIFHUNG, timeout_ms,
+                ctypes.byref(result),
+            )
+            # ret == 0 → окно не ответило (hung)
+            return ret == 0
+        except Exception:
+            # Не можем определить — считаем что НЕ зависло
+            return False
+
+    def _check_window_health(self, app: str) -> tuple:
+        """Health-check перед UIA-вызовом: находит окно и проверяет что оно не зависло.
+
+        Returns:
+            (hwnd, is_hung, error) — hwnd=0 если не найдено, is_hung=True если зависло.
+        """
+        import platform
+        if platform.system() != "Windows":
+            return (0, False, "Не Windows")
+
+        import ctypes
+        user32 = ctypes.windll.user32
+
+        if not app or app.lower().strip() in ("default", "системный", "system"):
+            hwnd = user32.GetForegroundWindow()
+        else:
+            base = os.path.basename(app).replace('.exe', '') if app.endswith('.exe') else app.replace('.exe', '').strip()
+            hwnd = 0
+            for variant in [base, base.lower(), base.upper(), base.title()]:
+                hwnd = self._find_window_by_process(variant)
+                if hwnd:
+                    break
+
+        if not hwnd:
+            return (0, False, f"Окно '{app}' не найдено")
+
+        is_hung = self._is_window_hung(hwnd, timeout_ms=1000)
+        if is_hung:
+            return (hwnd, True, f"Окно '{app}' не отвечает (зависло). Попробуйте перезапустить приложение.")
+        return (hwnd, False, "")
+
     def _find_browser(self, name: str) -> Optional[str]:
         """Ищет браузер по имени в реестре, common dirs, Start Menu и PATH.
 
@@ -622,6 +695,103 @@ class DesktopSandbox:
             return None
         except Exception:
             return None
+
+    # ---------- CDP-based browser methods (Layer 2) ----------
+    def browser_recon_cdp(self, url: str = "") -> dict:
+        """Recon a page via CDP (Chrome DevTools Protocol) — for JS-rendered pages.
+
+        Uses the CDP module (browser_cdp.py) to connect to a running Chromium
+        browser and extract elements with CSS selectors. Falls back to httpx
+        page_recon if CDP is unavailable.
+
+        Args:
+            url: URL to recon (empty = current active tab).
+
+        Returns:
+            {"ok": True, "url": str, "title": str, "elements": [...], "method": "cdp"|"httpx"}
+        """
+        from .browser_cdp import cdp_recon
+        result = cdp_recon(url)
+        if result.get("ok"):
+            result["method"] = "cdp"
+            self._log("browser_recon_cdp", {"url": url, "elements": len(result.get("elements", []))}, "ok")
+            return result
+        # CDP unavailable — fall back to httpx page_recon
+        self._log("browser_recon_cdp_fallback", {"url": url, "cdp_error": result.get("error", "")}, "fallback to httpx")
+        fallback = self.page_recon(url) if url else {"ok": False, "error": "CDP unavailable and no URL for httpx fallback"}
+        fallback["method"] = "httpx_fallback"
+        return fallback
+
+    def browser_click_cdp(self, selector: str) -> dict:
+        """Click a browser element by CSS selector via CDP.
+
+        Args:
+            selector: CSS selector (e.g. "#search-input", "button.primary").
+
+        Returns:
+            {"ok": bool, "selector": str}
+        """
+        from .browser_cdp import cdp_click
+        result = cdp_click(selector)
+        self._log("browser_click_cdp", {"selector": selector}, "ok" if result.get("ok") else "error")
+        return result
+
+    def browser_fill_cdp(self, selector: str, text: str) -> dict:
+        """Fill a browser input field by CSS selector via CDP.
+
+        Args:
+            selector: CSS selector of the input/textarea.
+            text: Text to fill.
+
+        Returns:
+            {"ok": bool, "selector": str}
+        """
+        from .browser_cdp import cdp_fill
+        result = cdp_fill(selector, text)
+        self._log("browser_fill_cdp", {"selector": selector, "text": text[:50]}, "ok" if result.get("ok") else "error")
+        return result
+
+    def browser_press_cdp(self, key: str) -> dict:
+        """Press a keyboard key in the browser via CDP.
+
+        Args:
+            key: Key name (e.g. "Enter", "Tab", "Escape").
+
+        Returns:
+            {"ok": bool, "key": str}
+        """
+        from .browser_cdp import cdp_press
+        result = cdp_press(key)
+        self._log("browser_press_cdp", {"key": key}, "ok" if result.get("ok") else "error")
+        return result
+
+    def browser_navigate_cdp(self, url: str) -> dict:
+        """Navigate the active browser tab to a URL via CDP.
+
+        Args:
+            url: http/https URL.
+
+        Returns:
+            {"ok": bool, "url": str, "title": str}
+        """
+        from .browser_cdp import cdp_navigate
+        result = cdp_navigate(url)
+        self._log("browser_navigate_cdp", {"url": url}, "ok" if result.get("ok") else "error")
+        return result
+
+    def browser_screenshot_cdp(self) -> dict:
+        """Screenshot the active browser tab via CDP.
+
+        Returns:
+            {"ok": bool, "path": str}
+        """
+        from .browser_cdp import cdp_screenshot
+        path = cdp_screenshot()
+        if path:
+            self._log("browser_screenshot_cdp", {"path": path}, "ok")
+            return {"ok": True, "path": path}
+        self._log("browser_screenshot_cdp", {}, "failed")
+        return {"ok": False, "error": "CDP screenshot failed (is browser running with CDP port?)"}
 
     # ---------- App launch ----------
     def launch_app(self, app: str, args: str = "") -> dict:
@@ -1145,6 +1315,10 @@ class DesktopSandbox:
             # "default" → авто-детект
             if app.lower().strip() in ("default", "системный", "system"):
                 app = self._get_default_browser() or self._detect_running_browser()
+            # Layer 3: Check window health before sending keys
+            _, is_hung, hung_err = self._check_window_health(app)
+            if is_hung:
+                return {"ok": False, "error": hung_err, "code": "window_unavailable"}
             # Приводим окно в фокус напрямую (надёжнее)
             base = os.path.basename(app).replace('.exe', '') if app.endswith('.exe') else app.replace('.exe', '').strip()
             found = None
@@ -1233,6 +1407,10 @@ class DesktopSandbox:
             return {"ok": False, "error": "window_click доступен только на Windows"}
 
         if app:
+            # Layer 3: Check window health before clicking
+            _, is_hung, hung_err = self._check_window_health(app)
+            if is_hung:
+                return {"ok": False, "error": hung_err, "code": "window_unavailable"}
             focus_res = self.window_focus(app)
             if not focus_res.get("ok"):
                 return focus_res
@@ -1248,9 +1426,9 @@ class DesktopSandbox:
                           f"Укажите целые числа (пиксели на экране). Сначала узнайте координаты через window_ui_recon или window_screenshot.",
                 "code": "bad_coords",
             }
-        success = self._click_at(x, y)
+        success = self._click_at(x, y, verify=True)
         if success:
-            self._log("window_click", {"x": x, "y": y, "app": app}, "clicked")
+            self._log("window_click", {"x": x, "y": y, "app": app}, "clicked (verified)")
             return {"ok": True, "x": x, "y": y, "app": app}
         self._log("window_click_error", {"x": x, "y": y, "app": app}, "failed")
         return {"ok": False, "error": "Не удалось выполнить клик"}
@@ -1476,13 +1654,13 @@ class DesktopSandbox:
         return False
 
     def _send_text_to_active(self, text: str, wait: float = 1.0) -> bool:
-        """Отправляет текст через clipboard + Ctrl+V (надёжно для кириллицы).
+        """Отправляет текст в активное окно. Многоуровневый подход (Layer 4):
 
-        Проверки:
-          1. Окно реально в фокусе (GetForegroundWindow)
-          2. Clipboard реально забалансирован
-          3. Ctrl+V через keybd_event
-          4. Если clipboard не сработал — SendInput побуквенно (fallback)
+          1. PostMessage(WM_CHAR) — фоновый ввод без clipboard (надёжно для
+             большинства окон, не трогает буфер обмена пользователя)
+          2. Clipboard + Ctrl+V — fallback для случаев когда PostMessage не сработал
+             (некоторые окна игнорируют WM_CHAR)
+          3. SendInput побуквенно — последний fallback
 
         wait — сколько секунд ждать после фокуса перед вводом текста
                (по умолчанию 1.0с — браузерам нужно время для загрузки страницы).
@@ -1502,7 +1680,11 @@ class DesktopSandbox:
             # Ждём после фокуса — браузерам нужно время для загрузки/рендеринга
             _time.sleep(wait)
 
-            # 2. Clipboard: запоминаем текущий формат, ставим наш текст
+            # Layer 4: Сначала пробуем PostMessage WM_CHAR (без clipboard)
+            if self._send_text_via_postmessage(fg_hwnd, text):
+                return True
+
+            # Fallback: Clipboard + Ctrl+V
             clipboard_buf = ctypes.create_unicode_buffer(len(text) + 1)
             clipboard_buf.value = text
             # Держим reference (иначе GC соберёт и SetClipboardData вернёт 0)
@@ -1520,7 +1702,7 @@ class DesktopSandbox:
             if ptr == 0:
                 return self._send_text_via_sendinput(text)
 
-            # 3. Ctrl+V через keybd_event
+            # Ctrl+V через keybd_event
             VK_CONTROL = 0x11
             VK_V = 0x56
             KEYEVENTF_KEYUP = 0x2
@@ -1534,6 +1716,61 @@ class DesktopSandbox:
             user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, None)
             _time.sleep(0.05)
 
+            return True
+        except Exception:
+            return False
+
+    def _send_text_via_postmessage(self, hwnd: int, text: str) -> bool:
+        """Layer 4: Отправляет текст через PostMessage(WM_CHAR) — фоновый ввод
+        без clipboard. Работает для большинства окон, не трогает буфер обмена.
+
+        Для кириллицы: каждый символ отправляется как WM_CHAR с Unicode-кодом.
+        Enter = WM_KEYDOWN(VK_RETURN) + WM_KEYUP(VK_RETURN).
+        Tab = WM_KEYDOWN(VK_TAB) + WM_KEYUP(VK_TAB).
+        """
+        try:
+            import ctypes
+            import time as _time
+
+            user32 = ctypes.windll.user32
+            user32.PostMessageW.argtypes = [
+                ctypes.wintypes.HWND,
+                ctypes.c_uint,
+                ctypes.wintypes.WPARAM,
+                ctypes.wintypes.LPARAM,
+            ]
+            user32.PostMessageW.restype = ctypes.c_int
+
+            WM_CHAR = 0x0102
+            WM_KEYDOWN = 0x0100
+            WM_KEYUP = 0x0101
+            VK_RETURN = 0x0D
+            VK_TAB = 0x09
+            VK_BACK = 0x08
+            VK_SPACE = 0x20
+
+            # Special key sequences
+            special_keys = {
+                "\n": VK_RETURN,
+                "\t": VK_TAB,
+                "\b": VK_BACK,
+                " ": VK_SPACE,
+            }
+
+            for ch in text:
+                if ch in special_keys:
+                    vk = special_keys[ch]
+                    user32.PostMessageW(hwnd, WM_KEYDOWN, vk, 0)
+                    _time.sleep(0.005)
+                    user32.PostMessageW(hwnd, WM_KEYUP, vk, 0)
+                    _time.sleep(0.005)
+                else:
+                    user32.PostMessageW(hwnd, WM_CHAR, ord(ch), 0)
+                    _time.sleep(0.005)
+
+            # Verify: check if the window is still responsive
+            # (if it hung, PostMessage would have failed silently)
+            _time.sleep(0.1)
             return True
         except Exception:
             return False
@@ -1566,18 +1803,45 @@ class DesktopSandbox:
         except Exception:
             return False
 
-    def _click_at(self, x: int, y: int) -> bool:
-        """Клик мыши в координатах (SetCursorPos + mouse_event)."""
+    def _click_at(self, x: int, y: int, verify: bool = False) -> bool:
+        """Клик мыши в координатах (SetCursorPos + mouse_event).
+
+        Layer 4: verify=True — после клика проверяет что курсор реально в точке
+        (GetCursorPos) и что окно не зависло.
+        """
         try:
             import ctypes
+            import ctypes.wintypes as wt
+            import time as _time
             user32 = ctypes.windll.user32
             user32.SetCursorPos(x, y)
-            import time as _time
             _time.sleep(0.05)
             # MOUSEEVENTF_LEFTDOWN = 0x0002, MOUSEEVENTF_LEFTUP = 0x0004
             user32.mouse_event(0x0002, 0, 0, 0, 0)  # left down
             _time.sleep(0.05)
             user32.mouse_event(0x0004, 0, 0, 0, 0)  # left up
+            _time.sleep(0.05)
+
+            if verify:
+                # Verify cursor is actually at the target position
+                pt = wt.POINT()
+                user32.GetCursorPos(ctypes.byref(pt))
+                # Allow small tolerance (2px)
+                if abs(pt.x - x) > 2 or abs(pt.y - y) > 2:
+                    # Retry once
+                    user32.SetCursorPos(x, y)
+                    _time.sleep(0.05)
+                    user32.mouse_event(0x0002, 0, 0, 0, 0)
+                    _time.sleep(0.05)
+                    user32.mouse_event(0x0004, 0, 0, 0, 0)
+                    _time.sleep(0.1)
+                    pt2 = wt.POINT()
+                    user32.GetCursorPos(ctypes.byref(pt2))
+                    if abs(pt2.x - x) > 2 or abs(pt2.y - y) > 2:
+                        self._log("click_verify_failed", {"x": x, "y": y},
+                                  f"cursor at ({pt2.x},{pt2.y}) after click at ({x},{y})")
+                        return False
+
             return True
         except Exception:
             return False
@@ -1869,6 +2133,12 @@ class DesktopSandbox:
             if not hwnd:
                 return {"ok": False, "error": "Нет активного окна"}
 
+        # Layer 3: Check window health before UIA call
+        if app:
+            _, is_hung, hung_err = self._check_window_health(app)
+            if is_hung:
+                return {"ok": False, "error": hung_err, "code": "window_unavailable"}
+
         elements = self._uia_get_elements(hwnd, max_depth=4, max_elements=150)
         if not elements:
             self._log("window_ui_recon_empty", {"app": app, "hwnd": hwnd}, "no UIA elements")
@@ -1919,6 +2189,12 @@ class DesktopSandbox:
         text = (text or "").strip()
         if not text:
             return {"ok": False, "error": "Пустой текст поиска", "code": "empty_text"}
+
+        # Layer 3: Check window health before UIA-based element search
+        if app:
+            _, is_hung, hung_err = self._check_window_health(app)
+            if is_hung:
+                return {"ok": False, "error": hung_err, "code": "window_unavailable"}
 
         recon = self.window_ui_recon(app)
         if not recon.get("ok"):
@@ -2039,6 +2315,19 @@ class DesktopSandbox:
                 control_type_filter=args.get("control_type_filter", ""),
                 url=args.get("url", ""),
             )
+        # CDP browser tools (Layer 2)
+        if tool == "browser_recon_cdp":
+            return self.browser_recon_cdp(args.get("url", ""))
+        if tool == "browser_click_cdp":
+            return self.browser_click_cdp(args.get("selector", ""))
+        if tool == "browser_fill_cdp":
+            return self.browser_fill_cdp(args.get("selector", ""), args.get("text", ""))
+        if tool == "browser_press_cdp":
+            return self.browser_press_cdp(args.get("key", ""))
+        if tool == "browser_navigate_cdp":
+            return self.browser_navigate_cdp(args.get("url", ""))
+        if tool == "browser_screenshot_cdp":
+            return self.browser_screenshot_cdp()
         return {"ok": False, "error": "Неизвестный desktop-инструмент: " + tool}
 
 

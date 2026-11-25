@@ -250,7 +250,10 @@ class ToolSandbox:
             return self.create_dir(args.get("path", ""))
         # Desktop tools (delegated to DesktopSandbox)
         if tool in ("open_url", "launch_app", "page_recon",
-                     "window_focus", "window_send_keys", "window_click", "window_screenshot", "window_ui_recon", "find_element_by_text"):
+                     "window_focus", "window_send_keys", "window_click", "window_screenshot",
+                     "window_ui_recon", "find_element_by_text",
+                     "browser_recon_cdp", "browser_click_cdp", "browser_fill_cdp",
+                     "browser_press_cdp", "browser_navigate_cdp", "browser_screenshot_cdp"):
             return _desktop_sandbox.execute(tool, **args)
         return {"ok": False, "error": "Неизвестный инструмент"}
 

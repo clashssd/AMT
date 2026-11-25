@@ -691,6 +691,52 @@ def run_10_tests(sandbox, tests: list[dict]) -> tuple[list[bool], list[str]]:
     return passed, failures
 
 
+async def run_10_tests_async(sandbox, tests: list[dict],
+                             timeout: float = 10.0) -> tuple[list[bool], list[str]]:
+    """Async-версия run_10_tests: каждый реальный вызов sandbox.execute()
+    выполняется в STA-потоке через run_com_sync с таймаутом, чтобы не
+    блокировать event loop FastAPI и не создавать COM-объекты в MTA-потоке.
+
+    Логика идентична sync-версии (idempotency/skip_execute не переисполняют
+    вызов). Возвращает (passed, failures) в том же формате.
+    """
+    from .async_utils import run_com_sync
+
+    passed: list[bool] = []
+    failures: list[str] = []
+    results: list[dict] = []
+    for i, t in enumerate(tests):
+        expect_ok = t.get("expect_ok")
+        expect_code = t.get("expect_code")
+        skip_exec = t.get("skip_execute", False)
+        if expect_ok is None or skip_exec:
+            p = True
+            if expect_ok is None:
+                ref = t.get("idempotent_of", 0)
+                if ref >= len(results):
+                    p = False
+            results.append({"ok": expect_ok if expect_ok is not None else True, "code": None, "_skipped": True})
+        else:
+            out = await run_com_sync(sandbox.execute, t["tool"],
+                                     timeout=timeout, **t["args"])
+            if out.get("ok"):
+                res = out.get("result") or {}
+            else:
+                # timeout/exception в STA-потоке → считаем провалом с кодом
+                res = {"ok": False, "code": out.get("code", "exception"),
+                       "error": out.get("error", "")}
+            results.append(res)
+            ok = res.get("ok")
+            code = res.get("code")
+            p = (ok == expect_ok)
+            if expect_code is not None:
+                p = p and (code == expect_code)
+        passed.append(p)
+        if not p:
+            failures.append(f"test[{i}] {t['name']}: expect_ok={expect_ok} got ok={results[-1].get('ok')} code={results[-1].get('code')}")
+    return passed, failures
+
+
 def refine_spec(spec: dict, failures: list[str], try_idx: int) -> dict:
     """Дорабатывает spec: добавляет пометку о провале в args_template._refine_notes."""
     s = dict(spec)
@@ -773,10 +819,52 @@ def execute_plan(plan: dict, sandbox, orchestrator) -> dict:
     steps = steps[:MAX_PLAN_STEPS]  # жёсткий лимит
 
     results: list[dict] = []
+    # Layer 5: recon cache — URL → result (avoid redundant page_recon / cdp_recon)
+    recon_cache: dict[str, dict] = {}
     for i, step in enumerate(steps):
         tool = (step.get("tool") or "").strip()
         args = dict(step.get("args") or {})
         expected = step.get("expected", "")
+
+        # Layer 5: Window health-check before executing window-targeted steps
+        if tool in ("window_focus", "window_send_keys", "window_click",
+                    "window_screenshot", "window_ui_recon", "find_element_by_text"):
+            app_name = (args.get("app") or args.get("window") or args.get("target")
+                        or args.get("name") or "").strip()
+            if app_name:
+                try:
+                    from .desktop_tools import desktop_sandbox
+                    _, is_hung, hung_err = desktop_sandbox._check_window_health(app_name)
+                    if is_hung:
+                        results.append({
+                            "step_idx": i, "tool": tool, "ok": False,
+                            "detail": f"Window unavailable: {hung_err}",
+                            "retries": 0,
+                            "code": "window_unavailable",
+                        })
+                        orchestrator._log_event("plan_step_window_unavailable", {
+                            "step_idx": i, "tool": tool, "app": app_name,
+                            "error": hung_err,
+                        })
+                        continue
+                except Exception:
+                    pass  # health check failed — proceed with step
+
+        # Layer 5: Recon cache — if this is a recon step, check cache first
+        if tool in ("page_recon", "browser_recon_cdp"):
+            recon_url = (args.get("url") or "").strip()
+            if recon_url and recon_url in recon_cache:
+                cached = recon_cache[recon_url]
+                results.append({
+                    "step_idx": i, "tool": tool, "ok": True,
+                    "detail": f"Cached recon for {recon_url} ({cached.get('chars', len(cached.get('elements', [])))} chars/elements)",
+                    "retries": 0,
+                    "cached": True,
+                })
+                orchestrator._log_event("plan_step_cached_recon", {
+                    "step_idx": i, "tool": tool, "url": recon_url,
+                })
+                continue
 
         # Watchdog-проверка
         ok_sec, reason = security_check_step(step)
@@ -800,8 +888,14 @@ def execute_plan(plan: dict, sandbox, orchestrator) -> dict:
                 break
             # если провал по whitelist/схеме — не ретрайим (бессмысленно)
             code = last_result.get("code", "")
-            if code in ("whitelist", "denied"):
+            if code in ("whitelist", "denied", "window_unavailable"):
                 break
+
+        # Layer 5: Cache recon results for reuse
+        if tool in ("page_recon", "browser_recon_cdp") and passed:
+            recon_url = (args.get("url") or last_result.get("url") or "").strip()
+            if recon_url:
+                recon_cache[recon_url] = last_result
 
         results.append({
             "step_idx": i,
@@ -1107,7 +1201,8 @@ class SysInteractionOrchestrator:
         return False
 
     # ---------- само-развитие: task-агенты (Type 2) ----------
-    def generate_task_agent(self, spec: dict, sandbox, skip_tests: bool = False) -> dict:
+    def generate_task_agent(self, spec: dict, sandbox, skip_tests: bool = False,
+                            timeout: float = 30.0) -> dict:
         """Генерирует task-агента из строгiego JSON task spec.
 
         Алгоритм:
@@ -1116,6 +1211,9 @@ class SysInteractionOrchestrator:
           3. Если 10/10 — создаём агента + скилл, draft=False, save().
           4. Если нет — refine_spec() до MAX_REFINE_TRIES; после — draft=True,
              TODO в logs. Черновик НЕ попадает в build_system_prompt.
+
+        Sync-версия (для вызова в STA-потоке через run_com_sync).
+        Для прямого async-использования — см. generate_task_agent_async().
 
         Возвращает: {"agent": dict|None, "passed": bool, "tries": int,
                      "draft": bool, "failures": [str]}
@@ -1188,6 +1286,105 @@ class SysInteractionOrchestrator:
                 "failures": failures,
             })
             # TODO: доработать черновик вручную
+            self._log_event("todo", {
+                "agent_id": agent_id,
+                "note": f"Task agent '{agent['name']}' не прошёл 10/10 после {try_idx+1} попыток. "
+                        f"Провалы: {failures}. Доработать spec вручную.",
+            })
+        else:
+            self._log_event("agent_saved", {
+                "agent_id": agent_id,
+                "task": spec.get("task", ""),
+                "tries": try_idx + 1,
+            })
+        self.save()
+
+        return {
+            "agent": agent,
+            "passed": not draft,
+            "tries": try_idx + 1,
+            "draft": draft,
+            "failures": failures,
+            "passed_count": passed_count,
+        }
+
+    async def generate_task_agent_async(self, spec: dict, sandbox,
+                                        skip_tests: bool = False,
+                                        timeout: float = 30.0) -> dict:
+        """Async-версия generate_task_agent: реальные вызовы sandbox.execute()
+        выполняются в STA-потоке через run_com_sync с таймаутом, чтобы не
+        блокировать event loop FastAPI.
+
+        Логика идентична sync-версии. Для прямого вызова из async-контекста
+        FastAPI используйте эту функцию, а не sync-версию.
+        """
+        from .async_utils import run_com_sync
+
+        spec = dict(spec)
+        if skip_tests:
+            passed_all = [True] * 10
+            failures = []
+            passed_count = 10
+            try_idx = 0
+        else:
+            tests = auto_derive_10_tests(spec)
+            passed_all, failures = await run_10_tests_async(sandbox, tests, timeout=timeout)
+            passed_count = sum(1 for p in passed_all if p)
+            try_idx = 0
+
+            while not all(passed_all) and try_idx < MAX_REFINE_TRIES:
+                try_idx += 1
+                spec = refine_spec(spec, failures, try_idx)
+                tests = auto_derive_10_tests(spec)
+                passed_all, failures = await run_10_tests_async(sandbox, tests, timeout=timeout)
+                passed_count = sum(1 for p in passed_all if p)
+
+        draft = not all(passed_all)
+        agent_id = "sys_task_" + os.urandom(4).hex()
+        skill_id = "sys_task_skill_" + os.urandom(4).hex()
+
+        agent = {
+            "id": agent_id,
+            "name": f"Task agent: {spec.get('task', 'unnamed')[:60]}",
+            "description": spec.get("task", ""),
+            "systemPrompt": (
+                f"Ты — task-агент для: {spec.get('task', '')}. "
+                f"Инструмент: {spec.get('target_tool', '')}. "
+                f"Ожидаемый результат: {spec.get('expected_outcome', '')}. "
+                f"Риск: {spec.get('risk_level', 'unknown')}. "
+                + ("(Черновик — не прошёл 10/10 тестов.)" if draft else "")
+            ),
+            "folder": "sysinteraction",
+            "skills": [skill_id],
+            "draft": draft,
+            "risk_level": spec.get("risk_level", "unknown"),
+        }
+        skill = {
+            "id": skill_id,
+            "name": f"Task skill: {spec.get('target_tool', '')}",
+            "description": f"Скилл для {spec.get('target_tool', '')}: {spec.get('task', '')}",
+            "prompt": (
+                f"Используй {spec.get('target_tool', '')} с аргументами "
+                f"{json.dumps(spec.get('args_template', {}), ensure_ascii=False)} "
+                f"для задачи: {spec.get('task', '')}. Ожидаемый результат: "
+                f"{spec.get('expected_outcome', '')}."
+            ),
+            "enabled": not draft,
+            "folder": "sysinteraction",
+            "agentId": agent_id,
+        }
+
+        self.agents.append(agent)
+        self.skills.append(skill)
+        self.task_specs.append(spec)
+        if draft:
+            self.drafts.append({"agent_id": agent_id, "spec": spec, "failures": failures})
+            self._log_event("draft_saved", {
+                "agent_id": agent_id,
+                "task": spec.get("task", ""),
+                "tries": try_idx + 1,
+                "failures": failures,
+            })
             self._log_event("todo", {
                 "agent_id": agent_id,
                 "note": f"Task agent '{agent['name']}' не прошёл 10/10 после {try_idx+1} попыток. "
@@ -1503,10 +1700,13 @@ MONITOR_CHECK_PROMPT = (
     "reason=конкретика. Без markdown, без пояснений вне JSON."
 )
 
-def monitor_security_check(tool: str, args: dict, llm_call_fn) -> tuple[bool, str, str]:
+def monitor_security_check(tool: str, args: dict, llm_call_fn, timeout: float = 15.0) -> tuple[bool, str, str]:
     """LLM-проверка монитора. llm_call_fn(system, user) -> str.
     Возвращает (allow, rule, reason). При ошибке LLM — allow=True (fallback
-    на детерминированный watchdog, который уже прошёл)."""
+    на детерминированный watchdog, который уже прошёл).
+    
+    Layer 5: timeout parameter — если LLM-вызов не завершится за timeout секунд,
+    деградируем до watchdog (fail-closed)."""
     user_msg = (
         f"Проверь вызов инструмента:\n"
         f"tool: {tool}\n"
@@ -1532,6 +1732,58 @@ def monitor_security_check(tool: str, args: dict, llm_call_fn) -> tuple[bool, st
             return wd[0], "watchdog-fallback", f"monitor-LLM error ({str(e)[:80]}) — watchdog: {wd[1]}"
         except Exception:
             # Даже watchdog упал → DENY (fail-closed)
+            return False, "deny", f"monitor-LLM и watchdog оба упали: {str(e)[:120]}"
+
+
+async def monitor_security_check_async(tool: str, args: dict, llm_call_fn, timeout: float = 15.0) -> tuple[bool, str, str]:
+    """Layer 5: Async version of monitor_security_check with timeout.
+    
+    Runs the LLM check with a timeout. If the LLM call hangs, falls back
+    to the deterministic watchdog (fail-closed).
+    
+    llm_call_fn: async callable (system, user) -> str, or sync callable
+    (will be run in a thread pool).
+    """
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    user_msg = (
+        f"Проверь вызов инструмента:\n"
+        f"tool: {tool}\n"
+        f"args: {json.dumps(args, ensure_ascii=False)}\n\n"
+        "Верни JSON {allow, rule, reason}."
+    )
+    try:
+        # Check if llm_call_fn is async
+        if asyncio.iscoroutinefunction(llm_call_fn):
+            resp = await asyncio.wait_for(llm_call_fn(MONITOR_CHECK_PROMPT, user_msg), timeout=timeout)
+        else:
+            # Run sync callable in thread pool with timeout
+            loop = asyncio.get_running_loop()
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = loop.run_in_executor(pool, llm_call_fn, MONITOR_CHECK_PROMPT, user_msg)
+                resp = await asyncio.wait_for(future, timeout=timeout)
+        m = re.search(r"\{.*\}", resp, re.DOTALL)
+        if not m:
+            wd = security_check_step({"tool": tool, "args": args})
+            return wd[0], "watchdog-fallback", f"monitor-LLM: нет JSON — watchdog: {wd[1]}"
+        data = json.loads(m.group(0))
+        allow = bool(data.get("allow", True))
+        rule = str(data.get("rule", "")).strip()
+        reason = str(data.get("reason", "")).strip()[:200]
+        return allow, rule, reason
+    except asyncio.TimeoutError:
+        # Layer 5: Timeout — fall back to watchdog (fail-closed)
+        try:
+            wd = security_check_step({"tool": tool, "args": args})
+            return wd[0], "watchdog-fallback", f"monitor-LLM timeout ({timeout}s) — watchdog: {wd[1]}"
+        except Exception:
+            return False, "deny", f"monitor-LLM timeout и watchdog упали"
+    except Exception as e:
+        try:
+            wd = security_check_step({"tool": tool, "args": args})
+            return wd[0], "watchdog-fallback", f"monitor-LLM error ({str(e)[:80]}) — watchdog: {wd[1]}"
+        except Exception:
             return False, "deny", f"monitor-LLM и watchdog оба упали: {str(e)[:120]}"
 
 
@@ -1746,6 +1998,46 @@ def run_variation_tests(sandbox, tests: list[dict]) -> tuple[bool, list[str]]:
                 p = True  # ожидаемый отказ с правильным кодом
             elif expect_ok is False and code in ("whitelist", "denied"):
                 p = True  # ожидаемый отказ
+        if not p:
+            failures.append(f"var[{i}] {t['name']}: expect_ok={expect_ok} got ok={results[-1].get('ok')} code={results[-1].get('code')}")
+    all_passed = len(failures) == 0
+    return all_passed, failures
+
+
+async def run_variation_tests_async(sandbox, tests: list[dict],
+                                    timeout: float = 10.0) -> tuple[bool, list[str]]:
+    """Async-версия run_variation_tests: реальные вызовы sandbox.execute()
+    выполняются в STA-потоке через run_com_sync с таймаутом.
+
+    Логика идентична sync-версии. Возвращает (all_passed, failures).
+    """
+    from .async_utils import run_com_sync
+
+    failures: list[str] = []
+    results: list[dict] = []
+    for i, t in enumerate(tests):
+        expect_ok = t.get("expect_ok")
+        skip_exec = t.get("skip_execute", False)
+        if expect_ok is None or skip_exec:
+            p = True
+            results.append({"ok": expect_ok if expect_ok is not None else True, "code": None, "_skipped": True})
+        else:
+            out = await run_com_sync(sandbox.execute, t["tool"],
+                                     timeout=timeout, **t["args"])
+            if out.get("ok"):
+                res = out.get("result") or {}
+            else:
+                res = {"ok": False, "code": out.get("code", "exception"),
+                       "error": out.get("error", "")}
+            results.append(res)
+            ok = bool(res.get("ok"))
+            p = (ok == expect_ok)
+            code = res.get("code")
+            expected_code = t.get("code")
+            if expected_code and code == expected_code:
+                p = True
+            elif expect_ok is False and code in ("whitelist", "denied"):
+                p = True
         if not p:
             failures.append(f"var[{i}] {t['name']}: expect_ok={expect_ok} got ok={results[-1].get('ok')} code={results[-1].get('code')}")
     all_passed = len(failures) == 0

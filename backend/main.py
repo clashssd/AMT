@@ -1,3 +1,10 @@
+import sys
+
+# Layer 1: Set COM apartment threading BEFORE any COM-dependent import.
+# COINIT_APARTMENTTHREADED = 2 — required for UIA (comtypes/pywinauto).
+# This must be set before pywinauto/comtypes are imported anywhere.
+sys.coinit_flags = 2
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -8,7 +15,6 @@ import json
 import asyncio
 import os
 import re
-import sys
 import logging
 import time
 from typing import AsyncGenerator, Optional
@@ -23,6 +29,7 @@ from ai_engine.sysinteraction import SysInteractionOrchestrator
 from ai_engine import filegen
 from ai_engine import media as media_gen
 from ai_engine import extensions as ext_loader
+from ai_engine.async_utils import run_com_sync
 
 app = FastAPI()
 
@@ -801,6 +808,12 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
             " [[SYS:window_click|cx|cy|<браузере>]] → [[SYS:window_send_keys|<текст>|<браузере>|1]]\n"
             "  [[SYS:window_click|<x>|<y>|<имя>?]] — клик в координатах\n"
             "  [[SYS:window_screenshot|<имя>?]] — скриншот окна/экрана\n"
+            "  [[SYS:browser_recon_cdp|<URL>?]] — CDP-разведка браузерной вкладки (JS-страницы)\n"
+            "  [[SYS:browser_click_cdp|<CSS selector>]] — клик по элементу через CDP\n"
+            "  [[SYS:browser_fill_cdp|<CSS selector>|<текст>]] — заполнить поле через CDP\n"
+            "  [[SYS:browser_press_cdp|<клавиша>]] — нажать клавишу через CDP\n"
+            "  [[SYS:browser_navigate_cdp|<URL>]] — перейти на URL через CDP\n"
+            "  [[SYS:browser_screenshot_cdp|]] — скриншот браузерной вкладки через CDP\n"
             "URL: только http:// или https:// (без других схем).\n"
             "  Если пользователь сказал «открой в Edge» — используй [[SYS:open_url|https://www.google.com|edge]].\n"
             "  Если пользователь просто сказал «открой Firefox» (без URL) — используй [[SYS:open_url||firefox]] "
@@ -952,7 +965,7 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
             "    \"goal\": \"<цель всей операции, 1 предложение>\",\n"
             "    \"steps\": [\n"
             "      {\n"
-            "        \"tool\": \"<open_url|launch_app|page_recon|window_focus|window_send_keys|window_click|window_screenshot|window_ui_recon|read_file|list_dir|write_file|run_command>\",\n"
+            "        \"tool\": \"<open_url|launch_app|page_recon|window_focus|window_send_keys|window_click|window_screenshot|window_ui_recon|find_element_by_text|browser_recon_cdp|browser_click_cdp|browser_fill_cdp|browser_press_cdp|browser_navigate_cdp|browser_screenshot_cdp|read_file|list_dir|write_file|run_command>\",\n"
             "        \"args\": {\"<arg>\": \"<value>\"},\n"
             "        \"expected\": \"<что должно получиться после этого шага>\"\n"
             "      }\n"
@@ -1345,7 +1358,7 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                             "task": spec.get("task", "")[:100],
                             "tool": spec.get("target_tool", ""),
                         })
-                        res = sysorch.generate_task_agent(spec, tools_sandbox)
+                        res = await sysorch.generate_task_agent_async(spec, tools_sandbox, skip_tests=False, timeout=30.0)
                         log_chat_event("SYSINTERACTION_AGENT_GEN", {
                             "agent_id": res["agent"]["id"] if res["agent"] else None,
                             "passed": res["passed"],
@@ -1382,11 +1395,23 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                             "goal": plan.get("goal", "")[:100],
                             "steps": len(plan.get("steps") or []),
                         })
-                        # 6) Новый цикл: v2 с agent-спавном, monitor, verify, variations
-                        plan_result = await resolve_plan_v2(
-                            plan, tools_sandbox, sysorch,
-                            api_key, base_url, model, proxy_string,
-                        )
+                        n_steps = len(plan.get("steps") or [])
+                        if n_steps > PLAN_JOB_MIN_STEPS:
+                            # Layer 1.2: длинный план → фоновый job (не держим /api/chat)
+                            job_id = start_plan_job(
+                                plan, tools_sandbox, sysorch,
+                                api_key, base_url, model, proxy_string,
+                            )
+                            plan_result = (
+                                f"[Длинный план ({n_steps} шагов) запущен в фоне. Job: {job_id}]\n"
+                                f"Готовность можно проверить запросом GET /api/jobs/{job_id}."
+                            )
+                        else:
+                            # Короткий план (≤ PLAN_JOB_MIN_STEPS) — инлайн, как раньше
+                            plan_result = await resolve_plan_v2(
+                                plan, tools_sandbox, sysorch,
+                                api_key, base_url, model, proxy_string,
+                            )
                         m_plan = SYS_PLAN_RE.search(text)
                         if m_plan:
                             # LLM сам вывел [[SYS:plan|...]] — заменяем его на result
@@ -1416,7 +1441,7 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
 
                 # Выполняем [[SYS:open_url|...]], browser-токены и убираем
                 # [[SYS:task_spec|...]] и [[SYS:plan|...]]
-                text = resolve_sys_tokens(text, sys_gate)
+                text = await resolve_sys_tokens(text, sys_gate)
 
                 return {"text": text, "usage": usage}
         except httpx.ConnectError as e:
@@ -2306,6 +2331,20 @@ SYS_WINDOW_SCREENSHOT_RE = re.compile(r'\[\[SYS:window_screenshot\|(?:([^\]]+?))
 SYS_WINDOW_UI_RECON_RE = re.compile(r'\[\[SYS:window_ui_recon\|(?:([^\]]+?))?\]\]', re.IGNORECASE)
 SYS_FIND_ELEMENT_RE = re.compile(r'\[\[SYS:find_element_by_text\|([^\]]+?)(?:\|([^\]]+?))?(?:\|([^\]]+?))?\]\]', re.IGNORECASE)
 
+# CDP browser tokens (Layer 2 — Chromium DevTools Protocol):
+# [[SYS:browser_recon_cdp|<URL>?]] — CDP-разведка браузерной вкладки
+# [[SYS:browser_click_cdp|<CSS selector>]] — клик по элементу через CDP
+# [[SYS:browser_fill_cdp|<CSS selector>|<текст>]] — заполнить поле через CDP
+# [[SYS:browser_press_cdp|<клавиша>]] — нажать клавишу через CDP
+# [[SYS:browser_navigate_cdp|<URL>]] — перейти на URL через CDP
+# [[SYS:browser_screenshot_cdp|]] — скриншот браузерной вкладки через CDP
+SYS_BROWSER_RECON_CDP_RE = re.compile(r'\[\[SYS:browser_recon_cdp\|(?:([^\]]+?))?\]\]', re.IGNORECASE)
+SYS_BROWSER_CLICK_CDP_RE = re.compile(r'\[\[SYS:browser_click_cdp\|([^\]]+?)\]\]', re.IGNORECASE)
+SYS_BROWSER_FILL_CDP_RE = re.compile(r'\[\[SYS:browser_fill_cdp\|([^\]]+?)\|([^\]]+?)\]\]', re.IGNORECASE)
+SYS_BROWSER_PRESS_CDP_RE = re.compile(r'\[\[SYS:browser_press_cdp\|([^\]]+?)\]\]', re.IGNORECASE)
+SYS_BROWSER_NAVIGATE_CDP_RE = re.compile(r'\[\[SYS:browser_navigate_cdp\|([^\]]+?)\]\]', re.IGNORECASE)
+SYS_BROWSER_SCREENSHOT_CDP_RE = re.compile(r'\[\[SYS:browser_screenshot_cdp\|(?:([^\]]+?))?\]\]', re.IGNORECASE)
+
 
 def extract_task_spec(text: str) -> Optional[dict]:
     """Извлекает [[SYS:task_spec|{json}]] из текста LLM. Возвращает dict или None."""
@@ -2339,8 +2378,31 @@ def extract_plan(text: str) -> Optional[dict]:
     return None
 
 
-def resolve_sys_tokens(text: str, active: bool) -> str:
+async def _exec_sandbox(tool: str, timeout: float = 10.0, **kwargs) -> dict:
+    """Выполняет один инструмент ToolSandbox в STA-потоке через run_com_sync.
+
+    Возвращает "сырой" результат sandbox.execute(...) как dict:
+      - успех: сам результат ({"ok": True/False, ...})
+      - timeout/exception в STA-потоке: {"ok": False, "code": <code>, "error": <msg>}
+
+    Файловые операции (read_file/write_file/list_dir/run_command) безопасны
+    в event loop, но desktop/CDP-инструменты (COM/UIA) требуют STA-потока.
+    Единый путь через run_com_sync — проще и безопаснее.
+    """
+    out = await run_com_sync(tools_sandbox.execute, tool,
+                             timeout=timeout, **kwargs)
+    if out.get("ok"):
+        return out.get("result") or {}
+    # таймаут/исключение в STA-потоке — структурированная ошибка
+    return {"ok": False, "code": out.get("code", "exception"),
+            "error": out.get("error", "unknown COM error")}
+
+
+async def resolve_sys_tokens(text: str, active: bool) -> str:
     """Выполняет токены [[SYS:...]] в тексте ответа.
+
+    Async: все desktop/CDP-вызовы идут через STA-поток (run_com_sync),
+    чтобы не блокировать event loop и не создавать COM-объекты в MTA.
 
     При active=True (sysinteraction гейт прошёл):
       - [[SYS:open_url|<url>]] → ToolSandbox.open_url(url) → «Открыл в системном браузере: <url>»
@@ -2375,7 +2437,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
             log_chat_event("SYS_OPEN_URL_DONE", {"url": raw_url[:100], "status": "invalid_url"})
         else:
             try:
-                res = tools_sandbox.open_url(url, browser)
+                res = await _exec_sandbox("open_url", timeout=15.0, url=url, browser=browser)
                 if res.get("ok"):
                     browser_name = res.get("browser") or browser or "браузере"
                     browser_note = f" в {browser_name}" if browser_name else ""
@@ -2411,7 +2473,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
             log_chat_event("SYS_PAGE_RECON_DONE", {"url": raw_url[:100], "status": "invalid_url"})
         else:
             try:
-                res = tools_sandbox.execute("page_recon", url=url)
+                res = await _exec_sandbox("page_recon", timeout=20.0, url=url)
                 if res.get("ok"):
                     text = res.get("text", "")
                     title = res.get("title", "")
@@ -2443,7 +2505,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
         app = m.group(1).strip()
         args = (m.group(2) or "").strip()
         try:
-            res = tools_sandbox.execute("launch_app", app=app, args=args)
+            res = await _exec_sandbox("launch_app", timeout=15.0, app=app, args=args)
             if res.get("ok"):
                 method = res.get("method", "")
                 if "foreground" in method:
@@ -2468,7 +2530,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
             break
         path_str = m.group(1).strip()
         try:
-            res = tools_sandbox.execute("read_file", path=path_str)
+            res = await _exec_sandbox("read_file", timeout=10.0, path=path_str)
             if res.get("ok"):
                 res_text = f"[Файл: {path_str}]\n{str(res.get('result', ''))[:5000]}"
                 log_chat_event("SYS_READ_FILE_DONE", {"path": path_str[:100], "status": "ok"})
@@ -2488,7 +2550,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
         path_str = m.group(1).strip()
         content = m.group(2) or ""
         try:
-            res = tools_sandbox.execute("write_file", path=path_str, content=content)
+            res = await _exec_sandbox("write_file", timeout=10.0, path=path_str, content=content)
             if res.get("ok"):
                 res_text = f"[Записал: {path_str}]"
                 log_chat_event("SYS_WRITE_FILE_DONE", {"path": path_str[:100], "status": "ok", "bytes": len(content)})
@@ -2507,7 +2569,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
             break
         path_str = m.group(1).strip()
         try:
-            res = tools_sandbox.execute("list_dir", path=path_str)
+            res = await _exec_sandbox("list_dir", timeout=10.0, path=path_str)
             if res.get("ok"):
                 res_text = f"[Каталог: {path_str}]\n{str(res.get('result', ''))[:3000]}"
                 log_chat_event("SYS_LIST_DIR_DONE", {"path": path_str[:100], "status": "ok"})
@@ -2526,7 +2588,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
             break
         cmd = m.group(1).strip()
         try:
-            res = tools_sandbox.execute("run_command", command=cmd)
+            res = await _exec_sandbox("run_command", timeout=45.0, command=cmd)
             if res.get("ok"):
                 res_text = f"[Команда: {cmd}]\n{str(res.get('result', ''))[:3000]}"
                 log_chat_event("SYS_RUN_COMMAND_DONE", {"command": cmd[:100], "status": "ok"})
@@ -2545,7 +2607,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
             break
         app = m.group(1).strip()
         try:
-            res = tools_sandbox.execute("window_focus", app=app)
+            res = await _exec_sandbox("window_focus", timeout=12.0, app=app)
             if res.get("ok"):
                 res_text = f"Привёл окно на передний план: {app}"
                 log_chat_event("SYS_WINDOW_FOCUS_DONE", {"app": app, "status": "ok"})
@@ -2568,7 +2630,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
         skip_ctrl_l_str = (m.group(3) or "").strip().lower()
         skip_ctrl_l = skip_ctrl_l_str in ("1", "true", "yes")
         try:
-            res = tools_sandbox.execute("window_send_keys", text=text, app=app, skip_ctrl_l=skip_ctrl_l)
+            res = await _exec_sandbox("window_send_keys", timeout=12.0, text=text, app=app, skip_ctrl_l=skip_ctrl_l)
             if res.get("ok"):
                 target_note = f" в {app}" if app else ""
                 res_text = f"Ввёл: {text[:50]}" + target_note
@@ -2599,7 +2661,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
             continue
         app = (m.group(3) or "").strip()
         try:
-            res = tools_sandbox.execute("window_click", x=x, y=y, app=app)
+            res = await _exec_sandbox("window_click", timeout=12.0, x=x, y=y, app=app)
             if res.get("ok"):
                 target_note = f" (в {app})" if app else ""
                 res_text = f"Клик в ({x}, {y}){target_note}"
@@ -2619,7 +2681,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
             break
         app = (m.group(1) or "").strip()
         try:
-            res = tools_sandbox.execute("window_screenshot", app=app)
+            res = await _exec_sandbox("window_screenshot", timeout=15.0, app=app)
             if res.get("ok"):
                 path = res.get("path", "")
                 res_text = f"[Скриншот{' окна ' + app if app else ' экрана'}: {path}]"
@@ -2640,7 +2702,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
             break
         app = (m.group(1) or "").strip()
         try:
-            res = tools_sandbox.execute("window_ui_recon", app=app)
+            res = await _exec_sandbox("window_ui_recon", timeout=15.0, app=app)
             if res.get("ok"):
                 elements = res.get("elements", [])
                 if elements:
@@ -2684,7 +2746,7 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
         app = (m.group(2) or "").strip()
         url = (m.group(3) or "").strip()
         try:
-            res = tools_sandbox.execute("find_element_by_text", text=text, app=app, url=url)
+            res = await _exec_sandbox("find_element_by_text", timeout=15.0, text=text, app=app, url=url)
             if res.get("ok") and res.get("found"):
                 coords = res.get("coords")
                 el = res.get("element", {})
@@ -2719,6 +2781,140 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
         out = out[:m.start()] + res_text + out[m.end():]
 
     # Убираем [[SYS:task_spec|...]] (обр��ботан в call_ai_api)
+    # [[SYS:browser_recon_cdp|URL?]] — CDP-разведка браузерной вкладки
+    while True:
+        m = SYS_BROWSER_RECON_CDP_RE.search(out)
+        if not m:
+            break
+        url = (m.group(1) or "").strip()
+        try:
+            res = await _exec_sandbox("browser_recon_cdp", timeout=20.0, url=url)
+            if res.get("ok"):
+                elements = res.get("elements", [])
+                title = res.get("title", "")
+                cur_url = res.get("url", "")
+                lines = []
+                for el in elements[:50]:
+                    sel = el.get("selector", "")
+                    etype = el.get("type", "?")
+                    etext = el.get("text", el.get("placeholder", el.get("alt", "")))[:50]
+                    eid = el.get("id", "")
+                    line = f'  • {etype}: "{etext}"'
+                    if eid:
+                        line += f" [id={eid[:30]}]"
+                    if sel:
+                        line += f" [{sel[:60]}]"
+                    lines.append(line)
+                res_text = (
+                    f"[CDP-элементы: {title or cur_url}]\n"
+                    + "\n".join(lines)
+                    + (f"\n(метод: {res.get('method', 'cdp')}, {len(elements)} элементов)" if elements else "\n(нет интерактивных элементов)")
+                )
+                log_chat_event("SYS_BROWSER_RECON_CDP_DONE", {"url": url[:100], "elements": len(elements), "status": "ok"})
+            else:
+                res_text = f"[CDP-разведка не удалась: {res.get('error', 'ошибка')}]. Попробуйте [[SYS:page_recon|{url or ''}]]"
+                log_chat_event("SYS_BROWSER_RECON_CDP_DONE", {"url": url[:100], "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка CDP-разведки: {e}]"
+            log_chat_event("SYS_BROWSER_RECON_CDP_DONE", {"url": url[:100], "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:browser_click_cdp|selector]] — клик по элементу через CDP
+    while True:
+        m = SYS_BROWSER_CLICK_CDP_RE.search(out)
+        if not m:
+            break
+        selector = m.group(1).strip()
+        try:
+            res = await _exec_sandbox("browser_click_cdp", timeout=15.0, selector=selector)
+            if res.get("ok"):
+                res_text = f"[Клик по элементу: {selector}]"
+                log_chat_event("SYS_BROWSER_CLICK_CDP_DONE", {"selector": selector[:100], "status": "ok"})
+            else:
+                res_text = f"[Не удалось кликнуть по {selector}: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_BROWSER_CLICK_CDP_DONE", {"selector": selector[:100], "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка CDP-клика: {e}]"
+            log_chat_event("SYS_BROWSER_CLICK_CDP_DONE", {"selector": selector[:100], "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:browser_fill_cdp|selector|text]] — заполнить поле через CDP
+    while True:
+        m = SYS_BROWSER_FILL_CDP_RE.search(out)
+        if not m:
+            break
+        selector = m.group(1).strip()
+        text = m.group(2).strip()
+        try:
+            res = await _exec_sandbox("browser_fill_cdp", timeout=15.0, selector=selector, text=text)
+            if res.get("ok"):
+                res_text = f"[Заполнил поле {selector}: {text[:50]}]"
+                log_chat_event("SYS_BROWSER_FILL_CDP_DONE", {"selector": selector[:100], "text": text[:50], "status": "ok"})
+            else:
+                res_text = f"[Не удалось заполнить {selector}: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_BROWSER_FILL_CDP_DONE", {"selector": selector[:100], "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка CDP-fill: {e}]"
+            log_chat_event("SYS_BROWSER_FILL_CDP_DONE", {"selector": selector[:100], "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:browser_press_cdp|key]] — нажать клавишу через CDP
+    while True:
+        m = SYS_BROWSER_PRESS_CDP_RE.search(out)
+        if not m:
+            break
+        key = m.group(1).strip()
+        try:
+            res = await _exec_sandbox("browser_press_cdp", timeout=10.0, key=key)
+            if res.get("ok"):
+                res_text = f"[Нажал клавишу: {key}]"
+                log_chat_event("SYS_BROWSER_PRESS_CDP_DONE", {"key": key, "status": "ok"})
+            else:
+                res_text = f"[Не удалось нажать {key}: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_BROWSER_PRESS_CDP_DONE", {"key": key, "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка CDP-press: {e}]"
+            log_chat_event("SYS_BROWSER_PRESS_CDP_DONE", {"key": key, "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:browser_navigate_cdp|url]] — перейти на URL через CDP
+    while True:
+        m = SYS_BROWSER_NAVIGATE_CDP_RE.search(out)
+        if not m:
+            break
+        url = m.group(1).strip()
+        try:
+            res = await _exec_sandbox("browser_navigate_cdp", timeout=20.0, url=url)
+            if res.get("ok"):
+                res_text = f"[Перешёл на: {res.get('url', url)} ({res.get('title', '')})]"
+                log_chat_event("SYS_BROWSER_NAVIGATE_CDP_DONE", {"url": url[:100], "status": "ok"})
+            else:
+                res_text = f"[Не удалось перейти на {url}: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_BROWSER_NAVIGATE_CDP_DONE", {"url": url[:100], "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка CDP-navigate: {e}]"
+            log_chat_event("SYS_BROWSER_NAVIGATE_CDP_DONE", {"url": url[:100], "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:browser_screenshot_cdp|]] — скриншот браузерной вкладки через CDP
+    while True:
+        m = SYS_BROWSER_SCREENSHOT_CDP_RE.search(out)
+        if not m:
+            break
+        try:
+            res = await _exec_sandbox("browser_screenshot_cdp", timeout=20.0)
+            if res.get("ok"):
+                res_text = f"[CDP-скриншот: {res.get('path', '')}]"
+                log_chat_event("SYS_BROWSER_SCREENSHOT_CDP_DONE", {"path": res.get('path', ''), "status": "ok"})
+            else:
+                res_text = f"[CDP-скриншот не удался: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_BROWSER_SCREENSHOT_CDP_DONE", {"status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка CDP-скриншота: {e}]"
+            log_chat_event("SYS_BROWSER_SCREENSHOT_CDP_DONE", {"status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # Убираем [[SYS:task_spec|...]] (обртботан в call_ai_api)
     out = SYS_TASK_SPEC_RE.sub("", out).strip()
     # Убираем [[SYS:plan|...]] (обработан в call_ai_api)
     out = SYS_PLAN_RE.sub("", out).strip()
@@ -2776,8 +2972,8 @@ async def resolve_plan_v2(plan: dict, sandbox, orchestrator,
     from ai_engine.sysinteraction import (
         security_check_step, MAX_PLAN_STEPS, MAX_PLAN_RETRIES,
         match_agents_for_step, spawn_task_agent_for_step,
-        monitor_security_check, verify_step_result,
-        derive_variation_tests, run_variation_tests,
+        monitor_security_check_async, verify_step_result,
+        derive_variation_tests, run_variation_tests_async,
         save_agent_to_library,
     )
 
@@ -2818,13 +3014,15 @@ async def resolve_plan_v2(plan: dict, sandbox, orchestrator,
             continue
 
         # LLM-монитор (параллельно с watchdog — если watchdog прошёл,
-        # монитор даёт вторую независимую проверку)
-        monitor_llm = lambda sys_, usr_: _quick_llm_call(
-            api_key, base_url, model, sys_, usr_,
-            timeout=15.0, proxy_string=proxy_string,
-        )
-        mon_allow, mon_rule, mon_reason = await _monitor_async(
-            tool, args, monitor_llm, api_key, base_url, model, proxy_string,
+        # монитор даёт вторую независимую проверку). Async-версия с таймаутом:
+        # при зависании LLM fail-closed на детерминированный watchdog.
+        async def _monitor_llm(sys_, usr_):
+            return await _quick_llm_call(
+                api_key, base_url, model, sys_, usr_,
+                timeout=15.0, proxy_string=proxy_string,
+            )
+        mon_allow, mon_rule, mon_reason = await monitor_security_check_async(
+            tool, args, _monitor_llm, timeout=15.0,
         )
         if not mon_allow:
             detail_lines.append(f"  {i+1}. [{tool}] ✗ Блок monitor ({mon_rule}): {mon_reason}")
@@ -2854,7 +3052,7 @@ async def resolve_plan_v2(plan: dict, sandbox, orchestrator,
                 "expected_outcome": expected,
                 "risk_level": plan.get("risk_level", "medium"),
             }
-            res = orchestrator.generate_task_agent(spec, sandbox, skip_tests=False)
+            res = await orchestrator.generate_task_agent_async(spec, sandbox, skip_tests=False, timeout=30.0)
             agent_ref = res.get("agent")
             skill_ref = None
             if agent_ref and agent_ref.get("skills"):
@@ -2886,12 +3084,17 @@ async def resolve_plan_v2(plan: dict, sandbox, orchestrator,
             agents_spawned += 1
             source_tag = f" (новый агент: {agent_ref.get('id','') if agent_ref else '?'})"
 
-        # === Выполнение с ретрайтами ===
+        # === Выполнение с ретрайтами === (STA-поток + таймаут)
         passed = False
         last_result: dict = {}
         retries_used = 0
         for retry in range(MAX_PLAN_RETRIES):
-            last_result = sandbox.execute(tool, **args)
+            out = await run_com_sync(sandbox.execute, tool, timeout=12.0, **args)
+            if out.get("ok"):
+                last_result = out.get("result") or {}
+            else:
+                last_result = {"ok": False, "code": out.get("code", "exception"),
+                               "error": out.get("error", "COM error")}
             passed = bool(last_result.get("ok"))
             if passed:
                 # === 4) Верификация против expected ===
@@ -2939,7 +3142,7 @@ async def resolve_plan_v2(plan: dict, sandbox, orchestrator,
             total_passed += 1
             # === 5) Вариационные тесты (5 штук) — только в лог, не в ответ ===
             var_tests = derive_variation_tests(step)
-            var_passed, var_failures = run_variation_tests(sandbox, var_tests)
+            var_passed, var_failures = await run_variation_tests_async(sandbox, var_tests, timeout=10.0)
             if var_passed:
                 save_agent_to_library(orchestrator, step, agent_ref, skill_ref, var_tests)
                 detail_lines.append(f"       ↳ 5/5 вариаций OK → агент сохранён в библиотеку")
@@ -2963,7 +3166,7 @@ async def resolve_plan_v2(plan: dict, sandbox, orchestrator,
                     "risk_level": "medium",
                     "_variation_failures": var_failures,
                 }
-                res2 = orchestrator.generate_task_agent(refined_spec, sandbox, skip_tests=False)
+                res2 = await orchestrator.generate_task_agent_async(refined_spec, sandbox, skip_tests=False, timeout=30.0)
                 if res2.get("passed"):
                     agent_ref = res2.get("agent")
                     detail_lines.append(f"       ↳ Refine-агент прошёл → сохранён: {agent_ref.get('id','') if agent_ref else ''}")
@@ -3017,51 +3220,102 @@ async def resolve_plan_v2(plan: dict, sandbox, orchestrator,
     return "\n".join(human_lines)
 
 
-async def _monitor_async(tool: str, args: dict,
-                         monitor_fn, api_key: str, base_url: str,
-                         model: str, proxy_string: str) -> tuple[bool, str, str]:
-    """Async-обёртка для monitor_security_check (которая синхронная,
-    но использует httpx sync). Запускаем в executor чтобы не блокировать loop."""
-    import asyncio as _aio
-    loop = _aio.get_event_loop()
-    from ai_engine.sysinteraction import monitor_security_check
-    result = await loop.run_in_executor(
-        None,
-        lambda: monitor_security_check(tool, args,
-            lambda s, u: _quick_llm_call_sync(s, u, api_key, base_url, model, proxy_string)),
-    )
-    return result
+# ===== Layer 1.2: Job pattern для долгих планов (job-id + polling) =====
+# Проблема: resolve_plan_v2 может держать HTTP-запрос /api/chat до 100с+
+# (10 шагов × 10с таймаут × ретраиты). Вместо того чтобы держать соединение,
+# план уходят в фоновый task, /api/chat сразу отдаёт job-id, а клиент
+# опрашивает /api/jobs/{job_id} до готовности.
+_plan_jobs: dict[str, dict] = {}  # job_id -> {"status","result","error","created","started"}
+_plan_jobs_lock = asyncio.Lock()
+# Порог (в шагах): план длиннее него — сразу уходит в job (быстрые планы — инлайн).
+PLAN_JOB_MIN_STEPS = 3
 
 
-def _quick_llm_call_sync(system: str, user: str, api_key: str,
-                         base_url: str, model: str,
-                         proxy_string: str = "", timeout: float = 15.0) -> str:
-    """Синхронная LLM-вызов (для run_in_executor)."""
-    import httpx
+def _new_plan_job() -> tuple[str, dict]:
+    job_id = "plan_" + os.urandom(6).hex()
+    rec = {"status": "running", "result": "", "error": "", "created": time.time()}
+    _plan_jobs[job_id] = rec
+    return job_id, rec
+
+
+async def _run_plan_job(
+    job_id: str, rec: dict,
+    plan: dict, sandbox, orchestrator,
+    api_key: str, base_url: str, model: str, proxy_string: str,
+) -> None:
+    """Фоновое выполнение плана (job worker). Пишет результат в _plan_jobs[job_id]."""
     try:
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        body = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.1,
-            "max_tokens": 512,
-            "stream": False,
-        }
-        url = f"{base_url.rstrip('/')}/chat/completions"
-        kwargs = {"timeout": timeout}
-        if proxy_string:
-            kwargs["proxy"] = proxy_string
-        with httpx.Client(**kwargs) as client:
-            r = client.post(url, headers=headers, json=body)
-            if r.status_code == 200:
-                data = r.json()
-                return data["choices"][0]["message"]["content"]
-            return ""
-    except Exception:
-        return ""
+        result = await resolve_plan_v2(
+            plan, sandbox, orchestrator,
+            api_key, base_url, model, proxy_string,
+        )
+        rec["result"] = result
+        rec["status"] = "done"
+        log_chat_event("SYSINTERACTION_JOB_DONE", {
+            "job_id": job_id, "goal": (plan.get("goal") or "")[:100],
+        })
+    except Exception as e:
+        rec["status"] = "error"
+        rec["error"] = str(e)
+        log_chat_event("SYSINTERACTION_JOB_ERROR", {
+            "job_id": job_id, "error": str(e)[:200],
+        })
+
+
+def _plan_jobs_cleanup(max_age: float = 600.0) -> None:
+    """Отчищаем завершённые job старше max_age (предотвращаем утечку памяти)."""
+    now = time.time()
+    dead = [
+        jid for jid, r in _plan_jobs.items()
+        if r["status"] in ("done", "error") and (now - r["created"]) > max_age
+    ]
+    for jid in dead:
+        _plan_jobs.pop(jid, None)
+
+
+@app.get("/api/jobs")
+async def list_plan_jobs():
+    """Список plan-jobs (активные + завершённые, пока не очищены)."""
+    _plan_jobs_cleanup()
+    return {"jobs": [
+        {"job_id": jid, "status": r["status"],
+         "result": r["result"], "error": r["error"]}
+        for jid, r in _plan_jobs.items()
+    ]}
+
+
+@app.get("/api/jobs/{job_id}")
+async def get_plan_job(job_id: str):
+    """Статус одного plan-job. Клиент опрашивает до status=done/error."""
+    r = _plan_jobs.get(job_id)
+    if r is None:
+        return {"job_id": job_id, "status": "not_found"}
+    return {"job_id": job_id, "status": r["status"],
+            "result": r["result"], "error": r["error"]}
+
+
+def start_plan_job(
+    plan: dict, sandbox, orchestrator,
+    api_key: str, base_url: str, model: str, proxy_string: str,
+) -> str:
+    """Создаёт фоновый job для плана и возвращает job_id.
+
+    Используется в call_ai_api: если план длинный (> PLAN_JOB_MIN_STEPS),
+    не держим /api/chat — отдаём job_id, клиент поллит /api/jobs/{id}.
+    """
+    global _plan_jobs_lock
+    job_id, rec = _new_plan_job()
+    task = asyncio.create_task(_run_plan_job(
+        job_id, rec, plan, sandbox, orchestrator,
+        api_key, base_url, model, proxy_string,
+    ))
+    # Не даём task "забыться" — держим ссылку в реестре
+    rec["task"] = task
+    log_chat_event("SYSINTERACTION_JOB_STARTED", {
+        "job_id": job_id, "goal": (plan.get("goal") or "")[:100],
+        "steps": len(plan.get("steps") or []),
+    })
+    return job_id
 
 
 # ===== Скриншот внешней страницы (Electron capturePage → бэкенд) =====
@@ -4404,7 +4658,7 @@ async def execute_tool(req: ToolExecuteIn):
         log_chat_event("TOOL_RESULT", {"tool": req.tool, "result": "needs_approval"})
         return {"ok": False, "code": "needs_approval", "error": "Требуется подтверждение действия", "tool": req.tool, "args": req.args}
     try:
-        res = tools_sandbox.execute(req.tool, **req.args)
+        res = await _exec_sandbox(req.tool, timeout=30.0, **req.args)
         log_chat_event("TOOL_RESULT", {"tool": req.tool, "result": "ok", "preview": str(res.get("result", ""))[:150]})
     except PermissionError as e:
         log_chat_event("TOOL_RESULT", {"tool": req.tool, "result": "denied", "error": str(e)[:100]})

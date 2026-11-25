@@ -5,7 +5,7 @@ import sys
 # This must be set before pywinauto/comtypes are imported anywhere.
 sys.coinit_flags = 2
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Response
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Response, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -188,6 +188,16 @@ class Settings(BaseModel):
     securityAgentKey: str = ""
     securityAgentBaseUrl: str = ""
     securityAgentModel: str = ""
+    # Voice control — non-secret settings (persisted in settings.json)
+    stt_provider: str = "local"       # "cloud" | "local" (local is default — needed for wake word)
+    tts_provider: str = "browser"      # "browser" | "elevenlabs" | "openai"
+    tts_voice_id: str = ""             # empty = system default
+    vosk_model_path: str = ""          # empty = use auto-downloaded default
+    wake_word_string: str = "Астра"    # string to match in Vosk transcript
+    vad_silence_ms: int = 2000
+    vad_sensitivity: float = 1.8
+    wake_word_aliases: list = []
+    vad_fuzzy_threshold: int = 2
     # UI: тема / шрифт / язык / фон (часть конфига, персистится + импорт/экспорт)
     theme: str = "ocean"
     font: str = "system"
@@ -4475,6 +4485,104 @@ async def stt_transcribe(req: SttRequest):
     res = media_gen.transcribe_audio(base, key, model, req.audio_b64, req.mime, req.proxy,
                                      fallback_key=fb_key, fallback_base=fb_base, fallback_model=fb_model)
     return res
+
+
+# ── Voice control: local STT + model status ────────────────────────────────
+
+class SttLocalRequest(BaseModel):
+    audio_b64: str
+    mime: str = "audio/webm"
+    model_path: str = ""
+
+
+@app.post("/api/stt-local")
+async def stt_local_transcribe(req: SttLocalRequest):
+    """Local Vosk STT: audio (base64) → text. No API key needed."""
+    import stt_local
+    result = stt_local.transcribe_local(req.audio_b64, req.mime, req.model_path or None)
+    return result
+
+
+@app.get("/api/voice/status")
+async def voice_status():
+    """Model readiness for the voice feature. Triggers download if missing."""
+    import stt_local
+    return stt_local.ensure_model_downloaded()
+
+
+# ── Voice control: WebSocket wake-word streaming ──────────────────────────
+
+@app.websocket("/ws/wake-word")
+async def ws_wake_word(websocket: "WebSocket"):
+    """Continuous Vosk wake-word detection.
+
+    Protocol:
+      - On connect: create session-scoped KaldiRecognizer
+      - Per binary frame (6400 bytes = 100 ms at 16 kHz mono Int16):
+          AcceptWaveform → final: Result() / partial: PartialResult()
+          → wake_word_match → send {"type":"wake",...} + rec.Reset()
+      - On disconnect: discard recognizer
+    """
+    import stt_local
+    import json as _json
+    from fastapi import WebSocket as _WS
+
+    await websocket.accept()
+    try:
+        rec = stt_local.create_wake_word_recognizer(server_settings.vosk_model_path or None)
+    except Exception:
+        await websocket.close(code=1011, reason="vosk_model_unavailable")
+        return
+
+    target_norm = stt_local.normalize(server_settings.wake_word_string)
+    aliases = server_settings.wake_word_aliases
+    threshold = server_settings.vad_fuzzy_threshold
+
+    try:
+        while True:
+            data = await websocket.receive_bytes()
+            if rec.AcceptWaveform(data):
+                text = _json.loads(rec.Result())["text"]
+                if stt_local.wake_word_match(stt_local.normalize(text), target_norm, aliases, threshold):
+                    await websocket.send_text(_json.dumps({"type": "wake", "text": text, "alias": target_norm}))
+                    rec.Reset()
+            else:
+                text = _json.loads(rec.PartialResult())["partial"]
+                if stt_local.wake_word_match(stt_local.normalize(text), target_norm, aliases, threshold):
+                    await websocket.send_text(_json.dumps({"type": "wake", "text": text, "alias": target_norm}))
+                    rec.Reset()
+    except Exception:
+        pass
+
+
+# ── Internal secrets channel (token-protected, 127.0.0.1 only) ────────────
+
+_in_memory_secrets: dict = {}
+
+class InternalSecretsRequest(BaseModel):
+    provider: str
+    key: str = ""
+
+
+@app.post("/internal/secrets")
+async def internal_secrets_set(req: InternalSecretsRequest, x_internal_token: str = Header(default="")):
+    import os
+    expected = os.environ.get("AMT_INTERNAL_TOKEN", "")
+    if not expected or x_internal_token != expected:
+        return JSONResponse(status_code=401, content={"ok": False, "error": "unauthorized"})
+    _in_memory_secrets[req.provider] = req.key
+    return {"ok": True}
+
+
+@app.delete("/internal/secrets")
+async def internal_secrets_clear(req: InternalSecretsRequest, x_internal_token: str = Header(default="")):
+    import os
+    expected = os.environ.get("AMT_INTERNAL_TOKEN", "")
+    if not expected or x_internal_token != expected:
+        return JSONResponse(status_code=401, content={"ok": False, "error": "unauthorized"})
+    _in_memory_secrets.pop(req.provider, None)
+    return {"ok": True}
+
 
 @app.post("/api/media/check")
 async def media_check(req: MediaGenRequest):

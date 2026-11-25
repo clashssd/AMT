@@ -17,10 +17,23 @@ _EXTENSIONS = os.path.join(_BACKEND_DIR, "..", "extensions")
 # electron-builder выводим в release/ (не в dist/), чтобы не коллизировать.
 _DIST = os.path.join(_BACKEND_DIR, "..", "dist")
 
+# Vosk native DLLs (libvosk.dll + runtime deps) — must be bundled
+# because PyInstaller's C-extension analysis doesn't always pick them up
+# from the venv site-packages.
+_VOSK_PKG = os.path.join(
+    _BACKEND_DIR, ".venv", "Lib", "site-packages", "vosk"
+)
+
 a = Analysis(
     ['main.py'],
     pathex=['.'],
-    binaries=[],
+    binaries=[
+        # Vosk native DLLs — bundle into _internal/ root so the runtime can find them.
+        # PyInstaller binaries format: (abs_source, relative_dest_dir)
+        (os.path.join(_VOSK_PKG, _dll), 'vosk')
+        for _dll in ["libvosk.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll", "libwinpthread-1.dll"]
+        if os.path.exists(os.path.join(_VOSK_PKG, _dll))
+    ],
     datas=[
         # Фронтенд (HTML/CSS/JS) -> _internal/frontend
         (_FRONTEND, os.path.join('frontend')),
@@ -39,6 +52,7 @@ a = Analysis(
         'ai_engine.keymanager', 'ai_engine.tools', 'ai_engine.filegen',
         'ai_engine.media', 'ai_engine.extensions', 'ai_engine.sysinteraction',
         'ai_engine.desktop_tools',
+        'stt_local', 'vosk',
         # COM/async isolation + browser CDP automation (5-layer resilience fixes)
         'ai_engine.async_utils',
         'ai_engine.browser_cdp',

@@ -12,6 +12,35 @@ a quality **orchestrator**, long-term **memory**, safe **tools**
 vanilla JS frontend (no frameworks), Electron shell. Your API key and
 all data stay on your machine.
 
+## Philosophy
+
+- **Your data stays yours.** AMT does not collect, store or send your chats,
+  API keys, or generated files anywhere. Everything lives locally on your
+  machine. Closing the app = closing access to your data.
+- **Open source, forever.** Code, docs, and all build tooling are published
+  under the MIT license. Forks, modifications, and reinterpretations are
+  welcome — the project is open to any developer.
+- **Easy to read and understand.** No frameworks, no layers of abstraction,
+  no magical dependencies. Frontend is vanilla JS, backend is FastAPI in
+  plain Python. Anyone who can follow the code at a "I understand what's
+  happening here" level can safely modify the project for their own use.
+- **Extend any part.** Extensions (folders in `extensions/`), agents,
+  skills, personas, media providers, tools — everything extends without
+  recompilation. Drop in your own `backend.py` / `index.js` and it plugs
+  into the app.
+- **Safe storage by default.** Writes/commands require confirmation,
+  commands only from a whitelist, files only inside the project working
+  folder. API keys are encrypted in the local `SecureStore`. Everything the
+  app does is logged — and visible in "Help → Logs".
+
+## About the Project
+
+AMT is a desktop chat client that **you** control. There is no cloud, no
+account, no telemetry: only your API key (or a local model) and your local
+files. This is not "another AI chat" — it is a construction kit in which
+you assemble agents, skills, and extensions for your own tasks and keep
+them in your own repository.
+
 > This is the **first official release (1.0.0)**. Full feature list and
 > how everything works — in `README.md#features` and in-app:
 > "Help → About", "Help → How to write", "Help → Updates" (v1.0.0).

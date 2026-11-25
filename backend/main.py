@@ -4129,6 +4129,7 @@ class MediaTaskIn(BaseModel):
     task_id: str
     base_url: str = ""
     api_key: str = ""
+    model_name: str = ""
     use_settings_key: bool = True
 
 @app.post("/api/media/task")
@@ -4137,7 +4138,8 @@ async def media_task(req: MediaTaskIn):
     key = req.api_key or (server_settings.videoKey if req.use_settings_key else "")
     base = req.base_url or ((server_settings.videoBaseUrl or server_settings.baseUrl) if req.use_settings_key else "")
     proxy = (server_settings.proxyUrl or "").strip() if req.use_settings_key else ""
-    return media_gen.check_video_task(base, key, req.task_id, proxy)
+    _mn = req.model_name or (server_settings.videoModel or server_settings.model if req.use_settings_key else "")
+    return media_gen.check_video_task(base, key, req.task_id, proxy, _mn)
 
 
 # Голоса: список + клонирование

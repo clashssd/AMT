@@ -62,7 +62,9 @@ PROVIDERS = {
 # Автоопределение провайдера по base_url. Оставляем пустым по умолчанию: приложение
 # не «узнаёт» конкретные хосты провайдеров, если пользователь не указал base_url.
 # (Подключите адрес через Настройки/Хранилище — автоопределение заработает по нему.)
-_BASE_PROVIDER_HINTS = {}
+_BASE_PROVIDER_HINTS = {
+    "agnes": "apihub.agnes-ai.com",
+}
 # Provider-neutral: запасные имена моделей, используемые ТОЛЬКО когда пользователь
 # не указал model. По умолчанию ПУСТЫЕ — приложение не «угадывает» модель провайдера.
 # При желании их можно задать через env AMT_DEFAULT_MEDIA_MODELS (JSON: {"image":"","audio":"","video":""}).
@@ -206,8 +208,9 @@ def generate_image(base_url: str = "", api_key: str = "", model: str = "", promp
     return generate_image_ref(base_url, api_key, model, prompt, size, "", proxy, extra)
 
 
-def check_video_task(base_url: str = "", api_key: str = "", task_id: str = "", proxy: str = "") -> dict:
-    p = provider_profile("video", base_url, api_key, proxy=proxy)
+def check_video_task(base_url: str = "", api_key: str = "", task_id: str = "", proxy: str = "",
+                     model_name: str = "") -> dict:
+    p = provider_profile("video", base_url, api_key, model_name, proxy=proxy)
     _nb = _missing_base_error(p, "видео (статус задачи)")
     if _nb:
         # check_video_task возвращает dict со полем "status" — сохраняем контракт.
@@ -222,8 +225,11 @@ def check_video_task(base_url: str = "", api_key: str = "", task_id: str = "", p
                 host = p["base"]
                 if host.endswith("/v1"):
                     host = host[: -len("/v1")]
-                model = _FB_VIDEO_MODEL  # provider-neutral: пустая = использовать дефолт провайдера
-                url = f"{host}/agnesapi?video_id={task_id}&model_name={model}"
+                # model_name: явный параметр > fallback > пустая (провайдер выберет дефолт)
+                _mn = model_name or _FB_VIDEO_MODEL or ""
+                url = f"{host}/agnesapi?video_id={task_id}"
+                if _mn:
+                    url += f"&model_name={_mn}"
                 r = c.get(url, headers={"Authorization": f"Bearer {p['key']}"})
                 if r.status_code >= 400:
                     return {"status": "error", "error": f"{r.status_code} {r.text[:200]}"}
@@ -554,10 +560,21 @@ def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
     _nb = _missing_base_error(p, "картинок")
     if _nb:
         return _nb
+    is_agnes = any(h in p["base"] for h in _BASE_PROVIDER_HINTS)
     try:
         import base64 as _b64
         with _client(proxy, timeout=300.0) as c:
-            if ref_image_b64:
+            if ref_image_b64 and is_agnes:
+                # Agnes: image-to-image через extra_body (URL или b64 data URI)
+                ref_url = f"data:image/png;base64,{ref_image_b64}"
+                jbody = {"model": model or _FB_IMAGE_MODEL, "prompt": prompt, "size": size,
+                         "extra_body": {"image": [ref_url], "response_format": "url"}}
+                if extra:
+                    jbody.update(extra)
+                r = c.post(f"{p['base']}/images/generations",
+                           headers={"Authorization": f"Bearer {p['key']}"},
+                           json=jbody)
+            elif ref_image_b64:
                 raw = _b64.b64decode(ref_image_b64)
                 import urllib3, io as _io
                 # OpenAI /images/edits (multipart)
@@ -572,11 +589,14 @@ def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
                            headers={"Authorization": f"Bearer {p['key']}", "Content-Type": content_type},
                            content=body)
             else:
-                jbody = {"model": model, "prompt": prompt, "n": 1, "size": size}
+                jbody = {"model": model or _FB_IMAGE_MODEL, "prompt": prompt, "n": 1, "size": size}
+                if is_agnes:
+                    # Agnes: return_base64=true → бинарный ответ в data[0].b64_json
+                    jbody["return_base64"] = True
                 if extra:
                     jbody.update(extra)
                 r = c.post(f"{p['base']}/images/generations",
-                           headers={"Authorization": f"Bearer {p['key']}"} ,
+                           headers={"Authorization": f"Bearer {p['key']}"},
                            json=jbody)
         if r.status_code >= 400:
             return {"ok": False, "code": "unsupported", "error": f"{r.status_code} {r.text[:200]}"}
@@ -627,7 +647,10 @@ def generate_video(base_url: str = "", api_key: str = "", model: str = "", promp
             # Agnes: video_id; OpenAI-style: task_id / data[]
             vid = d.get("video_id") or d.get("task_id") or (d.get("data") or {}).get("task_id") or ""
             url = d.get("url", "")
+            # model_name: для Agnes нужно передать при опросе
+            _mn = model if "video" in (model or "").lower() else (_FB_VIDEO_MODEL or model or "")
             return {"ok": True, "task_id": vid, "video_id": vid, "url": url, "aspect_ratio": aspect_ratio,
+                    "model_name": _mn,
                     "raw": d, "agnes": is_agnes,
                     "note": "Видео генерируется (задача создана)" + (" — URL готов" if url else "")}
         return {"ok": False, "code": "unsupported", "error": f"Провайдер: {r.status_code} {r.text[:200]}"}

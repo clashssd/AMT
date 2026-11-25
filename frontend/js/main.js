@@ -4128,8 +4128,9 @@ function parseCustom(id) {
     if (!el || !el.value.trim()) return null;
     try { return JSON.parse(el.value); } catch { return null; }
 }
-// ===== МЕДИА / ФАЙЛЫ ПРЯМО В ЧАТЕ (токены [[GEN:...]]) =====
-const GEN_TOKEN_RE = /\[\[GEN:([a-z_]+)\|([^\]]*)\]\]/gi;
+// ===== МЕДИА / ФАЙЛЫ ПРЯМО В ЧАТЕ (токены [[GEN:...]] или [GEN:...]) =====
+// LLM иногда пишет один bracket вместо двух — принимаем оба варианта.
+const GEN_TOKEN_RE = /\[+GEN:([a-z_]+)\|([^\]]*)\]+/gi;
 function parseGenTokens(text) {
     const out = [];
     let m;
@@ -4243,7 +4244,7 @@ async function renderGenInChat(item, hostEl) {
             const note = document.createElement('div');
             note.className = 'gen-inline-note'; note.textContent = 'Видео генерируется…';
             wrap.appendChild(note);
-            pollVideoTaskChat(res.task_id, v, note);
+            pollVideoTaskChat(res.task_id, v, note, res.model_name || "");
         } else {
             wrap.innerHTML = `<div class="gen-inline-err">Ключ не поддерживает видео. Укажите другой: ${escapeHtml(res.error || '')}</div>`;
         }
@@ -4283,12 +4284,14 @@ async function renderGenInChat(item, hostEl) {
         }
     }
 }
-async function pollVideoTaskChat(taskId, videoEl, noteEl) {
+async function pollVideoTaskChat(taskId, videoEl, noteEl, modelName = "") {
     for (let i = 0; i < 30; i++) {
         await new Promise(r => setTimeout(r, 5000));
+        const body = { task_id: taskId, use_settings_key: true };
+        if (modelName) body.model_name = modelName;
         const st = await fetch(`${API_BASE}/api/media/task`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ task_id: taskId, use_settings_key: true }),
+            body: JSON.stringify(body),
         }).then(x => x.json());
         if (st.status === 'succeed' && st.url) {
             videoEl.src = st.url;

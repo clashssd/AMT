@@ -561,6 +561,10 @@ def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
     if _nb:
         return _nb
     is_agnes = any(h in p["base"] for h in _BASE_PROVIDER_HINTS)
+    # Agnes-хаб требует /v1 в пути. Если base после обрезки не содержит /v1 — допишем.
+    _agnes_base = p["base"]
+    if is_agnes and not _agnes_base.endswith("/v1"):
+        _agnes_base = f"{_agnes_base}/v1"
     try:
         import base64 as _b64
         with _client(proxy, timeout=300.0) as c:
@@ -571,7 +575,7 @@ def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
                          "extra_body": {"image": [ref_url], "response_format": "url"}}
                 if extra:
                     jbody.update(extra)
-                r = c.post(f"{p['base']}/images/generations",
+                r = c.post(f"{_agnes_base}/images/generations",
                            headers={"Authorization": f"Bearer {p['key']}"},
                            json=jbody)
             elif ref_image_b64:
@@ -595,7 +599,8 @@ def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
                     jbody["return_base64"] = True
                 if extra:
                     jbody.update(extra)
-                r = c.post(f"{p['base']}/images/generations",
+                _img_endpoint = _agnes_base if is_agnes else p["base"]
+                r = c.post(f"{_img_endpoint}/images/generations",
                            headers={"Authorization": f"Bearer {p['key']}"},
                            json=jbody)
         if r.status_code >= 400:
@@ -625,17 +630,22 @@ def generate_video(base_url: str = "", api_key: str = "", model: str = "", promp
     if _nb:
         return _nb
     is_agnes = any(h in p["base"] for h in _BASE_PROVIDER_HINTS)
+    # Agnes-хаб требует /v1 в пути. Если base после обрезки не содержит /v1 — допишем.
+    _agnes_base = p["base"]
+    if is_agnes and not _agnes_base.endswith("/v1"):
+        _agnes_base = f"{_agnes_base}/v1"
     try:
         with _client(proxy, timeout=300.0) as c:
             if is_agnes:
                 # Agnes (OpenAI Videos): POST /v1/videos, нужен mode. seconds 4-12. size 720P/1080P.
                 # Модель должна быть видеомоделью Agnes — чат-модель (agnes-3.0-flash) отклоняется.
                 _vid_model = model if "video" in (model or "").lower() else (_FB_VIDEO_MODEL or model or "video")
+                _sec = str(duration or "5")
                 body = {**{"model": _vid_model, "prompt": prompt,
-                           "mode": "text", "seconds": duration or "5",
-                           "size": "720P", "aspect_ratio": aspect_ratio},
+                            "mode": "text", "seconds": _sec,
+                            "size": "720P", "aspect_ratio": aspect_ratio, "n": 1},
                         **({} if not extra else extra)}
-                r = c.post(f"{p['base']}/videos",
+                r = c.post(f"{_agnes_base}/videos",
                            headers={"Authorization": f"Bearer {p['key']}", "Content-Type": "application/json"},
                            json=body)
             else:

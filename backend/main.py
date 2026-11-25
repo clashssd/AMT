@@ -502,7 +502,14 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
         r'скриншот|скрин)\b', re.IGNORECASE
     )
     # Проще: если есть хоть одно десктоп-слово — авто-включаем
-    _desktop_hint = _DESKTOP_KW.search(user_message or "") is not None
+    # НО: «скинь/покажи фото/картинку/видео» — это media-запрос, а не десктопное действие.
+    # Такие запросы обрабатываются через [[GEN:...]] токены, а не через sysinteraction.
+    _media_hint = re.search(
+        r'\b(скинь|покажи|сгенерируй|создай|сделай)\s+(своё|свой|свою|моё|мой|мою)?\s*'
+        r'(фото|картинк[ау]|видео|изображен[иея])\b',
+        user_message or "", re.IGNORECASE
+    )
+    _desktop_hint = _DESKTOP_KW.search(user_message or "") is not None and not _media_hint
     if _desktop_hint and not sysinteraction:
         sysinteraction = True
         log_chat_event("SYSINTERACTION_AUTO", {"reason": "desktop_keywords", "msg": (user_message or "")[:100]})
@@ -1407,11 +1414,16 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
         # Логируем полный трейс для диагностики, но пользователю показываем
         # дружелюбное сообщение, а не внутренний текст Python-исключения
         # (например "invalid literal for int()...") — это служебная информация.
-        logger.exception("Ошибка обработки запроса к LLM/API")
-        raise HTTPException(
-            status_code=503,
-            detail="Не удалось получить ответ. Проверьте настройки API (ключ/адрес) и доступность бэкенда.",
-        )
+        logger.exception("Ошибка обработки запроса к LLM/API: %s", str(last_err))
+        _friendly = "Не удалось получить ответ. Проверьте настройки API (ключ/адрес) и доступность бэкенда."
+        _err_str = str(last_err)
+        if "ConnectError" in _err_str or "connect" in _err_str.lower():
+            _friendly = "Не удалось подключиться к бэкенду. Запустите `python backend/main.py`."
+        elif "401" in _err_str or "403" in _err_str or "Invalid token" in _err_str:
+            _friendly = "API-ключ отклонён (401/403). Проверьте ключ в настройках."
+        elif "404" in _err_str:
+            _friendly = "Адрес API не найден (404). Проверьте base_url в настройках."
+        raise HTTPException(status_code=503, detail=_friendly)
     raise HTTPException(status_code=503, detail="Не удалось получить ответ")
 
 
@@ -2400,8 +2412,17 @@ def resolve_sys_tokens(text: str, active: bool) -> str:
         m = SYS_WINDOW_CLICK_RE.search(out)
         if not m:
             break
-        x = int(m.group(1))
-        y = int(m.group(2))
+        x_str = m.group(1).strip()
+        y_str = m.group(2).strip()
+        try:
+            x = int(x_str)
+            y = int(y_str)
+        except (ValueError, TypeError):
+            app = (m.group(3) or "").strip()
+            res_text = f"[Некорректные координаты: x={x_str}, y={y_str}. Укажите целые числа.]"
+            log_chat_event("SYS_WINDOW_CLICK_DONE", {"x": x_str, "y": y_str, "app": app, "status": "error", "error": "invalid_coords"})
+            out = out[:m.start()] + res_text + out[m.end():]
+            continue
         app = (m.group(3) or "").strip()
         try:
             res = tools_sandbox.execute("window_click", x=x, y=y, app=app)

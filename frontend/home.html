@@ -6,6 +6,7 @@
     <title>AMT Chat</title>
     <link rel="icon" href="./assets/icon.svg">
     <link rel="stylesheet" href="./css/style.css">
+    <link rel="stylesheet" href="./css/voice.css">
 </head>
 <body>
     <!-- Свой тайтлбар (frameless-окно): заменяет нативную серую полосу.
@@ -334,6 +335,7 @@
                             <button class="attach-btn agent-toggle" id="thinkerToggle" title="Глубокий аналитик: рассуждения, анализ" data-i18n-en-title="Deep thinker" aria-label="Глубокий аналитик"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M9 3a4 4 0 00-4 4v1a4 4 0 004 4h2a4 4 0 004-4V7a4 4 0 00-4-4h-2z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 12v4a4 4 0 004 4h2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="19" cy="5" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
                             <button class="attach-btn agent-toggle" id="jailbreakToggle" title="Без фильтров: обходит все ограничения" data-i18n-en-title="No filters" aria-label="Без фильтров"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M12 3l7 4v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V7l7-4z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
                             <button class="attach-btn agent-toggle" id="sysInteractionToggle" title="Взаимодействие с системой (безопасно: только разрешённые действия, без слива данных)" data-i18n-en-title="System interaction (safe)" aria-label="Взаимодействие с системой"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 12h4M12 8v4M12 16v0M16 12h0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="16" cy="16" r="1.4" fill="currentColor"/></svg></button>
+                            <button class="attach-btn voice-btn off" id="voiceBtn" title="Голосовое управление: слушай → говори" data-i18n-en-title="Voice control: listen & speak" aria-label="Голос"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M19 10v2a7 7 0 0 1-14 0v-2" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="19" x2="12" y2="23" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="23" x2="16" y2="23" stroke="currentColor" stroke-width="1.5"/></svg></button>
                         </div>
                     </div>
                     <textarea 
@@ -455,6 +457,8 @@
                             <a href="#" data-sec="sec-tools" data-i18n="s_tools" data-i18n-ru="Инструменты">Инструменты</a>
                             <a href="#" data-sec="sec-projects" data-i18n="s_projects" data-i18n-ru="Проекты">Проекты</a>
                             <a href="#" data-sec="sec-media" data-i18n="s_media" data-i18n-ru="Медиа-ключи">Медиа-ключи</a>
+                            <a href="#" data-sec="sec-voice" data-i18n="s_voice" data-i18n-ru="Голос">Голос</a>
+                            <a href="#" data-sec="sec-providers" data-i18n="s_providers" data-i18n-ru="Провайдеры">Провайдеры</a>
                             <a href="#" data-sec="sec-orch" data-i18n="s_orch" data-i18n-ru="Оркестратор">Оркестратор</a>
                             <a href="#" data-sec="sec-memory" data-i18n="s_memory" data-i18n-ru="Память">Память</a>
                             <a href="#" data-sec="sec-personality" class="subnav-special" data-i18n="s_personality" data-i18n-ru="Личность">Личность</a>
@@ -824,6 +828,86 @@
                             <button class="test-btn primary" id="mediaKeysSaveBtn">Сохранить медиа-ключи</button>
                         </div>
                     </div><!-- /settings-page media -->
+
+                    <!-- Страница: Голос -->
+                    <div class="settings-page" id="sec-voice" data-page-key="voice">
+                        <div class="settings-block">
+                            <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M19 10v2a7 7 0 0 1-14 0v-2" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></span> Голосовое управление</h3>
+                            <p class="block-desc">Wake word, VAD таймаут, чувствительность. Все значения сохраняются в settings.json и применяются мгновенно.</p>
+                            <div class="form-group">
+                                <label>Wake word (триггер прослушивания)</label>
+                                <input type="text" id="wakeWordInput" class="opt-input" value="Астра" placeholder="Астра">
+                                <small>Любая фраза. При изменении — модель wake word перезагружается автоматически.</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Таймаут тишины VAD: <span id="vadSilenceOut">2000</span> мс</label>
+                                <input type="range" id="vadSilenceSlider" min="500" max="10000" step="100" value="2000">
+                            </div>
+                            <div class="form-group">
+                                <label>Чувствительность VAD: <span id="vadSensitivityOut">1.8</span></label>
+                                <input type="range" id="vadSensitivitySlider" min="1.2" max="3.0" step="0.1" value="1.8">
+                            </div>
+                            <button class="test-btn primary" id="voiceSaveBtn">Сохранить голосовые настройки</button>
+                        </div>
+                    </div><!-- /settings-page voice -->
+
+                    <!-- Страница: Провайдеры -->
+                    <div class="settings-page" id="sec-providers" data-page-key="providers">
+                        <div class="settings-block">
+                            <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span> Провайдеры STT / TTS</h3>
+                            <p class="block-desc">Ключи API хранятся в зашифрованном safeStorage (Electron) или localStorage (браузер). Никогда не попадают в settings.json.</p>
+
+                            <div class="form-group">
+                                <label>STT — провайдер</label>
+                                <label><input type="radio" name="sttProvider" value="local" checked> Локальный Vosk (offline, wake word)</label>
+                                <label style="margin-top:4px;display:block"><input type="radio" name="sttProvider" value="cloud"> Облачный (API)</label>
+                                <label style="margin-top:4px;display:block"><input type="radio" name="sttProvider" value="custom"> OpenAI-совместимый (custom)</label>
+                            </div>
+
+                            <div class="form-group" id="cloudSttGroup">
+                                <label>Cloud STT — Base URL</label>
+                                <input type="text" id="cloudSttBaseUrl" class="opt-input" placeholder="https://api.openai.com">
+                                <label style="margin-top:8px">Cloud STT — Модель</label>
+                                <input type="text" id="cloudSttModel" class="opt-input" placeholder="whisper-1">
+                                <label style="margin-top:8px">Cloud STT — API ключ</label>
+                                <input type="password" id="cloudSttKey" class="opt-input" placeholder="sk-... (пусто = использовать общий ключ)">
+                                <small id="cloudSttKeyStatus">Ключ не задан</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Local STT — Путь к модели Vosk</label>
+                                <input type="text" id="localSttModelPath" class="opt-input" placeholder="пусто = авто-загрузка (~50 МБ)">
+                                <small>Путь к папке с vosk-model-small-ru. Пусто = скачать автоматически при первом запуске.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label>TTS — провайдер</label>
+                                <select id="ttsProvider" class="opt-input">
+                                    <option value="browser" selected>Браузер (speechSynthesis, бесплатно)</option>
+                                    <option value="custom">OpenAI-совместимый (custom)</option>
+                                    <option value="elevenlabs">ElevenLabs</option>
+                                    <option value="openai">OpenAI TTS</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" id="ttsCustomGroup">
+                                <label>TTS — Base URL (для custom / OpenAI-совместимого)</label>
+                                <input type="text" id="ttsBaseUrl" class="opt-input" placeholder="https://api.openai.com">
+                                <label style="margin-top:8px">TTS — Модель</label>
+                                <input type="text" id="ttsModel" class="opt-input" placeholder="gpt-4o-mini-tts">
+                                <label style="margin-top:8px">TTS — Голос (voice ID)</label>
+                                <input type="text" id="ttsVoiceId" class="opt-input" placeholder="alloy (пусто = системный)">
+                                <label style="margin-top:8px">TTS — API ключ</label>
+                                <input type="password" id="ttsKey" class="opt-input" placeholder="sk-... (пусто = использовать общий ключ)">
+                                <small id="ttsKeyStatus">Ключ не задан</small>
+                            </div>
+
+                            <div style="display:flex;gap:8px;margin-top:16px">
+                                <button class="test-btn primary" id="providersSaveBtn">Сохранить</button>
+                                <button class="test-btn" id="providersResetBtn">Сбросить на дефолты</button>
+                            </div>
+                        </div>
+                    </div><!-- /settings-page providers -->
 
                     <!-- Страница: Оркестратор -->
                     <div class="settings-page" id="sec-orch" data-page-key="orch">
@@ -1737,6 +1821,7 @@
         </div>
     </div>
     <script src="./js/player-browser.js"></script>
+    <script src="./js/voice.js"></script>
     <script src="./js/main.js"></script>
 </body>
 </html>

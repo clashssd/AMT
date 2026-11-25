@@ -1128,7 +1128,19 @@ function buildSettingsFromInputs() {
         sttModel: document.getElementById('sttModel')?.value.trim() || '',
         codingKey: document.getElementById('codingKey')?.value.trim() || '',
         codingBaseUrl: document.getElementById('codingBaseUrl')?.value.trim() || '',
-        codingModel: document.getElementById('codingModel')?.value.trim() || ''
+        codingModel: document.getElementById('codingModel')?.value.trim() || '',
+        // Voice control
+        sttProvider: document.querySelector('input[name="sttProvider"]:checked')?.value || 'local',
+        sttBaseUrl: document.getElementById('cloudSttBaseUrl')?.value.trim() || '',
+        sttModelNew: document.getElementById('cloudSttModel')?.value.trim() || '',
+        ttsProvider: document.getElementById('ttsProvider')?.value || 'browser',
+        ttsBaseUrl: document.getElementById('ttsBaseUrl')?.value.trim() || '',
+        ttsModel: document.getElementById('ttsModel')?.value.trim() || '',
+        ttsVoiceId: document.getElementById('ttsVoiceId')?.value.trim() || '',
+        voskModelPath: document.getElementById('localSttModelPath')?.value.trim() || '',
+        wakeWordString: document.getElementById('wakeWordInput')?.value.trim() || 'Астра',
+        vadSilenceMs: parseInt(document.getElementById('vadSilenceSlider')?.value) || 2000,
+        vadSensitivity: parseFloat(document.getElementById('vadSensitivitySlider')?.value) || 1.8
     };
 }
 
@@ -1183,7 +1195,19 @@ function toBackendSettings(s) {
         audioVoiceId: s.audioVoiceId || '',
         codingKey: s.codingKey || '',
         codingBaseUrl: s.codingBaseUrl || '',
-        codingModel: s.codingModel || ''
+        codingModel: s.codingModel || '',
+        // Voice control (non-secret, persisted in settings.json)
+        stt_provider: s.sttProvider || 'local',
+        stt_base_url: s.sttBaseUrl || '',
+        stt_model: s.sttModelNew || '',
+        tts_provider: s.ttsProvider || 'browser',
+        tts_base_url: s.ttsBaseUrl || '',
+        tts_model: s.ttsModel || '',
+        tts_voice_id: s.ttsVoiceId || '',
+        vosk_model_path: s.voskModelPath || '',
+        wake_word_string: s.wakeWordString || 'Астра',
+        vad_silence_ms: s.vadSilenceMs || 2000,
+        vad_sensitivity: s.vadSensitivity || 1.8
     };
 }
 
@@ -5842,6 +5866,139 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Медиа-ключи (настройки)
     if (document.getElementById('mediaKeysSaveBtn')) document.getElementById('mediaKeysSaveBtn').addEventListener('click', saveMediaKeys);
+
+    // ── Голосовые настройки + провайдеры ──────────────────────────────────
+    // Вывод значений из settings в DOM
+    function loadVoiceSettingsIntoDom() {
+        const s = settings || {};
+        const sttProv = document.querySelector(`input[name="sttProvider"][value="${s.sttProvider || 'local'}"]`);
+        if (sttProv) sttProv.checked = true;
+        const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+        setVal('wakeWordInput', s.wakeWordString || 'Астра');
+        setVal('vadSilenceSlider', s.vadSilenceMs || 2000);
+        setVal('vadSensitivitySlider', s.vadSensitivity || 1.8);
+        setVal('cloudSttBaseUrl', s.sttBaseUrl || '');
+        setVal('cloudSttModel', s.sttModelNew || '');
+        setVal('localSttModelPath', s.voskModelPath || '');
+        setVal('ttsProvider', s.ttsProvider || 'browser');
+        setVal('ttsBaseUrl', s.ttsBaseUrl || '');
+        setVal('ttsModel', s.ttsModel || '');
+        setVal('ttsVoiceId', s.ttsVoiceId || '');
+        // Обновить output-бейджи слайдеров
+        const vo = document.getElementById('vadSilenceOut'); if (vo) vo.textContent = s.vadSilenceMs || 2000;
+        const vs = document.getElementById('vadSensitivityOut'); if (vs) vs.textContent = s.vadSensitivity || 1.8;
+        // Показать/скрыть группы в зависимости от STT-провайдера
+        updateSttGroupsVisibility();
+        updateTtsGroupsVisibility();
+    }
+    function updateSttGroupsVisibility() {
+        const prov = document.querySelector('input[name="sttProvider"]:checked')?.value || 'local';
+        const cg = document.getElementById('cloudSttGroup');
+        if (cg) cg.style.display = (prov === 'cloud' || prov === 'custom') ? '' : 'none';
+    }
+    function updateTtsGroupsVisibility() {
+        const prov = document.getElementById('ttsProvider')?.value || 'browser';
+        const tg = document.getElementById('ttsCustomGroup');
+        if (tg) tg.style.display = prov !== 'browser' ? '' : 'none';
+    }
+    document.querySelectorAll('input[name="sttProvider"]').forEach(r => r.addEventListener('change', updateSttGroupsVisibility));
+    const ttsProviderSel = document.getElementById('ttsProvider');
+    if (ttsProviderSel) ttsProviderSel.addEventListener('change', updateTtsGroupsVisibility);
+    const vadSilenceSlider = document.getElementById('vadSilenceSlider');
+    if (vadSilenceSlider) vadSilenceSlider.addEventListener('input', () => { const o = document.getElementById('vadSilenceOut'); if (o) o.textContent = vadSilenceSlider.value; });
+    const vadSensSlider = document.getElementById('vadSensitivitySlider');
+    if (vadSensSlider) vadSensSlider.addEventListener('input', () => { const o = document.getElementById('vadSensitivityOut'); if (o) o.textContent = vadSensSlider.value; });
+    // Загрузить при старте
+    loadVoiceSettingsIntoDom();
+
+    // Кнопки сохранения
+    document.getElementById('voiceSaveBtn')?.addEventListener('click', async () => {
+        settings = buildSettingsFromInputs();
+        await SecureStore.set(STORAGE_SETTINGS, settings);
+        await saveSettingsToServer();
+        flashStatus('Голосовые настройки сохранены');
+        if (window.voice) window.voice.init(buildVoiceSettingsObj());
+    });
+    document.getElementById('providersSaveBtn')?.addEventListener('click', async () => {
+        settings = buildSettingsFromInputs();
+        // Сохранить non-secret в settings.json
+        await SecureStore.set(STORAGE_SETTINGS, settings);
+        await saveSettingsToServer();
+        // API-ключи — в safeStorage (Electron) или localStorage (браузер)
+        const sttKey = document.getElementById('cloudSttKey')?.value.trim() || '';
+        const ttsKey = document.getElementById('ttsKey')?.value.trim() || '';
+        const sttStatus = document.getElementById('cloudSttKeyStatus');
+        const ttsStatus = document.getElementById('ttsKeyStatus');
+        if (sttKey) {
+            await window.api?.secrets?.set?.({ provider: 'stt', key: sttKey }) ||
+                localStorage.setItem('amt_secret_stt', sttKey);
+            if (sttStatus) sttStatus.textContent = '•••••••• Saved';
+        } else if (sttStatus) sttStatus.textContent = 'Ключ не задан';
+        if (ttsKey) {
+            await window.api?.secrets?.set?.({ provider: 'tts', key: ttsKey }) ||
+                localStorage.setItem('amt_secret_tts', ttsKey);
+            if (ttsStatus) ttsStatus.textContent = '•••••••• Saved';
+        } else if (ttsStatus) ttsStatus.textContent = 'Ключ не задан';
+        flashStatus('Настройки провайдеров сохранены');
+    });
+    document.getElementById('providersResetBtn')?.addEventListener('click', async () => {
+        // Сбросить DOM-поля
+        const resetFields = [
+            ['wakeWordInput', 'Астра'], ['vadSilenceSlider', '2000'], ['vadSensitivitySlider', '1.8'],
+            ['cloudSttBaseUrl', ''], ['cloudSttModel', ''], ['cloudSttKey', ''], ['localSttModelPath', ''],
+            ['ttsProvider', 'browser'], ['ttsBaseUrl', ''], ['ttsModel', ''], ['ttsVoiceId', ''], ['ttsKey', '']
+        ];
+        resetFields.forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.value = v; });
+        const localRadio = document.querySelector('input[name="sttProvider"][value="local"]');
+        if (localRadio) localRadio.checked = true;
+        updateSttGroupsVisibility(); updateTtsGroupsVisibility();
+        const vo = document.getElementById('vadSilenceOut'); if (vo) vo.textContent = '2000';
+        const vs = document.getElementById('vadSensitivityOut'); if (vs) vs.textContent = '1.8';
+        const sttStatus = document.getElementById('cloudSttKeyStatus'); if (sttStatus) sttStatus.textContent = 'Ключ не задан';
+        const ttsStatus = document.getElementById('ttsKeyStatus'); if (ttsStatus) ttsStatus.textContent = 'Ключ не задан';
+        // Очистить ключи
+        await window.api?.secrets?.clear?.({ provider: 'stt' }) || localStorage.removeItem('amt_secret_stt');
+        await window.api?.secrets?.clear?.({ provider: 'tts' }) || localStorage.removeItem('amt_secret_tts');
+        // Сохранить сброс
+        settings = buildSettingsFromInputs();
+        await SecureStore.set(STORAGE_SETTINGS, settings);
+        await saveSettingsToServer();
+        flashStatus('Сброшено на дефолты');
+    });
+    // Показать статус ключей при загрузке
+    (async () => {
+        try {
+            const st = await window.api?.secrets?.status?.();
+            if (st?.providers?.includes('stt')) {
+                const el = document.getElementById('cloudSttKeyStatus');
+                if (el) el.textContent = '•••••••• Saved';
+            }
+            if (st?.providers?.includes('tts')) {
+                const el = document.getElementById('ttsKeyStatus');
+                if (el) el.textContent = '•••••••• Saved';
+            }
+        } catch (_) { /* browser без safeStorage — молча */ }
+    })();
+
+    // beforeunload — остановить голосовой режим
+    window.addEventListener('beforeunload', () => { if (window.voice) window.voice.stopAll(); });
+
+    // Инициализация voice.js
+    function buildVoiceSettingsObj() {
+        return {
+            sttProvider: settings?.sttProvider || 'local',
+            sttBaseUrl: settings?.sttBaseUrl || '',
+            sttModel: settings?.sttModelNew || '',
+            ttsProvider: settings?.ttsProvider || 'browser',
+            ttsBaseUrl: settings?.ttsBaseUrl || '',
+            ttsModel: settings?.ttsModel || '',
+            ttsVoiceId: settings?.ttsVoiceId || '',
+            wakeWordString: settings?.wakeWordString || 'Астра',
+            vadSilenceMs: settings?.vadSilenceMs || 2000,
+            vadSensitivity: settings?.vadSensitivity || 1.8,
+        };
+    }
+    if (window.voice) window.voice.init(buildVoiceSettingsObj());
 
     // Тест STT (текст → голос → STT: полный цикл)
     if (document.getElementById('sttTestBtn')) {

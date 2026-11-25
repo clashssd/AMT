@@ -4152,7 +4152,7 @@ function parseCustom(id) {
 }
 // ===== МЕДИА / ФАЙЛЫ ПРЯМО В ЧАТЕ (токены [[GEN:...]] или [GEN:...]) =====
 // LLM иногда пишет один bracket вместо двух — принимаем оба варианта.
-const GEN_TOKEN_RE = /\[+GEN:([a-z_]+)\|([\s\S]+?)\]\]/gi;
+const GEN_TOKEN_RE = /\[+GEN:([a-z_]+)\|([\s\S]+)\]\]/gi;
 const GEN_TOKEN_RE_SINGLE = /\[GEN:([a-z_]+)\|([\s\S]+)\]/gi;
 function _parseGenMatch(m) {
     const kind = m[1];

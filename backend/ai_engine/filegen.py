@@ -38,6 +38,7 @@ def gen_docx(content: str, title: str = "Документ") -> bytes:
 def gen_xlsx(content: str, title: str = "Лист") -> bytes:
     """content: JSON {"sheets":[{"name":..,"rows":[[..],..]},..]} или CSV."""
     from openpyxl import Workbook
+    import re as _re
     data = None
     if content.strip().startswith("[") or content.strip().startswith("{"):
         try:
@@ -48,7 +49,10 @@ def gen_xlsx(content: str, title: str = "Лист") -> bytes:
         wb = Workbook()
         wb.remove(wb.active)
         for s in data["sheets"]:
-            ws = wb.create_sheet(title=s.get("name", "Лист"))
+            # Sanitize sheet name: openpyxl forbids : \ / ? * [ ]
+            raw_name = s.get("name", "Лист")
+            safe_name = _re.sub(r'[:\\/?\[\]]', '', str(raw_name)).strip() or "Лист"
+            ws = wb.create_sheet(title=safe_name)
             for row in s.get("rows", []):
                 ws.append(row)
     else:

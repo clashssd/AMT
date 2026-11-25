@@ -1014,6 +1014,9 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
         "  - pptx: JSON вида {\"slides\":[{\"title\":\"Заголовок\",\"body\":\"Текст\"},...]}\n"
         "  - docx: текст документа (абзацы, # = заголовок)\n"
         "  - pdf: текст (бэкенд нарисует PDF)\n"
+        "СТРОГО ЗАПРЕЩЕНО: оборачивать содержимое токена в markdown-заглушки (```json ... ```). "
+        "Пиши JSON/код БЕЗ markdown-обёртки, прямо внутри [[GEN:file|ext|...]]. "
+        "Например: [[GEN:file|xlsx|{\"sheets\":[{\"name\":\"Данные\",\"rows\":[[\"А\",\"Б\"],[1,2]]}]}]]\n"
         "Если пользователь просит код («сделай скрипт», «напиши функцию») — сначала кратко объясни, "
         "затем в конце отдельной строкой добавь токен [[GEN:file|<ext>|<ПОЛНЫЙ код>]].\n"
         "Пример: [[GEN:file|py|import os\nprint(os.getcwd())]]\n"
@@ -1314,6 +1317,10 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                 else:
                     # Даже без web-агента выполняем [[SCREENSHOT:url]] и [[WEBSEARCH:...]]
                     text = await resolve_websearch_tokens(text, True)
+
+                # Авто-обёртка: если LLM выдала raw JSON (xlsx/pptx) без [[GEN:file|...]],
+                # оборачиваем в токен, чтобы фронтенд мог его распознать и сгенерировать файл.
+                text = _auto_wrap_gen_file_tokens(text)
 
                 # ВЗАИМОДЕЙСТВИЕ С СИСТЕМОЙ: sys_gate уже вычислен выше
                 # (авто-включение при sysinteraction=True).
@@ -1935,6 +1942,47 @@ def _fmt_websearch_results(res: dict) -> str:
     lines.append("\nYouTube/Twitch ссылки — нажми в чате, откроются в плеере (с фильтрами).")
     lines.append("Веб-ссылки (Lordfilm и др.) — откроются в браузере.")
     return "\n".join(lines)
+
+
+# === Авто-обёртка raw JSON → [[GEN:file|...]] ===
+# LLM иногда выводит JSON (xlsx/pptx) без токен-обёртки. Обернём его,
+# чтобы фронтенд мог распознать и сгенерировать файл.
+import re as _re_auto_wrap
+_XLSX_JSON_RE = _re_auto_wrap.compile(
+    r'```(?:json)?\s*\n(\{["\']?sheets["\']?\s*:).*?```',
+    _re_auto_wrap.DOTALL
+)
+_PPTX_JSON_RE = _re_auto_wrap.compile(
+    r'```(?:json)?\s*\n(\{["\']?slides["\']?\s*:).*?```',
+    _re_auto_wrap.DOTALL
+)
+
+
+def _auto_wrap_gen_file_tokens(text: str) -> str:
+    """Если текст содержит raw JSON для xlsx/pptx (без [[GEN:file|...]]),
+    оборачиваем его в токен. Уже обёрнутые токены не трогаем."""
+    if not text or "[[GEN:file|" in text:
+        return text  # уже есть токен — не дублируем
+
+    m = _XLSX_JSON_RE.search(text)
+    if m:
+        json_body = m.group(0).strip()
+        # Убираем markdown-обёртку (```json ... ```)
+        json_body = json_body.replace('```json', '').replace('```', '').strip()
+        # Убираем текст ДО JSON (вступление) и ПОСЛЕ (если есть)
+        prefix = text[:m.start()].rstrip()
+        suffix = text[m.end():].lstrip()
+        return f"{prefix}\n[[GEN:file|xlsx|{json_body}]]{suffix}"
+
+    m = _PPTX_JSON_RE.search(text)
+    if m:
+        json_body = m.group(0).strip()
+        json_body = json_body.replace('```json', '').replace('```', '').strip()
+        prefix = text[:m.start()].rstrip()
+        suffix = text[m.end():].lstrip()
+        return f"{prefix}\n[[GEN:file|pptx|{json_body}]]{suffix}"
+
+    return text
 
 
 async def resolve_websearch_tokens(text: str, active: bool) -> str:

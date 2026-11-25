@@ -1,8 +1,19 @@
 {
-  "version": "1.0.4",
+  "version": "1.0.5",
   "name": "AMT Chat",
   "latest_at": "2026-11-25",
   "releases": [
+    {
+      "version": "1.0.5",
+      "date": "2026-11-25",
+      "title": "FIX: LLM raw JSON → [[GEN:file]] авто-обёртка + openpyxl sheet name sanitize",
+      "changes": [
+        "LLM иногда выводит raw JSON (xlsx/pptx) без токен-обёртки [[GEN:file|...]]. Теперь бэкенд автоматически оборачивает raw JSON (в markdown-заглушках ```json ... ```) в [[GEN:file|xlsx|...]] / [[GEN:file|pptx|...]], чтобы фронтенд мог распознать и сгенерировать файл.",
+        "MEDIA_CAPABILITY промпт: добавлено жёсткое запрет markdown-заглушек внутри [[GEN:file|ext|content]] — LLM пишет JSON/код прямо внутри токена.",
+        "gen_xlsx (filegen.py): sanitize sheet names — убираются недопустимые для openpyxl символы (: \\ / ? * [ ]) из имён листов.",
+        "Добавлены 5 регрессионных тестов (_auto_wrap_gen_file_tokens: xlsx/pptx/already-token/no-json/empty)."
+      ]
+    },
     {
       "version": "1.0.4",
       "date": "2026-11-25",

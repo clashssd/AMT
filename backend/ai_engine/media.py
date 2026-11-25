@@ -131,7 +131,8 @@ def _get_path(has_file: bool, prompt: str, is_voice: bool, user_paths: Optional[
     return default
 
 
-def _prepare_payload(prompt: str, model: str, attached_file=None) -> dict:
+def _prepare_payload(prompt: str, model: str, attached_file=None,
+                    voice_id=None, voice_settings=None, extra=None) -> dict:
     """Собирает JSON payload. prompt/model — ТОЧЬ-В-ТОЧЬ (без trim).
 
     attached_file обрабатывается по типу (фронт отправляет base64-строки,
@@ -140,6 +141,10 @@ def _prepare_payload(prompt: str, model: str, attached_file=None) -> dict:
       - str "data:..." URI   -> отбросить префикс до запятой (включая), остаток = base64
       - str, путь к существующему файлу (os.path.exists) -> прочитать + base64
       - str, иначе (готовый base64) -> использовать как есть, open() НЕ вызывать
+
+    Kind-specific fields (voice_id, voice_settings, extra) are merged into the
+    payload VERBATIM when provided, so TTS/video requests carry the same fields
+    the kind-specific functions (generate_audio / generate_video) would send.
     """
     payload = {"prompt": prompt, "model": model}
     if attached_file is not None:
@@ -156,16 +161,30 @@ def _prepare_payload(prompt: str, model: str, attached_file=None) -> dict:
             else:
                 # обычный base64-строка (не путь, не data URI) — используем как есть
                 payload["image"] = attached_file
+    # Kind-specific fields — ТОЧЬ-В-ТОЧЬ, без подмен формата.
+    if voice_id is not None:
+        payload["voice"] = voice_id
+    if voice_settings:
+        for k, v in voice_settings.items():
+            if v is not None:
+                payload[k] = v
+    if extra:
+        for k, v in extra.items():
+            if k not in payload:
+                payload[k] = v
     return payload
 
 
 def _make_request(api_key: str, base_url: str, model: str, path: str,
-                  prompt: str, attached_file=None) -> dict:
+                  prompt: str, attached_file=None,
+                  voice_id=None, voice_settings=None, extra=None) -> dict:
     """Склеивает URL (структурная нормализация только хвост/начало), POST-ит,
     делает raise_for_status, возвращает JSON тела.
     """
     url = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
-    payload = _prepare_payload(prompt, model, attached_file)
+    payload = _prepare_payload(prompt, model, attached_file,
+                               voice_id=voice_id, voice_settings=voice_settings,
+                               extra=extra)
     resp = httpx.post(url, json=payload,
                       headers={"Authorization": f"Bearer {api_key}"},
                       timeout=60)
@@ -174,7 +193,8 @@ def _make_request(api_key: str, base_url: str, model: str, path: str,
 
 
 def generate_media(user_api_key, user_base_url, user_model, user_paths,
-                   prompt, attached_file=None, is_voice=False) -> dict:
+                   prompt, attached_file=None, is_voice=False,
+                   voice_id=None, voice_settings=None, extra=None) -> dict:
     """Универсальный фасад генерации медиа.
 
     Все настройки (ключ, base_url, модель, пути) ОПЦИОНАЛЬНЫ: пустые/None/
@@ -200,7 +220,9 @@ def generate_media(user_api_key, user_base_url, user_model, user_paths,
 
     try:
         result = _make_request(active_api_key, active_base_url, active_model,
-                               active_path, prompt, attached_file)
+                               active_path, prompt, attached_file,
+                               voice_id=voice_id, voice_settings=voice_settings,
+                               extra=extra)
         out = {"ok": True}
         out.update(result if isinstance(result, dict) else {"data": result})
         return out
@@ -209,7 +231,9 @@ def generate_media(user_api_key, user_base_url, user_model, user_paths,
         _log.warning("media: кастомная конфигурация не сработала, fallback на дефолты: %s", err1)
         try:
             result = _make_request(DEFAULT_API_KEY, DEFAULT_BASE_URL, DEFAULT_MODEL,
-                                   default_path, prompt, attached_file)
+                                   default_path, prompt, attached_file,
+                                   voice_id=voice_id, voice_settings=voice_settings,
+                                   extra=extra)
             out = {"ok": True}
             out.update(result if isinstance(result, dict) else {"data": result})
             return out

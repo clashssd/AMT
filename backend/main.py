@@ -4698,9 +4698,14 @@ async def _media_generate_inner(req: MediaGenRequest):
     if req.paths is not None or req.ref_image_b64:
         attached = req.ref_image_b64 or req.video_example_b64 or None
         is_voice = (req.kind == "audio")
+        # Все kind-specific параметры передаются ТОЧЬ-В-ТОЧЬ, иначе провайдер
+        # отклонит запрос (например, TTS без voice → 500).
         return media_gen.generate_media(cfg["key"], cfg["base"], cfg["model"],
                                         req.paths, req.prompt,
-                                        attached_file=attached, is_voice=is_voice)
+                                        attached_file=attached, is_voice=is_voice,
+                                        voice_id=cfg["voice_id"],
+                                        voice_settings=req.audio_settings,
+                                        extra=req.custom_params)
     if req.kind == "image":
         if req.ref_image_b64:
             res = media_gen.generate_image_ref(cfg["base"], cfg["key"], cfg["model"],

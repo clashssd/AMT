@@ -84,6 +84,14 @@ def provider_profile(kind: str, base_url: str = "", api_key: str = "", model: st
                      voice_id: str = "", proxy: str = "") -> dict:
     p = dict(PROVIDERS.get(kind, {}))
     base = (base_url or p.get("default_base", "")).rstrip("/")
+    # Если пользователь вставил полный endpoint (например,
+    # https://easyvoice.ae/api/v1/audio/speech) — отрезаем хвост до /v1
+    # или до host, чтобы не получилось /v1/audio/speech/v1/audio/speech.
+    for suffix in ("/v1/audio/speech", "/v1/audio/transcriptions", "/v1/images/generations",
+                   "/v1/video/generations", "/v1/video", "/v1", "/api"):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)].rstrip("/")
+            break
     p["base"] = base
     # base без хвоста /v1 — чтобы не получалось /v1/v1/...
     p["api_base"] = base[: -len("/v1")] if base.endswith("/v1") else base

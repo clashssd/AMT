@@ -19,6 +19,8 @@ import tempfile
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
+from .desktop_tools import desktop_sandbox as _desktop_sandbox
+
 CONFIG_FILE = os.environ.get("AMT_TOOLS_CONFIG") or os.path.join(os.path.dirname(__file__), "..", "tools_config.json")
 LOG_FILE = os.environ.get("AMT_TOOLS_LOG") or os.path.join(os.path.dirname(__file__), "..", "tools_log.jsonl")
 
@@ -194,19 +196,12 @@ class ToolSandbox:
             self._log("run_command_error", "run_command", {"cmd": cmd}, str(e))
             return {"ok": False, "error": str(e)}
 
-    def open_url(self, url: str) -> dict:
-        """Открывает URL в системном браузере (безопасно: только http/https)."""
+    def open_url(self, url: str, browser: str = "") -> dict:
+        """Открывает URL в системном браузере (безопасно: только http/https).
+        Делегирует в DesktopSandbox (единый источник истины)."""
         if not self.cfg.enabled:
             return {"ok": False, "error": "Инструменты выключены"}
-        if not url.startswith(("http://", "https://")):
-            return {"ok": False, "error": "Только http/https ссылки"}
-        try:
-            import webbrowser
-            webbrowser.open(url)
-            self._log("open_url", "open_url", {"url": url}, "opened")
-            return {"ok": True, "url": url}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
+        return _desktop_sandbox.open_url(url, browser)
 
     def write_file(self, path: str, content: str = "") -> dict:
         """Записывает файл ТОЛЬКО в разрешённых каталогах. Требует enabled."""
@@ -249,12 +244,14 @@ class ToolSandbox:
             return self.list_dir(args.get("path", "."))
         if tool == "run_command":
             return self.run_command(args.get("command", ""), args.get("workdir", ""))
-        if tool == "open_url":
-            return self.open_url(args.get("url", ""))
         if tool == "write_file":
             return self.write_file(args.get("path", ""), args.get("content", ""))
         if tool == "create_dir":
             return self.create_dir(args.get("path", ""))
+        # Desktop tools (delegated to DesktopSandbox)
+        if tool in ("open_url", "launch_app", "page_recon",
+                     "window_focus", "window_send_keys", "window_click", "window_screenshot", "window_ui_recon", "find_element_by_text"):
+            return _desktop_sandbox.execute(tool, **args)
         return {"ok": False, "error": "Неизвестный инструмент"}
 
 

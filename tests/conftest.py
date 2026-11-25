@@ -55,6 +55,10 @@ def tmp_backend(tmp_path, monkeypatch):
     monkeypatch.setenv("AMT_CONFIGS_DIR", str(tmp_path / "configs"))
     monkeypatch.setenv("AMT_PROJECTS_CURRENT", str(tmp_path / "projects_current.json"))
     monkeypatch.setenv("AMT_EXTENSIONS_STATE", str(tmp_path / "extensions_state.json"))
+    monkeypatch.setenv("AMT_SYSINTERACTION_FILE", str(tmp_path / "sysinteraction.json"))
+    monkeypatch.setenv("AMT_TOOLS_CONFIG", str(tmp_path / "tools_config.json"))
+    monkeypatch.setenv("AMT_TOOLS_LOG", str(tmp_path / "tools_log.jsonl"))
+    monkeypatch.setenv("AMT_DESKTOP_LOG", str(tmp_path / "desktop_log.jsonl"))
     (tmp_path / "backgrounds").mkdir()
     (tmp_path / "configs").mkdir()
 

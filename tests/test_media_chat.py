@@ -188,6 +188,37 @@ def test_video_example_structured():
         assert r.get("aspect_ratio") == "9:16"
 
 
+def test_provider_profile_strips_full_tts_endpoint(tmp_backend):
+    """Кол-во: base_url с полным путём /api/v1/audio/speech →
+    auto-strip даёт https://easyvoice.ae/api → TTS URL корректен."""
+    from ai_engine.media import provider_profile
+    p = provider_profile("audio", base_url="https://easyvoice.ae/api/v1/audio/speech",
+                         api_key="ev_test", model="kokoro-82m", voice_id="af_aoded")
+    assert p["base"] == "https://easyvoice.ae/api", f"base={p['base']}"
+    assert p["api_base"] == "https://easyvoice.ae/api", f"api_base={p['api_base']}"
+    assert p["key"] == "ev_test"
+    assert p["model"] == "kokoro-82m"
+    assert p["voice_id"] == "af_aoded"
+
+
+def test_provider_profile_plain_base_unchanged(tmp_backend):
+    """Кол-во: обычный host (без /v1/audio/speech) не трогается."""
+    from ai_engine.media import provider_profile
+    p = provider_profile("audio", base_url="https://easyvoice.ae",
+                         api_key="ev_test", model="kokoro-82m", voice_id="af_aoded")
+    assert p["base"] == "https://easyvoice.ae"
+    assert p["api_base"] == "https://easyvoice.ae"
+
+
+def test_provider_profile_strips_v1_suffix(tmp_backend):
+    """Кол-во: base_url с /v1 хвостом → strip."""
+    from ai_engine.media import provider_profile
+    p = provider_profile("audio", base_url="https://api.example.com/v1",
+                         api_key="k", model="m", voice_id="v")
+    assert p["base"] == "https://api.example.com", f"base={p['base']}"
+    assert p["api_base"] == "https://api.example.com", f"api_base={p['api_base']}"
+
+
 def test_media_generate_save_flag(c, tmp_backend):
     """save=True сохраняет media в FILES_DIR и возвращает stored_name/download_url."""
     import main as m

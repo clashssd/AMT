@@ -95,6 +95,7 @@ if getattr(_sys, "frozen", False):
         os.environ["AMT_EXTENSIONS_DIR"] = os.path.join(_frozen_appdata, "extensions")
     # ai_engine/memory.json лежит в ai_engine/ под base; для frozen пишем в APPDATA
     os.makedirs(_frozen_appdata, exist_ok=True)
+    os.makedirs(os.environ["AMT_EXTENSIONS_DIR"], exist_ok=True)
 
 # После frozen-redirect обновляем LOG_DIR и пересоздаём лог-handler
 LOG_DIR = os.environ.get("AMT_LOG_DIR") or os.path.join(os.path.dirname(__file__), "logs")
@@ -176,11 +177,17 @@ class Settings(BaseModel):
     codingKey: str = ""
     codingBaseUrl: str = ""
     codingModel: str = ""
+    # Ключ для агента безопасности (monitor). Если пусто — используется общий apiKey.
+    securityAgentKey: str = ""
+    securityAgentBaseUrl: str = ""
+    securityAgentModel: str = ""
     # UI: тема / шрифт / язык / фон (часть конфига, персистится + импорт/экспорт)
     theme: str = "ocean"
     font: str = "system"
     uiLang: str = "ru"
     background: str = ""   # URL/путь к фону (картинка или видео)
+    # Default browser (detected on first run, overridable by user)
+    defaultBrowser: str = ""
 
     @property
     def effective_base_url(self) -> str:
@@ -307,6 +314,92 @@ def persist_settings():
 load_persisted_settings()
 
 
+def _detect_default_browser() -> str:
+    """Детектит дефолтный браузер пользователя через реестр Windows.
+
+    Источники:
+      1. HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice
+         → ProgId (например "MSEdgeHTM" → edge, "ChromeHTML" → chrome)
+      2. HKCR\\http\\shell\\open\\command → команда (парсим имя браузера)
+
+    Returns: имя браузера (edge, chrome, firefox, ...) или "" если не определён.
+    """
+    import platform
+    if platform.system() != "Windows":
+        return ""
+
+    # ProgId → browser name mapping
+    PROGID_MAP = {
+        "MSEdgeHTM": "edge",
+        "ChromeHTML": "chrome",
+        "FirefoxDefaultBrowser": "firefox",
+        "Brave": "brave",
+        "BraveHTML": "brave",
+        "VivaldiHTML": "vivaldi",
+        "OperaHTML": "opera",
+        "chromium-url-scheme-handler": "chromium",
+        "KometaHTML": "kometa",
+        "YandexBrowser": "yandex",
+        "arc": "arc",
+        "arcURL": "arc",
+    }
+
+    try:
+        import winreg
+        # Source 1: UserChoice
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice",
+        ) as key:
+            prog_id, _ = winreg.QueryValueEx(key, "ProgId")
+            prog_lower = prog_id.lower()
+            for k, v in PROGID_MAP.items():
+                if k.lower() in prog_lower or prog_lower in k.lower():
+                    return v
+            # Fallback: strip common suffixes
+            base = prog_id.rstrip("_")
+            # Try to extract browser from ProgId
+            if base in PROGID_MAP:
+                return PROGID_MAP[base]
+    except Exception:
+        pass
+
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, r"http\shell\open\command") as key:
+            cmd, _ = winreg.QueryValueEx(key, None)
+            # cmd is like "C:\Program Files\Google\Chrome\Application\chrome.exe" %1
+            import re as _re
+            match = _re.search(r'["\']?([^"\' ]+\.exe)["\']?', cmd, _re.IGNORECASE)
+            if match:
+                exe_name = _os.path.basename(match.group(1)).lower().replace(".exe", "")
+                # Map common exe names to browser names
+                EXE_MAP = {
+                    "msedge": "edge",
+                    "chrome": "chrome",
+                    "firefox": "firefox",
+                    "brave": "brave",
+                    "vivaldi": "vivaldi",
+                    "opera": "opera",
+                    "chromium": "chromium",
+                }
+                if exe_name in EXE_MAP:
+                    return EXE_MAP[exe_name]
+                return exe_name
+    except Exception:
+        pass
+
+    return ""
+
+
+# Auto-detect default browser on first load (if not set by user)
+if not server_settings.defaultBrowser:
+    detected = _detect_default_browser()
+    if detected:
+        server_settings.defaultBrowser = detected
+        persist_settings()
+
+
 @app.get("/api/settings")
 async def get_settings():
     """Возвращает текущие настройки AI (без ключа для безопасности)"""
@@ -333,6 +426,7 @@ async def get_settings():
         "codingKey": server_settings.codingKey,
         "codingBaseUrl": server_settings.codingBaseUrl,
         "codingModel": server_settings.codingModel,
+        "defaultBrowser": server_settings.defaultBrowser,
     }
 
 
@@ -384,15 +478,50 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
         r'официальн|wiki|гик|гайд|инфо|список|'
         r'бесславн|ублюдки)\b', re.IGNORECASE
     )
+    # АВТОДЕТЕКТ: если пользователь просит десктопное действие (открой, запущи, браузер,
+    # приложение и т.п.) — автоматически включаем sysinteraction, даже если тумблер не нажат.
+    # Это нужно, чтобы ЛЛМ знала что она МОЖЕТ использовать [[SYS:...]] токены.
+    _DESKTOP_KW = re.compile(
+        r'\b(откр[оае]|открыть|открыл|открой|откро|'
+        r'запуст[иея]|запустить|запустил|запусти|запуска|запущен|'
+        r'браузере|браузер|edge|firefox|chrome|brave|browser|'
+        r'приложени[ея]|прилож|steam|стим|discord|дискорд|telegram|телеграм|'
+        r'ю ?tube|ютуб|youtube|twitch|твич|'
+        r'страниц[ау]|сайт|сай[тт]|'
+        r'ссылк[ау]|'
+        r'включи|выключи|сверни|разверни|'
+        r'напиши|набрать|напечатать|'
+        r'покажи|скинь|'
+        r'введи|ввести|вбить|'
+        r'поиск|найти|поищи|погугли|погуглить|'
+        r'скачай|скачать|скачалка|'
+        r'видео|фил|фильм|сериал|музык[ау]|песн[аиу]|'
+        r'картинк[ау]|картин|изображен|'
+        r'файл|документ|'
+        r'фотк[ау]|фото|'
+        r'скриншот|скрин)\b', re.IGNORECASE
+    )
+    # Проще: если есть хоть одно десктоп-слово — авто-включаем
+    _desktop_hint = _DESKTOP_KW.search(user_message or "") is not None
+    if _desktop_hint and not sysinteraction:
+        sysinteraction = True
+        log_chat_event("SYSINTERACTION_AUTO", {"reason": "desktop_keywords", "msg": (user_message or "")[:100]})
+
     web_auto = _VIDEO_KW.search(user_message or "") is not None
-    if web_auto and "core_web" not in core_agents:
+    # ВАЖНО: если sysinteraction активен — НЕ включаем core_web автоматически.
+    # Sysinteraction сам управляет браузером/приложениями через [[SYS:...]] токены.
+    # core_web говорит ИИ «я не могу управлять твоим компьютером» — это конфликтует.
+    if web_auto and "core_web" not in core_agents and not sysinteraction:
         core_agents.append("core_web")
     if settings is None:
         settings = server_settings
 
     # Прогрессивный поиск: если веб-агент активен и пользователь просит видео/поиск,
-    # выполняем поиск ДО вызова LLM и подмешиваем результаты в контекст
-    if "core_web" in core_agents and web_auto:
+    # выполняем поиск ДО вызова LLM и подмешиваем результаты в контекст.
+    # ВАЖНО: если sysinteraction активен — пропускаем web-search (он добавляет
+    # задержку 2-10 сек, а sysinteraction сам откроет нужную страницу в браузере).
+    _sys_active_now = bool(sysinteraction)
+    if "core_web" in core_agents and web_auto and not _sys_active_now:
         try:
             # Используем весь текст сообщения как поисковый запрос (LLM уже
             # сформулировала его точно). Убираем только служебные вводные слова.
@@ -631,15 +760,223 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     else:
         system_prompt = (system_prompt + ("\n\n" + agent_block if agent_block else "") + ("\n\n" + core_block if core_block else "")).strip()
 
-    # ВЗАИМОДЕЙСТВИЕ С СИСТЕМОЙ: добавляется ТОЛЬКО если тумблер включён И
-    # ToolSandbox активен (двойной гейт). Без этого sysorch.build_system_prompt
-    # вернёт "" и ни один sysinteraction-агент/скилл не применяется.
-    sys_block = sysorch.build_system_prompt(
-        active=sysorch.is_active(sysinteraction, tools_sandbox.cfg.enabled)
-    )
+    # ВЗАИМОДЕЙСТВИЕ С СИСТЕМОЙ: тумблер в чате (sysinteraction=True)
+    # АВТОМАТИЧЕСКИ включает глобальный гейт + open_url в ToolSandbox.
+    # Это значит: если пользователь кликнул «Взаимодействие с системой» в чате,
+    # он хочет, чтобы ИИ мог открывать браузер — и мы не требуем от него
+    # отдельно включить 2 переключателя в Настройки → Хранилище.
+    # ВАЖНО: авто-включение НЕ сохраняется на диск — только для текущей сессии.
+    # Пользователь может явно включить в Настройки, и тогда это персистится.
+    sys_gate = False
+    if sysinteraction:
+        # Эфемерное авто-включение (не пишем в конфиг)
+        sysorch.enabled = True
+        tools_sandbox.cfg.enabled = True
+        sys_gate = sysorch.is_active(True, tools_sandbox.cfg.enabled)
+
+    sys_block = sysorch.build_system_prompt(active=sys_gate)
     if sys_block:
-        log_chat_event("SYSINTERACTION_ACTIVE", {"enabled": True})
+        log_chat_event("SYSINTERACTION_ACTIVE", {"enabled": True, "auto": sysinteraction})
         system_prompt = (system_prompt + "\n\n" + sys_block).strip()
+        # Инструкции по системным инструментам (браузер + приложения + разведка + файлы)
+        system_prompt += (
+            "\n\n[СИСТЕМНЫЕ ИНСТРУМЕНТЫ]\n"
+            "Ты можешь открывать ссылки в системном браузере пользователя, запускать "
+            "приложения на его ПК, читать/писать файлы и получать текст веб-страниц:\n"
+            "  [[SYS:open_url|<URL>]] — открыть URL в системном браузере\n"
+            "  [[SYS:open_url|<URL>|<браузер>]] — открыть URL в указанном браузере (edge, chrome, firefox, brave, vivaldi, opera, chromium, kometa, etc.)\n"
+            "  [[SYS:page_recon|<URL>]] — получить текст страницы + structured elements (кнопки, поля, видео, изображения)\n"
+            "  [[SYS:launch_app|<имя>]] — запустить приложение (имя как назвал пользователь, можно с пробелами)\n"
+            "  [[SYS:launch_app|<имя>|<аргументы>]] — запустить с аргументами\n"
+            "  [[SYS:read_file|<путь>]] — прочитать файл (только в allowed_dirs)\n"
+            "  [[SYS:write_file|<путь>|<содержимое>]] — записать файл в allowed_dirs\n"
+            "  [[SYS:list_dir|<путь>]] — список файлов в каталоге\n"
+            "  [[SYS:run_command|<команда>]] — команда из белого списка (если есть)\n"
+            "  [[SYS:window_focus|<имя>]] — привести окно на передний план\n"
+            "  [[SYS:window_send_keys|<текст>|<имя>?|1?]] — ввести текст в окно.\n"
+            "    Последний параметр = 1 → skip Ctrl+L (НЕ фокусировать адресную строку). "
+            "Обязательно для ввода в поле поиска на странице:\n"
+            "    [[SYS:window_ui_recon|<браузере>]] → найди input/searchbox → "
+            " [[SYS:window_click|cx|cy|<браузере>]] → [[SYS:window_send_keys|<текст>|<браузере>|1]]\n"
+            "  [[SYS:window_click|<x>|<y>|<имя>?]] — клик в координатах\n"
+            "  [[SYS:window_screenshot|<имя>?]] — скриншот окна/экрана\n"
+            "URL: только http:// или https:// (без других схем).\n"
+            "  Если пользователь сказал «открой в Edge» — используй [[SYS:open_url|https://www.google.com|edge]].\n"
+            "  Если пользователь просто сказал «открой Firefox» (без URL) — используй [[SYS:open_url||firefox]] "
+            "(пустой URL + браузер = открыть домашнюю страницу). Или [[SYS:open_url|https://www.google.com|firefox]].\n"
+            "  Если браузер не указан — откроется в default-браузере пользователя (детектится автоматически).\n"
+            "  Если страница вернёт structured elements — используй их для анализа (видео, кнопки, формы).\n"
+            "  Кириллицу в URL НЕ кодируй — система сама обработает. Просто передавай текст как есть.\n"
+            "  НЕ выдумывай URL — открывай только то, что пользователь явно назвал или ты уверен.\n"
+            "  ПОИСК В БРАУЗЕРЕ: если пользователь просит найти что-то в браузере — "
+            "СНАЧАЛА [[SYS:open_url|https://www.google.com]] (или другой поисковик). "
+            "open_url вернёт имя браузера (chrome/edge/firefox) — используй его для "
+            "[[SYS:window_focus|<имя браузера>]] и [[SYS:window_send_keys|<запрос>|<имя браузера>]]. "
+            "Для браузера window_send_keys автоматически делает Ctrl+L — запрос попадает в адресную "
+            "строку и браузер сам откроет страницу результатов. НЕ кодируй запрос в URL вручную.\n"
+            "ПОЛЕ ПОИСКА НА СТРАНИЦЕ: если пользователь просит вписать текст в поле поиска "
+            "конкретного сайта (адресная строка не подходит, страница уже открыта) — "
+            "СНАЧАЛА [[SYS:find_element_by_text|search|<имя браузера>]] (или window_ui_recon если\n"
+            "нужна полная картина): найди элемент input/searchbox, у которого "
+            "id/name/placeholder содержит 'search'/'q'/'поиск', затем [[SYS:window_click|<cx>|<cy>|<браузере>]] "
+            "по его координатам (cx=(l+r)//2, cy=(t+b)//2 из bounding_rect), затем "
+            "[[SYS:window_send_keys|<текст>|<браузере>|1]] (третий параметр=1 — НЕ делать Ctrl+L, "
+            "чтобы текст попал в поле на странице, а не в адресную строку).\n"
+            "\n"
+            "[ПРИЛОЖЕНИЕ vs БРАУЗЕР vs САЙТ]\n"
+            "БРАУЗЕР (edge, chrome, firefox, brave, vivaldi, opera, etc.) — ВСЕГДА открывай "
+            "через [[SYS:open_url|<URL>|<браузере>]], НИКОГДА через launch_app.\n"
+            "  — «открой Firefox» → [[SYS:open_url|https://www.google.com|firefox]]\n"
+            "  — «открой Edge» → [[SYS:open_url|https://www.youtube.com|edge]]\n"
+            "  — «открой браузер и найди X» → [[SYS:open_url|https://www.google.com]] "
+            "потом [[SYS:window_send_keys|X|<браузере>]]\n"
+            "ПРИЛОЖЕНИЕ (Telegram, Discord, Steam, VS Code, etc.) — запускать через "
+            "[[SYS:launch_app|<имя>]].\n"
+            "  — «открой телеграмм» → [[SYS:launch_app|Telegram]]\n"
+            "  — «запусти стим» → [[SYS:launch_app|Steam]]\n"
+            "  — «включи код» → [[SYS:launch_app|Visual Studio Code]]\n"
+            "САЙТ (telegram.org, youtube.com, github.com) — открывать через "
+            "[[SYS:open_url|<URL>]].\n"
+            "  — «открой сайт телеграмма» → [[SYS:open_url|https://telegram.org]]\n"
+            "  — «включи видео на ютубе» → [[SYS:open_url|https://www.youtube.com]] "
+            "потом найди видео через window_send_keys или page_recon.\n"
+            "Если пользователь не уточнил — по умолчанию браузеры через open_url, "
+            "приложения через launch_app.\n"
+            "Если приложение уже запущено (свёрнуто) — launch_app приведёт его на передний план.\n"
+            "\n"
+            "[ВЗАИМОДЕЙСТВИЕ С ОКНАМИ]\n"
+            "После запуска приложения или открытия страницы ты можешь взаимодействовать с окном:\n"
+            "  1. [[SYS:window_focus|<имя>]] — привести на передний план (если уже запущено)\n"
+            "  2. [[SYS:window_ui_recon|<имя>?]] — UI-интроспекция: дерево элементов окна\n"
+            "     (кнопки, поля ввода, меню, их координаты). Основной способ найти поле поиска\n"
+            "     или кнопку в приложении. Возвращает имя, тип, id и координаты каждого элемента.\n"
+            "  3. [[SYS:window_send_keys|<текст>|<имя>?]] — ввести текст (поиск, форму, чат)\n"
+            "     Специальные: \\n=Enter, {CTRL}+<цифра>=вкладка браузера (напр. {CTRL}3)\n"
+            "  4. [[SYS:window_click|<x>|<y>|<имя>?]] — кликнуть в нужное место\n"
+            "     (координаты — из window_ui_recon)\n"
+            "  5. [[SYS:window_screenshot|<имя>?]] — скриншот окна (fallback, если UIA не сработал)\n"
+            "  6. Переключение вкладок: браузер — {CTRL}+<номер>; мессенджеры (Telegram, Discord) —\n"
+            "     сначала window_ui_recon (найти вкладки/кнопки), потом window_click.\n"
+            "  7. «Открой N-й чат в Telegram/Discord»: сначала "
+            "[[SYS:find_element_by_text|<имя чата>|<имя приложения>]] — это УНИВЕРСАЛЬНЫЙ "
+            "поиск элемента UIA по тексту (работает с ЛЮБЫМ приложением). Если чат найден — "
+            "window_click по его координатам → window_send_keys|<текст>|<имя> и Enter. "
+            "Если чат не найден по тексту — window_ui_recon|<имя> → получи список элементов "
+            "(ListItem/Text с именами чатов и bounding_rect) → выбери N-й элемент → window_click "
+            "по его center_x=(l+r)//2, center_y=(t+b)//2. Если элементов нет — window_screenshot "
+            "и опиши что видишь.\n"
+            "  8. Если приложение (Telegram) не открыл чат через UI — используй поиск: window_send_keys\n"
+            "     {CTRL}K (Telegram — Ctrl+K открывает поиск) → window_send_keys|<имя чата>|<имя> → Enter.\n"
+            "  9. [[SYS:find_element_by_text|<текст>|<имя>?|<URL>?]] — УНИВЕРСАЛЬНЫЙ поиск элемента\n"
+            "     в ЛЮБОМ приложении/сайта по тексту. Работает в 2 режимах:\n"
+            "     а) UIA (приложения: Telegram, Discord, notepad): ищет по имени элемента,\n"
+            "        возвращает координаты → window_click.\n"
+            "     б) page_recon (браузеры Chromium — UIA не работает): передайте URL сайта\n"
+            "        как 3-й параметр. Найдёт input по name/id/placeholder, но БЕЗ координат —\n"
+            "        для браузера используйте open_url с поисковым URL.\n"
+            "     Примеры:\n"
+            "     [[SYS:find_element_by_text|search|edge|https://www.bing.com]] → найдёт поле поиска Bing\n"
+            "     [[SYS:find_element_by_text|избранное|Telegram]] → найдёт чат «Избранное» (UIA)\n"
+            "ВАЖНО: window_focus/window_send_keys работают ТОЛЬКО ПОСЛЕ того, как "
+            "приложение запущено (launch_app) или браузер открыт (open_url). "
+            "Сначала запусти/открой, потом взаимодействуй. "
+            "Для веб-страниц: сначала page_recon (структура), потом open_url + window_send_keys/click.\n"
+            "Для приложений: сначала window_ui_recon (элементы), потом window_click "
+            "по координатам из recon или window_send_keys. window_screenshot — "
+            "только как fallback, когда window_ui_recon не вернул элементов.\n"
+            "ПОИСК: открой поисковик (open_url на google.com/yandex.com), потом window_send_keys "
+            "с запросом. window_send_keys автоматически делает Ctrl+L — текст попадает в адресную "
+            "строку браузера, он сам распознаёт запрос и открывает страницу результатов.\n"
+            "Если пользователь просит вписать запрос в ПОЛЕ ПОИСКА на сайте (не адресная строка) — "
+            "сначала [[SYS:find_element_by_text|search|<браузер>]] (или window_ui_recon если нужна\n"
+            "полная картина) → найди элемент input/searchbox → window_click по его координатам → "
+            "window_send_keys|<запрос>|<браузер>|1 (третий параметр=1 — НЕ делать Ctrl+L).\n"
+            "НЕ кодируй запрос в URL вручную.\n"
+            "\n"
+            "[УВЕРЕННОСТЬ В ЗАПУСКЕ]\n"
+            "После [[SYS:launch_app|<имя>]] или [[SYS:open_url|<URL>]] ты НЕ знаешь наверняка, "
+            "что окно появилось на экране пользов��теля (оно может быть за другими окнами).\n"
+            "Формулируй ответ как «Запустил <имя>» (а не «Я открыл и ты видишь»), и если пользователь "
+            "скажет «не вижу / не запустилось» — попробуй другой метод или попроси уточнить."
+            "\n"
+            "[ПРАВИЛА АВТОНОМНОСТИ]\n"
+            "— Не хардкодь URL, имена приложений или пути. Определяй их сам из контекста запроса.\n"
+            "— Если пользователь просит найти что-то в браузере — открой поисковик (open_url на "
+            "google.com / yandex.com / duckduckgo.com), потом window_send_keys с запросом. "
+            "НЕ кодируй запрос в URL вручную.\n"
+            "— Если пользователь просит взаимодействовать со страницей — сначала сделай "
+            "[[SYS:page_recon|<URL>]] чтобы увидеть её структуру и ссылки, потом решай, что делать.\n"
+            "— Если страница JS-тяжёлая (page_recon вернёт мало текста) — открой её через "
+            "[[SYS:open_url|<URL>]] и объясни пользователю, что нужно сделать вручную.\n"
+            "— launch_app: имя приложения бери из слов пользователя (можно с пробелами, например «Visual Studio Code»).\n"
+            "— Если приложение уже запущено (свёрнуто) — launch_app приведёт его на передний план.\n"
+            "— Системные утилиты (cmd, powershell, regedit, taskmgr и т.д.) — ЗАПРЕЩЕНЫ.\n"
+            "\n"
+            "[КОРРЕКТИРОВЩИЕ ВОПРОСЫ]\n"
+            "Если задача неясная, не хватает контекста или шаг не удался — задай "
+            "корректирующий вопрос пользователю. Не угадывай. Примеры:\n"
+            "— «Какой именно файл ты имеешь в виду? Дай путь.»\n"
+            "— «Я не могу запустить это приложение. Попробовать другое?»\n"
+            "— «Страница не загрузилась. Открыть в другом браузере?»\n"
+            "Формулируй кратко, по делу, с вариантами выбора если есть."
+        )
+        # САМО-РАЗВИТИЕ: учим LLM выводить task spec для новых задач.
+        system_prompt += (
+            "\n\n[САМО-РАЗВИТИЕ: TASK SPEC]\n"
+            "Когда пользователь просит НОВУЮ системную задачу (не просто открыть URL, "
+            "а прочитать файл, запустить команду, создать каталог, выполнить DOM-действие и т.п.) — выведи "
+            "ТОЧНО один токен вида:\n"
+            "  [[SYS:task_spec|{json}]]\n"
+            "JSON-шаблон (обязательные поля):\n"
+            "  {\n"
+            "    \"task\": \"<описание задачи, 1 предложение>\",\n"
+            "    \"target_tool\": \"<read_file|list_dir|run_command|open_url|launch_app|page_recon|write_file>\",\n"
+            "    \"args_template\": {\"<arg>\": \"<value>\"},\n"
+            "    \"expected_outcome\": \"<что должно получиться>\",\n"
+            "    \"risk_level\": \"<low|medium|high>\n"
+            "  }\n"
+            "Бэкенд сгенерирует task-агента, проведёт 10 детерминированных тестов "
+            "и сохранит его (или черновик, если не прошёл). Токен добавляй в конце "
+            "ответа, отдельно. Если задача уже выполнена существующим агентом — "
+            "токен НЕ нужен.\n"
+            "\n"
+            "[ПЛАНИРОВАНИЕ: МНОГОШАГОВАЯ ЗАДАЧА]\n"
+            "Когда пользователь даёт СЛОЖНУЮ задачу из нескольких шагов (например "
+            "«зайди на сайт, включи то-то, введи запрос, нажми кнопку, проверь результат») — "
+            "сначала подумай (brainstorming), разбей задачу на последовательность шагов, "
+            "потом выведи ТОЧНО один токен вида:\n"
+            "  [[SYS:plan|{json}]]\n"
+            "JSON-шаблон (обязательные поля):\n"
+            "  {\n"
+            "    \"goal\": \"<цель всей операции, 1 предложение>\",\n"
+            "    \"steps\": [\n"
+            "      {\n"
+            "        \"tool\": \"<open_url|launch_app|page_recon|window_focus|window_send_keys|window_click|window_screenshot|window_ui_recon|read_file|list_dir|write_file|run_command>\",\n"
+            "        \"args\": {\"<arg>\": \"<value>\"},\n"
+            "        \"expected\": \"<что должно получиться после этого шага>\"\n"
+            "      }\n"
+            "    ],\n"
+            "    \"risk_level\": \"<low|medium|high>\"\n"
+            "  }\n"
+            "Правила:\n"
+            "— Максимум 10 шагов. Каждый шаг — один инструмент.\n"
+            "— Бэкенд выполнит план автоматически через ОРКЕСТРАТОР: каждый шаг "
+            "проверяется watchdog-агентом + monitor-LLM, agent берётся из библиотеки "
+            "или спавнится заново, результат верифицируется против `expected`, "
+            "после успеха запускаются 5 вариационных тестов на tool. "
+            "Ты НЕ повторяешь шаги вручную — план делает бэкенд.\n"
+            "— Если задача простая (один шаг) — используй одиночный токен "
+            "(open_url / launch_app / window_send_keys), а НЕ план.\n"
+            "— Если задача сложная (3+ шагов) — используй план.\n"
+            "— Если ты не уверен в плане — бэкенд-оркестратор СКАМИРУЕТ СВОЙ план "
+            "автоматически (отдельный LLM-вызов). Твой план — оптимизация, "
+            "оркестраторский — fallback.\n"
+            "— Перед планом кратко опиши, что ты будешь делать (brainstorming-блок: "
+            "«Для этого нужно: 1) открыть страницу, 2) найти элемент, 3) нажать…»). "
+            "Потом — токен плана в конце.\n"
+            "— После выполнения плана бэкенд покажет сводку. Если что-то не удалось — "
+            "предложи пользователю упростить задачу или переформулировать."
+        )
     if os.environ.get("AMT_DEBUG_AGENT"):
         import sys as _s
         print(f"[DBG] agent_id={agent_id!r} agent_block={agent_block[:40]!r} sys_prompt={system_prompt[:40]!r}", file=_s.stderr)
@@ -851,10 +1188,10 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                 text = data["choices"][0]["message"]["content"]
                 usage = data.get("usage", {})
                 finish_reason = data["choices"][0].get("finish_reason", "")
-                # Если ответ обрезан (length) и jailbreak активен — пробуй продолжить
-                # с увеличенным max_tokens (до 4 раз по 8k). Это спасает от
-                # «обрезанных» ответов, когда maxTokens=4096 не хватает.
-                if finish_reason == "length" and ("core_jailbreak" in (core_agents or []) or agent_id == "core_jailbreak"):
+                # Если ответ обрезан (length) — пробуй продолжить с увеличенным
+                # max_tokens (до 4 раз по 8k). Это спасает от «обрезанных»
+                # ответов, когда maxTokens не хватает.
+                if finish_reason == "length":
                     for ext in range(4):
                         ext_max = 4096 + 8192 * (ext + 1)
                         request_body_ext = dict(request_body)
@@ -971,6 +1308,90 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                     # Даже без web-агента выполняем [[SCREENSHOT:url]] и [[WEBSEARCH:...]]
                     text = await resolve_websearch_tokens(text, True)
 
+                # ВЗАИМОДЕЙСТВИЕ С СИСТЕМОЙ: sys_gate уже вычислен выше
+                # (авто-включение при sysinteraction=True).
+                # САМО-РАЗВИТИЕ: извлекаем task spec ДО того, как resolve_sys_tokens
+                # его удалит. Если гейт не прошёл — не генерируем.
+                if sys_gate:
+                    spec = extract_task_spec(text)
+                    if spec:
+                        log_chat_event("SYSINTERACTION_TASK_SPEC", {
+                            "task": spec.get("task", "")[:100],
+                            "tool": spec.get("target_tool", ""),
+                        })
+                        res = sysorch.generate_task_agent(spec, tools_sandbox)
+                        log_chat_event("SYSINTERACTION_AGENT_GEN", {
+                            "agent_id": res["agent"]["id"] if res["agent"] else None,
+                            "passed": res["passed"],
+                            "draft": res["draft"],
+                            "tries": res["tries"],
+                            "failures": res["failures"],
+                        })
+
+                    # ПЛАНИРОВАНИЕ: извлекаем [[SYS:plan|{json}]] и выполняем
+                    # многошаговый план с watchdog-проверкой.
+                    plan = extract_plan(text)
+                    # 1) Оркестратор составляет план: если LLM не вывела план,
+                    #    но задача системная — оркестратор сам композит план.
+                    if not plan:
+                        from ai_engine.sysinteraction import orchestrator_compose_plan, parse_orchestrator_plan
+                        orch_msgs = orchestrator_compose_plan(user_message, [
+                            {"role": m.role, "content": m.content}
+                            for m in history[-3:]
+                        ])
+                        orch_resp = await _quick_llm_call(
+                            api_key, base_url, model,
+                            orch_msgs["system"], orch_msgs["user"],
+                            timeout=30.0, proxy_string=proxy_string,
+                        )
+                        plan = parse_orchestrator_plan(orch_resp)
+                        if plan:
+                            log_chat_event("SYSINTERACTION_ORCH_PLAN", {
+                                "goal": plan.get("goal", "")[:100],
+                                "steps": len(plan.get("steps") or []),
+                                "source": "orchestrator_composed",
+                            })
+                    if plan:
+                        log_chat_event("SYSINTERACTION_PLAN", {
+                            "goal": plan.get("goal", "")[:100],
+                            "steps": len(plan.get("steps") or []),
+                        })
+                        # 6) Новый цикл: v2 с agent-спавном, monitor, verify, variations
+                        plan_result = await resolve_plan_v2(
+                            plan, tools_sandbox, sysorch,
+                            api_key, base_url, model, proxy_string,
+                        )
+                        m_plan = SYS_PLAN_RE.search(text)
+                        if m_plan:
+                            # LLM сам вывел [[SYS:plan|...]] — заменяем его на result
+                            text = text[:m_plan.start()] + plan_result + text[m_plan.end():]
+                        else:
+                            # Оркестратор скомпонентовал план. Убираем ВСЕ индив. SYS-токены
+                            # (open_url, window_focus, window_send_keys и т.д.), чтобы
+                            # resolve_sys_tokens ниже не выполнил их повторно.
+                            for _re in (SYS_OPEN_URL_RE, SYS_PAGE_RECON_RE, SYS_LAUNCH_APP_RE,
+                                        SYS_TASK_SPEC_RE, SYS_READ_FILE_RE, SYS_WRITE_FILE_RE,
+                                        SYS_LIST_DIR_RE, SYS_RUN_COMMAND_RE, SYS_WINDOW_FOCUS_RE,
+                                        SYS_WINDOW_SEND_KEYS_RE, SYS_WINDOW_CLICK_RE,
+                                        SYS_WINDOW_SCREENSHOT_RE, SYS_PLAN_RE):
+                                text = _re.sub('', text)
+                            text = text.rstrip() + "\n\n" + plan_result
+                        # В обоих случаях: убираем оставшиеся индив. SYS-токены,
+                        # чтобы resolve_sys_tokens не выполнил их повторно.
+                        for _re in (SYS_OPEN_URL_RE, SYS_PAGE_RECON_RE, SYS_LAUNCH_APP_RE,
+                                    SYS_TASK_SPEC_RE, SYS_READ_FILE_RE, SYS_WRITE_FILE_RE,
+                                    SYS_LIST_DIR_RE, SYS_RUN_COMMAND_RE, SYS_WINDOW_FOCUS_RE,
+                                    SYS_WINDOW_SEND_KEYS_RE, SYS_WINDOW_CLICK_RE,
+                                    SYS_WINDOW_SCREENSHOT_RE, SYS_PLAN_RE):
+                            text = _re.sub('', text)
+                        log_chat_event("SYSINTERACTION_PLAN_DONE", {
+                            "goal": plan.get("goal", "")[:100],
+                        })
+
+                # Выполняем [[SYS:open_url|...]], browser-токены и убираем
+                # [[SYS:task_spec|...]] и [[SYS:plan|...]]
+                text = resolve_sys_tokens(text, sys_gate)
+
                 return {"text": text, "usage": usage}
         except httpx.ConnectError as e:
             last_err = e
@@ -983,7 +1404,14 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     if isinstance(last_err, HTTPException):
         raise last_err
     if isinstance(last_err, Exception):
-        raise HTTPException(status_code=503, detail=f"Не удалось получить ответ: {str(last_err)}")
+        # Логируем полный трейс для диагностики, но пользователю показываем
+        # дружелюбное сообщение, а не внутренний текст Python-исключения
+        # (например "invalid literal for int()...") — это служебная информация.
+        logger.exception("Ошибка обработки запроса к LLM/API")
+        raise HTTPException(
+            status_code=503,
+            detail="Не удалось получить ответ. Проверьте настройки API (ключ/адрес) и доступность бэкенда.",
+        )
     raise HTTPException(status_code=503, detail="Не удалось получить ответ")
 
 
@@ -1587,6 +2015,858 @@ async def resolve_websearch_tokens(text: str, active: bool) -> str:
             out = out[:m.start()] + res_text + out[m.end():]
 
     return out
+
+
+def _normalize_url(raw: str) -> Optional[str]:
+    """Нормализует URL из вывода LLM, исправляя типичные ошибки.
+
+    - Добавляет http:// если схема пропущена (www.example.com → http://www.example.com)
+    - Кодирует кириллицу в домене (IDNA → punycode)
+    - Заменяет ': ' на '=' в query string (?q: запрос → ?q=запрос)
+    - URL-encode'ит пробелы и кириллицу в query/path
+    - Возвращает None если URL невалиден.
+    """
+    import urllib.parse
+    raw = raw.strip()
+    if not raw:
+        return None
+    # Убираем лишние кавычки/скобки
+    raw = raw.strip('"\'')
+
+    # Отклоняем явно не-http схемы (file://, ftp://, data: и т.д.)
+    raw_lower = raw.lower()
+    if raw_lower.startswith(("file://", "ftp://", "ftps://", "data:", "javascript:", "mailto:", "tel:")):
+        return None
+
+    # Если нет схемы — добавляем http://
+    if not raw.startswith(("http://", "https://")):
+        # Возможно это домен с www или без
+        raw = "http://" + raw
+
+    try:
+        parts = urllib.parse.urlsplit(raw)
+    except Exception:
+        return None
+
+    # Нормализуем домен: кириллица → punycode
+    host = parts.netloc
+    try:
+        host_enc = host.encode("idna").decode("ascii") if host else ""
+    except Exception:
+        host_enc = host  # fallback: оставим как есть
+
+    # URL-encode path и query (пробел → %20, кириллица → %XX)
+    path = urllib.parse.quote(parts.path, safe="/%")
+    query = urllib.parse.quote(parts.query, safe="&=?+!*,;@$~")
+    # Чиним типичную ошибку: ?q: запрос → ?q=запрос
+    if query:
+        query = re.sub(r'=([^=]*):(\s*)(?=\S)', r'=\1\2', query)
+        # Заменяем ': ' после = на '=' (вариант без пробела)
+        query = re.sub(r':\s+', '=', query, count=1)
+    if parts.fragment:
+        frag = urllib.parse.quote(parts.fragment, safe="")
+
+    normalized = f"{parts.scheme}://{host_enc}{path}"
+    if query:
+        normalized += f"?{query}"
+    if parts.fragment:
+        normalized += f"#{frag}"
+
+    return normalized if host_enc else None
+
+
+# ===== ВЗАИМОДЕЙСТВИЕ С СИСТЕМОЙ: токен [[SYS:open_url|<url>]] =====
+# LLM (при активном sysinteraction) вставляет токен [[SYS:open_url|https://...]]
+# в ответ. Бэкенд преобразует его в реальный вызов ToolSandbox.open_url() и
+# подставляет результат («Открыл: <url>» или ошибку).
+# URL допускает пробелы в query (?q=word1 word2), кириллицу — нормализуется.
+# Поддерживается опциональный браузер: [[SYS:open_url|<URL>|edge]]
+# URL может быть с схемой (https://...) или без (www.youtube.com) — нормализуется.
+SYS_OPEN_URL_RE = re.compile(r'\[\[SYS:open_url\|([^\]]+?)(?:\|([^\]]+?))?\]\]', re.IGNORECASE)
+SYS_PAGE_RECON_RE = re.compile(r'\[\[SYS:page_recon\|([^\]]+)\]\]', re.IGNORECASE)
+
+# Токен [[SYS:launch_app|<app>]] или [[SYS:launch_app|<app>|<args>]] — запуск системного приложения.
+# Имя приложения может содержать пробелы: [[SYS:launch_app|Visual Studio Code]]
+SYS_LAUNCH_APP_RE = re.compile(r'\[\[SYS:launch_app\|([^\]]+?)(?:\|([^\]]*))?\]\]', re.IGNORECASE)
+
+# Токен [[SYS:task_spec|<json>]] — LLM выводит строгий JSON task spec.
+# Бэке��д извлекает его и вызывает sysorch.generate_task_agent(spec, sandbox).
+SYS_TASK_SPEC_RE = re.compile(r'\[\[SYS:task_spec\|(\{.*?\})\]\]', re.DOTALL)
+
+# Токен [[SYS:plan|<json>]] — LLM выводит структурированный многошаговый план.
+# Бэкенд извлекает его, проверяет каждый шаг через watchdog и выполняет
+# последовательно с ретрайтами. Результат подставляется в ответ.
+SYS_PLAN_RE = re.compile(r'\[\[SYS:plan\|(\{.*?\})\]\]', re.DOTALL)
+
+# Файловые токены — LLM выводит [[SYS:read_file|<path>]], [[SYS:write_file|<path>|<content>]],
+# [[SYS:list_dir|<path>]], [[SYS:run_command|<cmd>]].
+# Бэкенд выполняет через ToolSandbox (allowed_dirs + whitelist gating).
+SYS_READ_FILE_RE = re.compile(r'\[\[SYS:read_file\|([^\s\]]+)\]\]', re.IGNORECASE)
+SYS_WRITE_FILE_RE = re.compile(r'\[\[SYS:write_file\|([^\s\|]+)\|([^\]]*)\]\]', re.IGNORECASE)
+SYS_LIST_DIR_RE = re.compile(r'\[\[SYS:list_dir\|([^\s\]]+)\]\]', re.IGNORECASE)
+SYS_RUN_COMMAND_RE = re.compile(r'\[\[SYS:run_command\|([^\s\]]+)\]\]', re.IGNORECASE)
+
+# Токены взаимодействия с окнами:
+# [[SYS:window_focus|<app>]] — привести окно на передний план
+# [[SYS:window_send_keys|<text>|<app>?]] — отправить клавиши
+# [[SYS:window_click|<x>|<y>|<app>?]] — клик в координатах
+# [[SYS:window_screenshot|<app>?]] — скриншот окна
+# [[SYS:window_ui_recon|<app>?]] — UI-интроспекция (элементы через UIA)
+# [[SYS:find_element_by_text|<text>|<app>?]] — найти элемент UIA по тексту, вернуть координаты
+SYS_WINDOW_FOCUS_RE = re.compile(r'\[\[SYS:window_focus\|([^\]]+?)\]\]', re.IGNORECASE)
+SYS_WINDOW_SEND_KEYS_RE = re.compile(r'\[\[SYS:window_send_keys\|([^\]]+?)(?:\|([^\]]+?))?(?:\|([^\]]+?))?\]\]', re.IGNORECASE)
+SYS_WINDOW_CLICK_RE = re.compile(r'\[\[SYS:window_click\|(\d+)\|(\d+)(?:\|([^\]]+?))?\]\]', re.IGNORECASE)
+SYS_WINDOW_SCREENSHOT_RE = re.compile(r'\[\[SYS:window_screenshot\|(?:([^\]]+?))?\]\]', re.IGNORECASE)
+SYS_WINDOW_UI_RECON_RE = re.compile(r'\[\[SYS:window_ui_recon\|(?:([^\]]+?))?\]\]', re.IGNORECASE)
+SYS_FIND_ELEMENT_RE = re.compile(r'\[\[SYS:find_element_by_text\|([^\]]+?)(?:\|([^\]]+?))?(?:\|([^\]]+?))?\]\]', re.IGNORECASE)
+
+
+def extract_task_spec(text: str) -> Optional[dict]:
+    """Извлекает [[SYS:task_spec|{json}]] из текста LLM. Возвращает dict или None."""
+    if not text:
+        return None
+    m = SYS_TASK_SPEC_RE.search(text)
+    if not m:
+        return None
+    try:
+        spec = json.loads(m.group(1))
+        if isinstance(spec, dict):
+            return spec
+    except Exception:
+        pass
+    return None
+
+
+def extract_plan(text: str) -> Optional[dict]:
+    """Извлекает [[SYS:plan|{json}]] из текста LLM. Возвращает dict или None."""
+    if not text:
+        return None
+    m = SYS_PLAN_RE.search(text)
+    if not m:
+        return None
+    try:
+        plan = json.loads(m.group(1))
+        if isinstance(plan, dict):
+            return plan
+    except Exception:
+        pass
+    return None
+
+
+def resolve_sys_tokens(text: str, active: bool) -> str:
+    """Выполняет токены [[SYS:...]] в тексте ответа.
+
+    При active=True (sysinteraction гейт прошёл):
+      - [[SYS:open_url|<url>]] → ToolSandbox.open_url(url) → «Открыл в системном браузере: <url>»
+      - [[SYS:page_recon|<url>]] → ToolSandbox.execute("page_recon", url=url) → текст страницы
+      - [[SYS:launch_app|<app>]] или [[SYS:launch_app|<app>|<args>]] → ToolSandbox.launch_app
+      - [[SYS:read_file|<path>]] → ToolSandbox.read_file → содержимое файла
+      - [[SYS:write_file|<path>|<content>]] → ToolSandbox.write_file → «Записал: <path>»
+      - [[SYS:list_dir|<path>]] → ToolSandbox.list_dir → список файлов
+      - [[SYS:run_command|<cmd>]] → ToolSandbox.run_command (whitelist) → результат
+      - [[SYS:task_spec|{json}]] → удаляется (обработан отдельно в call_ai_api)
+      - [[SYS:plan|{json}]] → удаляется (обработан отдельно в call_ai_api)
+    При active=False токены остаются как есть (не выполняются).
+    """
+    if not active or not text:
+        return text
+
+    out = text
+
+    # Ссылки на другие [[SYS:...]] токены (вставляем их внутрь текста page_recon
+    # не следует — они выполнялись бы повторно). Оставляем как есть.
+
+    # [[SYS:open_url|...]] — системный браузер
+    while True:
+        m = SYS_OPEN_URL_RE.search(out)
+        if not m:
+            break
+        raw_url = m.group(1).strip()
+        browser = (m.group(2) or "").strip()
+        url = _normalize_url(raw_url)
+        if not url or not url.startswith(("http://", "https://")):
+            res_text = f"[Не удалось открыть: некорректный URL '{raw_url}' (только http/https)]"
+            log_chat_event("SYS_OPEN_URL_DONE", {"url": raw_url[:100], "status": "invalid_url"})
+        else:
+            try:
+                res = tools_sandbox.open_url(url, browser)
+                if res.get("ok"):
+                    browser_name = res.get("browser") or browser or "браузере"
+                    browser_note = f" в {browser_name}" if browser_name else ""
+                    res_text = (
+                        f"Открыл{browser_note}: {url}\n"
+                        f"[Открыто в браузере {browser_name}. Для ввода текста в ПОЛЕ ПОИСКА сайта "
+                        f"(а не адресную строку): сначала [[SYS:window_ui_recon|{browser_name}]] — найди в элементах "
+                        f"поле ввода (input/searchbox, атрибут type=search или name/placeholder со словом search), "
+                        f"затем [[SYS:window_click|<cx>|<cy>|{browser_name}]] по его координатам "
+                        f"(center_x=(l+r)//2, center_y=(t+b)//2 из bounding_rect), "
+                        f"и [[SYS:window_send_keys|<запрос>|{browser_name}]].\n"
+                        f"Если пользователь просит открыть конкретный URL — делай это через [[SYS:open_url|<URL>|{browser_name}]] — "
+                        f"это вставит адрес в адресную строку и откроет страницу.]"
+                    )
+                    log_chat_event("SYS_OPEN_URL_DONE", {"url": url[:100], "browser": browser, "status": "ok"})
+                else:
+                    res_text = f"[Не удалось открыть: {res.get('error', 'ошибка')}]"
+                    log_chat_event("SYS_OPEN_URL_DONE", {"url": url[:100], "browser": browser, "status": "error", "error": res.get('error', '')})
+            except Exception as e:
+                res_text = f"[Ошибка: {e}]"
+                log_chat_event("SYS_OPEN_URL_DONE", {"url": url[:100], "browser": browser, "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:page_recon|...]] — получить текст страницы
+    while True:
+        m = SYS_PAGE_RECON_RE.search(out)
+        if not m:
+            break
+        raw_url = m.group(1).strip()
+        url = _normalize_url(raw_url)
+        if not url or not url.startswith(("http://", "https://")):
+            res_text = f"[Не удалось получить страницу: некорректный URL '{raw_url}' (только http/https)]"
+            log_chat_event("SYS_PAGE_RECON_DONE", {"url": raw_url[:100], "status": "invalid_url"})
+        else:
+            try:
+                res = tools_sandbox.execute("page_recon", url=url)
+                if res.get("ok"):
+                    text = res.get("text", "")
+                    title = res.get("title", "")
+                    links = res.get("links", [])
+                    screenshot_url = res.get("screenshot")
+                    links_block = ""
+                    if links:
+                        links_lines = [f"  - {l.get('text', l.get('href', ''))[:60]}: {l.get('href', '')[:100]}" for l in links[:20]]
+                        links_block = "\nСсылки на странице:\n" + "\n".join(links_lines)
+                    js_note = ""
+                    if len(text) < 100:
+                        js_note = "\n[Внимание: страница JS-тяжёлая — текст почти пуст. Открой её через [[SYS:open_url|]] и объясни пользователю, что нужно сделать вручную.]"
+                        js_note = js_note.replace("[[SYS:open_url|]]", f"[[SYS:open_url|{url}]]")
+                    res_text = f"[Страница: {title or url}]\n{text[:3000]}{links_block}{js_note}"
+                    log_chat_event("SYS_PAGE_RECON_DONE", {"url": url[:100], "status": "ok", "chars": res.get("chars", 0)})
+                else:
+                    res_text = f"[Не удалось получить страницу: {res.get('error', 'ошибка')}]"
+                    log_chat_event("SYS_PAGE_RECON_DONE", {"url": url[:100], "status": "error", "error": res.get('error', '')[:100]})
+            except Exception as e:
+                res_text = f"[Ошибка: {e}]"
+                log_chat_event("SYS_PAGE_RECON_DONE", {"url": url[:100], "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:launch_app|...]] — запуск системного приложения
+    while True:
+        m = SYS_LAUNCH_APP_RE.search(out)
+        if not m:
+            break
+        app = m.group(1).strip()
+        args = (m.group(2) or "").strip()
+        try:
+            res = tools_sandbox.execute("launch_app", app=app, args=args)
+            if res.get("ok"):
+                method = res.get("method", "")
+                if "foreground" in method:
+                    res_text = f"{app} уже запущено — привёл на передний план"
+                elif "note" in res:
+                    res_text = f"{app}: {res.get('note', 'запущено')}"
+                else:
+                    res_text = f"Запустил: {app}" + (f" {args}" if args else "")
+                log_chat_event("SYS_LAUNCH_APP_DONE", {"app": app, "args": args, "status": "ok", "method": method})
+            else:
+                res_text = f"[Не удалось запустить {app}: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_LAUNCH_APP_DONE", {"app": app, "args": args, "status": "error", "error": res.get('error', '')[:100], "method": res.get('method', '')})
+        except Exception as e:
+            res_text = f"[Ошибка: {e}]"
+            log_chat_event("SYS_LAUNCH_APP_DONE", {"app": app, "args": args, "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:read_file|...]] — чтение файла через ToolSandbox (allowed_dirs)
+    while True:
+        m = SYS_READ_FILE_RE.search(out)
+        if not m:
+            break
+        path_str = m.group(1).strip()
+        try:
+            res = tools_sandbox.execute("read_file", path=path_str)
+            if res.get("ok"):
+                res_text = f"[Файл: {path_str}]\n{str(res.get('result', ''))[:5000]}"
+                log_chat_event("SYS_READ_FILE_DONE", {"path": path_str[:100], "status": "ok"})
+            else:
+                res_text = f"[Не удалось прочитать {path_str}: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_READ_FILE_DONE", {"path": path_str[:100], "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка: {e}]"
+            log_chat_event("SYS_READ_FILE_DONE", {"path": path_str[:100], "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:write_file|...|...]] — запись файла через ToolSandbox (allowed_dirs)
+    while True:
+        m = SYS_WRITE_FILE_RE.search(out)
+        if not m:
+            break
+        path_str = m.group(1).strip()
+        content = m.group(2) or ""
+        try:
+            res = tools_sandbox.execute("write_file", path=path_str, content=content)
+            if res.get("ok"):
+                res_text = f"[Записал: {path_str}]"
+                log_chat_event("SYS_WRITE_FILE_DONE", {"path": path_str[:100], "status": "ok", "bytes": len(content)})
+            else:
+                res_text = f"[Не удалось записать {path_str}: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_WRITE_FILE_DONE", {"path": path_str[:100], "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка: {e}]"
+            log_chat_event("SYS_WRITE_FILE_DONE", {"path": path_str[:100], "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:list_dir|...]] — листинг каталога через ToolSandbox
+    while True:
+        m = SYS_LIST_DIR_RE.search(out)
+        if not m:
+            break
+        path_str = m.group(1).strip()
+        try:
+            res = tools_sandbox.execute("list_dir", path=path_str)
+            if res.get("ok"):
+                res_text = f"[Каталог: {path_str}]\n{str(res.get('result', ''))[:3000]}"
+                log_chat_event("SYS_LIST_DIR_DONE", {"path": path_str[:100], "status": "ok"})
+            else:
+                res_text = f"[Не удалось прочитать каталог {path_str}: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_LIST_DIR_DONE", {"path": path_str[:100], "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка: {e}]"
+            log_chat_event("SYS_LIST_DIR_DONE", {"path": path_str[:100], "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:run_command|...]] — команда из whitelist через ToolSandbox
+    while True:
+        m = SYS_RUN_COMMAND_RE.search(out)
+        if not m:
+            break
+        cmd = m.group(1).strip()
+        try:
+            res = tools_sandbox.execute("run_command", command=cmd)
+            if res.get("ok"):
+                res_text = f"[Команда: {cmd}]\n{str(res.get('result', ''))[:3000]}"
+                log_chat_event("SYS_RUN_COMMAND_DONE", {"command": cmd[:100], "status": "ok"})
+            else:
+                res_text = f"[Команда не выполнена ({cmd}): {res.get('error', res.get('code', 'ошибка'))}]"
+                log_chat_event("SYS_RUN_COMMAND_DONE", {"command": cmd[:100], "status": "error", "error": res.get('error', res.get('code', ''))[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка: {e}]"
+            log_chat_event("SYS_RUN_COMMAND_DONE", {"command": cmd[:100], "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:window_focus|...]] — привести окно на передний план
+    while True:
+        m = SYS_WINDOW_FOCUS_RE.search(out)
+        if not m:
+            break
+        app = m.group(1).strip()
+        try:
+            res = tools_sandbox.execute("window_focus", app=app)
+            if res.get("ok"):
+                res_text = f"Привёл окно на передний план: {app}"
+                log_chat_event("SYS_WINDOW_FOCUS_DONE", {"app": app, "status": "ok"})
+            else:
+                res_text = f"[Не удалось сфокусировать {app}: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_WINDOW_FOCUS_DONE", {"app": app, "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка: {e}]"
+            log_chat_event("SYS_WINDOW_FOCUS_DONE", {"app": app, "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:window_send_keys|text|app?|skip_ctrl_l?]] — отправить клавиши
+    # group(3) — optional "1"/"true" → skip Ctrl+L (for typing into page fields)
+    while True:
+        m = SYS_WINDOW_SEND_KEYS_RE.search(out)
+        if not m:
+            break
+        text = m.group(1).strip()
+        app = (m.group(2) or "").strip()
+        skip_ctrl_l_str = (m.group(3) or "").strip().lower()
+        skip_ctrl_l = skip_ctrl_l_str in ("1", "true", "yes")
+        try:
+            res = tools_sandbox.execute("window_send_keys", text=text, app=app, skip_ctrl_l=skip_ctrl_l)
+            if res.get("ok"):
+                target_note = f" в {app}" if app else ""
+                res_text = f"Ввёл: {text[:50]}" + target_note
+                log_chat_event("SYS_WINDOW_SEND_KEYS_DONE", {"text": text[:50], "app": app, "status": "ok"})
+            else:
+                res_text = f"[Не удалось ввести текст{(' в ' + app) if app else ''}: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_WINDOW_SEND_KEYS_DONE", {"text": text[:50], "app": app, "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка: {e}]"
+            log_chat_event("SYS_WINDOW_SEND_KEYS_DONE", {"text": text[:50], "app": app, "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:window_click|x|y|app?]] — клик в координатах
+    while True:
+        m = SYS_WINDOW_CLICK_RE.search(out)
+        if not m:
+            break
+        x = int(m.group(1))
+        y = int(m.group(2))
+        app = (m.group(3) or "").strip()
+        try:
+            res = tools_sandbox.execute("window_click", x=x, y=y, app=app)
+            if res.get("ok"):
+                target_note = f" (в {app})" if app else ""
+                res_text = f"Клик в ({x}, {y}){target_note}"
+                log_chat_event("SYS_WINDOW_CLICK_DONE", {"x": x, "y": y, "app": app, "status": "ok"})
+            else:
+                res_text = f"[Не удалось кликнуть в ({x}, {y}): {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_WINDOW_CLICK_DONE", {"x": x, "y": y, "app": app, "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка: {e}]"
+            log_chat_event("SYS_WINDOW_CLICK_DONE", {"x": x, "y": y, "app": app, "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # [[SYS:window_screenshot|app?]] — скриншот окна
+    while True:
+        m = SYS_WINDOW_SCREENSHOT_RE.search(out)
+        if not m:
+            break
+        app = (m.group(1) or "").strip()
+        try:
+            res = tools_sandbox.execute("window_screenshot", app=app)
+            if res.get("ok"):
+                path = res.get("path", "")
+                res_text = f"[Скриншот{' окна ' + app if app else ' экрана'}: {path}]"
+                log_chat_event("SYS_WINDOW_SCREENSHOT_DONE", {"app": app, "path": path, "status": "ok"})
+            else:
+                res_text = f"[Не удалось сделать скриншот: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_WINDOW_SCREENSHOT_DONE", {"app": app, "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка: {e}]"
+            log_chat_event("SYS_WINDOW_SCREENSHOT_DONE", {"app": app, "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+
+    # [[SYS:window_ui_recon|app?]] — UI-интроспекция через Windows UI Automation
+    while True:
+        m = SYS_WINDOW_UI_RECON_RE.search(out)
+        if not m:
+            break
+        app = (m.group(1) or "").strip()
+        try:
+            res = tools_sandbox.execute("window_ui_recon", app=app)
+            if res.get("ok"):
+                elements = res.get("elements", [])
+                if elements:
+                    lines = []
+                    for el in elements[:80]:
+                        loc = ""
+                        if el.get("rect"):
+                            l, t, r, b = el["rect"]
+                            cx, cy = (l + r) // 2, (t + b) // 2
+                            loc = f" @({cx},{cy})"
+                        line = f'  • {el.get("control_type","?")}: "{el.get("name","")[:60]}"'
+                        if el.get("automation_id"):
+                            line += f" [id={el['automation_id'][:30]}]"
+                        if el.get("class_name"):
+                            line += f" [{el['class_name'][:20]}]"
+                        line += loc
+                        lines.append(line)
+                    res_text = (
+                        f"[UI-элементы окна{' ' + app if app else ''}]: {len(elements)}\n"
+                        + "\n".join(lines)
+                    )
+                else:
+                    res_text = res.get("note", "[UI-интроспекция не вернула элементов]")
+                log_chat_event("SYS_WINDOW_UI_RECON_DONE", {"app": app, "elements": len(elements), "status": "ok"})
+            else:
+                res_text = f"[Не удалось UI-интроспекция: {res.get('error', 'ошибка')}]"
+                log_chat_event("SYS_WINDOW_UI_RECON_DONE", {"app": app, "status": "error", "error": res.get('error', '')[:100]})
+        except Exception as e:
+            res_text = f"[Ошибка UI-интроспекции: {e}]"
+            log_chat_event("SYS_WINDOW_UI_RECON_DONE", {"app": app, "status": "exception", "error": str(e)[:100]})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+
+    # [[SYS:find_element_by_text|<text>|<app>?|<url>?]] - generic UIA element finder by text
+    # 3rd param: optional URL for page_recon fallback (for browsers where UIA returns 0 elements)
+    while True:
+        m = SYS_FIND_ELEMENT_RE.search(out)
+        if not m:
+            break
+        text = (m.group(1) or "").strip()
+        app = (m.group(2) or "").strip()
+        url = (m.group(3) or "").strip()
+        try:
+            res = tools_sandbox.execute("find_element_by_text", text=text, app=app, url=url)
+            if res.get("ok") and res.get("found"):
+                coords = res.get("coords")
+                el = res.get("element", {})
+                if coords:
+                    cx = coords.get("cx", 0)
+                    cy = coords.get("cy", 0)
+                    res_text = (
+                        "[Found element: " + el.get("name", "")[:80] +
+                        " (type: " + el.get("control_type", "?") + ") "
+                        + "coords: (" + str(cx) + ", " + str(cy) + ")]\n"
+                        + "[[SYS:window_click|" + str(cx) + "|" + str(cy) + "|" + app + "]]"
+                    )
+                else:
+                    # page_recon fallback — no coords, give LLM guidance
+                    res_text = (
+                        "[Found element via page_recon: " + el.get("name", "")[:80] +
+                        " (id: " + el.get("id", "") + ", source: " + el.get("source", "page_recon") + ")]\n"
+                        + (res.get("note", "") + "\n")
+                        + "[To search: use open_url with a search URL, e.g. "
+                        + "[[SYS:open_url|https://www.bing.com/search?q=<query>|" + app + "]]"
+                    )
+                log_chat_event("SYS_FIND_ELEMENT_DONE", {"text": text[:50], "app": app, "status": "found"})
+            elif res.get("ok"):
+                res_text = "[Element not found: " + text + ". " + res.get("note", "") + "]"
+                log_chat_event("SYS_FIND_ELEMENT_DONE", {"text": text[:50], "app": app, "status": "not_found"})
+            else:
+                res_text = "[Error: " + res.get("error", "could not find element") + "]"
+                log_chat_event("SYS_FIND_ELEMENT_DONE", {"text": text[:50], "app": app, "status": "error"})
+        except Exception as e:
+            res_text = "[Error finding element: " + str(e) + "]"
+            log_chat_event("SYS_FIND_ELEMENT_DONE", {"text": text[:50], "app": app, "status": "exception"})
+        out = out[:m.start()] + res_text + out[m.end():]
+
+    # Убираем [[SYS:task_spec|...]] (обр��ботан в call_ai_api)
+    out = SYS_TASK_SPEC_RE.sub("", out).strip()
+    # Убираем [[SYS:plan|...]] (обработан в call_ai_api)
+    out = SYS_PLAN_RE.sub("", out).strip()
+    return out
+
+
+async def _quick_llm_call(api_key: str, base_url: str, model: str,
+                          system: str, user: str, timeout: float = 30.0,
+                          proxy_string: str = "") -> str:
+    """Лёгкий LLM-вызов для оркестратора/монитора (не main chat).
+    Возвращает raw text ответа. При ошибке — пустая строка."""
+    import httpx
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        body = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": 0.1,
+            "max_tokens": 2048,
+            "stream": False,
+        }
+        url = f"{base_url.rstrip('/')}/chat/completions"
+        kwargs = {"timeout": timeout}
+        if proxy_string:
+            kwargs["proxy"] = proxy_string
+        async with httpx.AsyncClient(**kwargs) as client:
+            r = await client.post(url, headers=headers, json=body)
+            if r.status_code == 200:
+                data = r.json()
+                return data["choices"][0]["message"]["content"]
+            return ""
+    except Exception:
+        return ""
+
+
+async def resolve_plan_v2(plan: dict, sandbox, orchestrator,
+                          api_key: str, base_url: str, model: str,
+                          proxy_string: str = "") -> str:
+    """Новый цикл плана (6 пунктов):
+      1) оркестратор составил план (plan уже на входе)
+      2) по каждому шагу — agent из библиотеки или новый task-агент
+      3) security monitor LLM-проверка параллельно с watchdog
+      4) верификация результата против `expected`
+      5) при успехе — 5 вариационных тестов на tool
+      6) при 5/5 вариаций — сохранение agent+skill в библиотеку
+
+    Возвращает человекочитаемую сводку.
+    """
+    from ai_engine.sysinteraction import (
+        security_check_step, MAX_PLAN_STEPS, MAX_PLAN_RETRIES,
+        match_agents_for_step, spawn_task_agent_for_step,
+        monitor_security_check, verify_step_result,
+        derive_variation_tests, run_variation_tests,
+        save_agent_to_library,
+    )
+
+    goal = plan.get("goal", "")
+    steps = (plan.get("steps") or [])[:MAX_PLAN_STEPS]
+    if not steps:
+        return "[План пуст — нет шагов для выполнения.]"
+
+    orchestrator._log_event("plan_started_v2", {"goal": goal[:100], "steps": len(steps)})
+
+    # Детали для логирования (не показываются пользователю)
+    detail_lines: list[str] = []
+    detail_lines.append(f"📋 План (v2): {goal}")
+    detail_lines.append(f"Шагов: {len(steps)}. Выполняю…")
+
+    total_passed = 0
+    total_failed = 0
+    agents_matched = 0
+    agents_spawned = 0
+    human_results: list[str] = []  # короткие строки для пользователя
+
+    for i, step in enumerate(steps):
+        tool = (step.get("tool") or "").strip()
+        args = dict(step.get("args") or {})
+        expected = step.get("expected", "")
+
+        # === 3) Security: детерминированный watchdog + LLM-монитор ===
+        ok_sec, reason = security_check_step(step)
+        if not ok_sec:
+            detail_lines.append(f"  {i+1}. [{tool}] ✗ Блок watchdog: {reason}")
+            human_results.append(f"{i+1}. [{tool}] — заблокировано ({reason[:60]})")
+            orchestrator._log_event("plan_step_blocked", {"step_idx": i, "tool": tool, "reason": reason})
+            log_chat_event("SYSINTERACTION_PLAN_STEP", {
+                "step": i + 1, "tool": tool, "status": "blocked",
+                "detail": reason, "retries": 0,
+            })
+            total_failed += 1
+            continue
+
+        # LLM-монитор (параллельно с watchdog — если watchdog прошёл,
+        # монитор даёт вторую независимую проверку)
+        monitor_llm = lambda sys_, usr_: _quick_llm_call(
+            api_key, base_url, model, sys_, usr_,
+            timeout=15.0, proxy_string=proxy_string,
+        )
+        mon_allow, mon_rule, mon_reason = await _monitor_async(
+            tool, args, monitor_llm, api_key, base_url, model, proxy_string,
+        )
+        if not mon_allow:
+            detail_lines.append(f"  {i+1}. [{tool}] ✗ Блок monitor ({mon_rule}): {mon_reason}")
+            human_results.append(f"{i+1}. [{tool}] — заблокировано монитором ({mon_reason[:60]})")
+            orchestrator._log_event("plan_step_monitor_blocked", {
+                "step_idx": i, "tool": tool, "rule": mon_rule, "reason": mon_reason,
+            })
+            log_chat_event("SYSINTERACTION_PLAN_STEP", {
+                "step": i + 1, "tool": tool, "status": "monitor_blocked",
+                "detail": f"{mon_rule}: {mon_reason}", "retries": 0,
+            })
+            total_failed += 1
+            continue
+
+        # === 2) Agent-спавн: из библиотеки или новый ===
+        agent_ref, skill_ref = match_agents_for_step(step, orchestrator)
+        if agent_ref:
+            agents_matched += 1
+            source_tag = f" (библиотека: {agent_ref.get('id','')})"
+        else:
+            # Новый task-агент — генерируем (через generate_task_agent)
+            # Если needs_skill=True — агент запрашивает новый скилл у оркестратора
+            spec = {
+                "task": f"{tool}: {json.dumps(args, ensure_ascii=False)[:120]}",
+                "target_tool": tool,
+                "args_template": args,
+                "expected_outcome": expected,
+                "risk_level": plan.get("risk_level", "medium"),
+            }
+            res = orchestrator.generate_task_agent(spec, sandbox, skip_tests=False)
+            agent_ref = res.get("agent")
+            skill_ref = None
+            if agent_ref and agent_ref.get("skills"):
+                skill_ref = orchestrator._find_skill(agent_ref["skills"][0])
+            # 2b) Agent-спавн: если needs_skill — создаём новый скилл
+            if step.get("needs_skill") and agent_ref:
+                skill = {
+                    "id": "sys_dyn_skill_" + os.urandom(4).hex(),
+                    "name": f"Dynamic skill: {tool}",
+                    "description": f"Скилл для {tool}: {expected[:80]}",
+                    "prompt": (
+                        f"Используй {tool} с аргументами "
+                        f"{json.dumps(args, ensure_ascii=False)} "
+                        f"для задачи: {expected}. Ожидаемый результат: {expected}."
+                    ),
+                    "enabled": True,
+                    "folder": "sysinteraction",
+                    "agentId": agent_ref["id"],
+                }
+                try:
+                    skill_ref = orchestrator.add_skill(skill, agent_ref["id"])
+                    orchestrator._log_event("dynamic_skill_spawned", {
+                        "skill_id": skill["id"],
+                        "agent_id": agent_ref["id"],
+                        "tool": tool,
+                    })
+                except ValueError:
+                    pass  # лимит 5 скиллов — пропускаем
+            agents_spawned += 1
+            source_tag = f" (новый агент: {agent_ref.get('id','') if agent_ref else '?'})"
+
+        # === Выполнение с ретрайтами ===
+        passed = False
+        last_result: dict = {}
+        retries_used = 0
+        for retry in range(MAX_PLAN_RETRIES):
+            last_result = sandbox.execute(tool, **args)
+            passed = bool(last_result.get("ok"))
+            if passed:
+                # === 4) Верификация против expected ===
+                verified, ver_detail = verify_step_result(step, last_result)
+                if verified:
+                    retries_used = 0
+                    break
+                else:
+                    # ok=True но не совпадает с expected — считаем провал
+                    passed = False
+                    last_result["ok"] = False
+                    last_result["error"] = f"verify: {ver_detail}"
+            retries_used += 1
+            code = last_result.get("code", "")
+            if code in ("whitelist", "denied"):
+                break
+
+        # === 4) Финальная верификация ===
+        if passed:
+            verified, ver_detail = verify_step_result(step, last_result)
+            if not verified:
+                detail_lines.append(f"  {i+1}. [{tool}] ⚠ verify: {ver_detail}")
+                last_result = {**last_result, "ok": False}
+                passed = False
+
+        status = "✓" if passed else "✗"
+        detail = last_result.get("url") or last_result.get("data") or last_result.get("detail") or last_result.get("error") or ""
+        detail_str = str(detail)[:100]
+        retry_note = f" ({retries_used} ретрайт)" if retries_used > 0 and not passed else ""
+        verify_note = ""
+        if passed:
+            verified, ver_detail = verify_step_result(step, last_result)
+            verify_note = f" [verify: {ver_detail}]" if ver_detail else ""
+
+        detail_lines.append(f"  {i+1}. [{tool}] {status} {detail_str}{retry_note}{verify_note}{source_tag}")
+
+        # Короткая строка для пользователя
+        if passed:
+            human_results.append(f"{i+1}. [{tool}] — выполнен")
+        else:
+            err_hint = detail_str if detail_str else "ошибка"
+            human_results.append(f"{i+1}. [{tool}] — не выполнено ({err_hint[:60]})")
+
+        if passed:
+            total_passed += 1
+            # === 5) Вариационные тесты (5 штук) — только в лог, не в ответ ===
+            var_tests = derive_variation_tests(step)
+            var_passed, var_failures = run_variation_tests(sandbox, var_tests)
+            if var_passed:
+                save_agent_to_library(orchestrator, step, agent_ref, skill_ref, var_tests)
+                detail_lines.append(f"       ↳ 5/5 вариаций OK → агент сохранён в библиотеку")
+                orchestrator._log_event("variation_tests_passed", {
+                    "step_idx": i, "tool": tool,
+                    "agent_id": agent_ref.get("id") if agent_ref else None,
+                    "variations": len(var_tests),
+                })
+            else:
+                detail_lines.append(f"       ↳ Вариации: {5-len(var_failures)}/5 провалы: {var_failures[0][:80] if var_failures else ''}")
+                orchestrator._log_event("variation_tests_failed", {
+                    "step_idx": i, "tool": tool,
+                    "failures": var_failures[:3],
+                })
+                # Пытаемся спасти: refine spec и перегенерировать
+                refined_spec = {
+                    "task": f"{tool} (refined)",
+                    "target_tool": tool,
+                    "args_template": args,
+                    "expected_outcome": expected,
+                    "risk_level": "medium",
+                    "_variation_failures": var_failures,
+                }
+                res2 = orchestrator.generate_task_agent(refined_spec, sandbox, skip_tests=False)
+                if res2.get("passed"):
+                    agent_ref = res2.get("agent")
+                    detail_lines.append(f"       ↳ Refine-агент прошёл → сохранён: {agent_ref.get('id','') if agent_ref else ''}")
+        else:
+            total_failed += 1
+
+        orchestrator._log_event("plan_step_v2", {
+            "step_idx": i, "tool": tool, "ok": passed,
+            "retries": retries_used,
+            "agent_source": "library" if agent_ref and agents_matched > 0 else "spawned",
+        })
+        log_chat_event("SYSINTERACTION_PLAN_STEP", {
+            "step": i + 1, "tool": tool,
+            "status": "ok" if passed else "fail",
+            "detail": detail_str, "retries": retries_used,
+            "agent": "library" if agent_ref else "new",
+        })
+
+    # Детали в лог (не в ответ пользователю)
+    orchestrator._log_event("plan_detail_v2", {
+        "goal": goal[:100],
+        "detail": "\n".join(detail_lines),
+    })
+    log_chat_event("SYSINTERACTION_PLAN_DETAIL", {
+        "goal": goal[:100],
+        "detail": "\n".join(detail_lines),
+    })
+
+    # Краткий человеческий отчёт для ответа
+    human_lines: list[str] = []
+    if total_passed == len(steps):
+        human_lines.append(f"Готово: {goal}")
+    elif total_passed > 0:
+        human_lines.append(f"Частично: {total_passed}/{len(steps)} шагов — {goal}")
+    else:
+        human_lines.append(f"Не удалось: {goal}")
+    for h in human_results:
+        human_lines.append(f"  • {h}")
+    if total_failed:
+        human_lines.append("  Попробуй переформулировать.")
+
+    orchestrator._log_event("plan_finished_v2", {
+        "goal": goal[:100],
+        "steps_passed": total_passed,
+        "steps_total": len(steps),
+        "agents_matched": agents_matched,
+        "agents_spawned": agents_spawned,
+    })
+    orchestrator.save()
+
+    return "\n".join(human_lines)
+
+
+async def _monitor_async(tool: str, args: dict,
+                         monitor_fn, api_key: str, base_url: str,
+                         model: str, proxy_string: str) -> tuple[bool, str, str]:
+    """Async-обёртка для monitor_security_check (которая синхронная,
+    но использует httpx sync). Запускаем в executor чтобы не блокировать loop."""
+    import asyncio as _aio
+    loop = _aio.get_event_loop()
+    from ai_engine.sysinteraction import monitor_security_check
+    result = await loop.run_in_executor(
+        None,
+        lambda: monitor_security_check(tool, args,
+            lambda s, u: _quick_llm_call_sync(s, u, api_key, base_url, model, proxy_string)),
+    )
+    return result
+
+
+def _quick_llm_call_sync(system: str, user: str, api_key: str,
+                         base_url: str, model: str,
+                         proxy_string: str = "", timeout: float = 15.0) -> str:
+    """Синхронная LLM-вызов (для run_in_executor)."""
+    import httpx
+    try:
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        body = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": 0.1,
+            "max_tokens": 512,
+            "stream": False,
+        }
+        url = f"{base_url.rstrip('/')}/chat/completions"
+        kwargs = {"timeout": timeout}
+        if proxy_string:
+            kwargs["proxy"] = proxy_string
+        with httpx.Client(**kwargs) as client:
+            r = client.post(url, headers=headers, json=body)
+            if r.status_code == 200:
+                data = r.json()
+                return data["choices"][0]["message"]["content"]
+            return ""
+    except Exception:
+        return ""
 
 
 # ===== Скриншот внешней страницы (Electron capturePage → бэкенд) =====

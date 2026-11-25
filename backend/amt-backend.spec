@@ -38,13 +38,18 @@ a = Analysis(
         'ai_engine', 'ai_engine.memory', 'ai_engine.orchestrator', 'ai_engine.agents',
         'ai_engine.keymanager', 'ai_engine.tools', 'ai_engine.filegen',
         'ai_engine.media', 'ai_engine.extensions', 'ai_engine.sysinteraction',
+        'ai_engine.desktop_tools',
         # тяжёлые генераторы файлов
         'docx', 'openpyxl', 'pptx', 'reportlab', 'markdown', 'pygments',
+        # UI Automation (Windows UIA — динамический импорт в desktop_tools.py)
+        'comtypes', 'comtypes.client', 'comtypes.server',
+        'comtypes._comobject', 'comtypes._enum', 'comtypes._generate',
+        'comtypes._util', 'comtypes.automation',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'numpy', 'pandas', 'scipy', 'PIL', 'PIL.Image'],
+    excludes=['tkinter', 'matplotlib', 'numpy', 'pandas', 'scipy'],
     noarchive=False,
 )
 

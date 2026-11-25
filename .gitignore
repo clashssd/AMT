@@ -27,6 +27,10 @@ backend/chats/
 backend/files/
 backend/projects_current.json
 backend/ai_engine/memory.json
+backend/sysinteraction.json
+backend/tools_config.json
+backend/tools_log.jsonl
+backend/desktop_log.jsonl
 extensions_state.json
 
 # Local secrets — never commit real API keys. Keep keys.json structure with an

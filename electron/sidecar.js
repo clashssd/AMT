@@ -126,6 +126,15 @@ function startSidecar(port = 8000) {
       if (healthTimer) { clearInterval(healthTimer); healthTimer = null; }
       if (code !== 0 && code !== null && !process.appQuitting) {
         process.stderr.write(`[sidecar] backend exited code=${code} signal=${signal}\n`);
+        // Auto-restart: бэкенд упал (crash) — перезапускаем через 2 секунды
+        setTimeout(() => {
+          if (process.appQuitting) return;
+          process.stderr.write(`[sidecar] restarting backend...\n`);
+          startSidecar(port).then(
+            () => { process.stderr.write(`[sidecar] backend restarted OK\n`); },
+            (err) => { process.stderr.write(`[sidecar] restart failed: ${err.message}\n`); }
+          );
+        }, 2000);
       }
     });
 

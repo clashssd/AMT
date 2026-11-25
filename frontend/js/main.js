@@ -1449,6 +1449,61 @@ function flashStatus(text) {
     setTimeout(() => setStatus('idle'), 1500);
 }
 
+// ===== TOAST NOTIFICATIONS =====
+let toastContainer = null;
+function getToastContainer() {
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }
+    return toastContainer;
+}
+
+function showToast(icon, title, body, duration = 4000) {
+    const c = getToastContainer();
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.innerHTML = `
+        <span class="toast-icon">${icon}</span>
+        <div>
+            <div class="toast-title">${title}</div>
+            ${body ? `<div class="toast-body">${body}</div>` : ''}
+        </div>
+    `;
+    c.appendChild(t);
+    setTimeout(() => {
+        t.classList.add('fade-out');
+        setTimeout(() => t.remove(), 300);
+    }, duration);
+}
+
+// Show toast when window actions happen (SYS_WINDOW_*_DONE events)
+function showWindowToast(tag, detail) {
+    const kv = {};
+    (detail || '').split(' ').forEach(kvPair => {
+        const i = kvPair.indexOf('=');
+        if (i > 0) kv[kvPair.slice(0, i)] = kvPair.slice(i + 1);
+    });
+    if (tag === 'SYS_WINDOW_FOCUS_DONE') {
+        const ok = kv.status === 'ok';
+        showToast(ok ? '🖥️' : '⚠️', ok ? `Окно приведено: ${kv.app || ''}` : 'Не удалось сфокусировать окно',
+            ok ? '' : (kv.error || '').slice(0, 100));
+    } else if (tag === 'SYS_WINDOW_SEND_KEYS_DONE') {
+        const ok = kv.status === 'ok';
+        showToast(ok ? '⌨️' : '⚠️', ok ? `Текст введён в: ${kv.app || 'окно'}` : 'Не удалось ввести текст',
+            ok ? (kv.text || '').slice(0, 60) : (kv.error || '').slice(0, 100));
+    } else if (tag === 'SYS_WINDOW_CLICK_DONE') {
+        const ok = kv.status === 'ok';
+        showToast(ok ? '🖱️' : '⚠️', ok ? `Клик: ${kv.x}, ${kv.y}` : 'Клик не выполнен',
+            kv.app ? kv.app : '');
+    } else if (tag === 'SYS_WINDOW_SCREENSHOT_DONE') {
+        const ok = kv.status === 'ok';
+        showToast(ok ? '📸' : '⚠️', ok ? `Скриншот: ${kv.app || 'экран'}` : 'Скриншот не удался',
+            ok ? (kv.path || '').slice(0, 80) : (kv.error || '').slice(0, 100));
+    }
+}
+
 async function clearHistory() {
     if (!(await amtConfirm({ text: 'Очистить текущий чат? Это действие нельзя отменить.', yesLabel: 'Очистить' }))) return;
     const chat = getCurrentChat();
@@ -2106,20 +2161,51 @@ function showTaskEvent(idx) {
     for (const e of (t.events || [])) {
         const evKind = e.kind; // 'chat' | 'agent' | 'orch'
         const isTool = e.tag === 'TOOL_USE' || e.tag === 'TOOL_RESULT';
+        const isPlanStep = e.tag === 'SYSINTERACTION_PLAN_STEP';
+        const isPlanStart = e.tag === 'SYSINTERACTION_PLAN';
+        const isPlanDone = e.tag === 'SYSINTERACTION_PLAN_DONE';
+        const isTaskSpec = e.tag === 'SYSINTERACTION_TASK_SPEC';
+        const isAgentGen = e.tag === 'SYSINTERACTION_AGENT_GEN';
+        // Новые: sys-token resolution events (open_url, launch_app, page_recon, read_file, write_file, list_dir, run_command, window_*)
+        const isSysDone = e.tag === 'SYS_OPEN_URL_DONE' || e.tag === 'SYS_LAUNCH_APP_DONE'
+            || e.tag === 'SYS_PAGE_RECON_DONE' || e.tag === 'SYS_READ_FILE_DONE'
+            || e.tag === 'SYS_WRITE_FILE_DONE' || e.tag === 'SYS_LIST_DIR_DONE'
+            || e.tag === 'SYS_RUN_COMMAND_DONE'
+            || e.tag === 'SYS_WINDOW_FOCUS_DONE' || e.tag === 'SYS_WINDOW_SEND_KEYS_DONE'
+            || e.tag === 'SYS_WINDOW_CLICK_DONE' || e.tag === 'SYS_WINDOW_SCREENSHOT_DONE';
+        const isPlanAny = isPlanStep || isPlanStart || isPlanDone || isTaskSpec || isAgentGen || isSysDone;
         const tagLabel = isTool ? (e.tag === 'TOOL_USE' ? 'tool_use' : 'tool_result')
+            : isPlanStep ? 'plan_step'
+            : isPlanStart ? 'plan_start'
+            : isPlanDone ? 'plan_done'
+            : isTaskSpec ? 'task_spec'
+            : isAgentGen ? 'agent_gen'
+            : isSysDone ? e.tag.replace('SYS_', '').replace('_DONE', '').toLowerCase()
             : (evKind === 'agent' ? 'agent' : (evKind === 'orch' ? 'orchestrator' : 'chat'));
         const toolName = isTool ? ((e.detail.match(/tool=(\S+)/) || [])[1] || 'unknown') : '';
         stepNum++;
-        const isExpandable = isTool;
-        const detailFormatted = isTool ? fmtKvDetail(e.detail) : e.tag;
+        const isExpandable = isTool || isPlanStep || isSysDone;
+        // Для plan-step: извлекаем tool и status из kv
+        let planTool = '', planStatus = '';
+        if (isPlanStep) {
+            const kv = e.detail || '';
+            const mT = kv.match(/tool=(\S+)/);
+            const mS = kv.match(/status=(\S+)/);
+            planTool = mT ? mT[1] : '';
+            planStatus = mS ? mS[1] : '';
+        }
+        const detailFormatted = isTool ? fmtKvDetail(e.detail)
+            : isPlanStep ? `${planTool} → ${planStatus}`
+            : isPlanAny ? e.tag
+            : e.tag;
         const inputHtml = isExpandable
             ? `<div class="td-step-input" style="display:none"><pre class="td-code">${escapeHtml(fmtKvDetail(e.detail))}</pre></div>`
             : '';
         pipelineSteps.push(
             `<div class="td-pipeline-step" data-step="${stepNum}">
                 <div class="td-step-head" data-step="${stepNum}">
-                    <span class="td-step-dot ${isTool ? 'td-dot-tool' : (evKind === 'agent' ? 'td-dot-agent' : 'td-dot-chat')}"></span>
-                    <span class="td-step-tag ${isTool ? 'td-tag-tool' : (evKind === 'agent' ? 'td-tag-agent' : 'td-tag-chat')}">${tagLabel}</span>
+                    <span class="td-step-dot ${isTool ? 'td-dot-tool' : (isSysDone ? ((e.detail.match(/status=(\S+)/) || [])[1] === 'ok' ? 'td-dot-ok' : 'td-dot-fail') : (isPlanAny ? (planStatus === 'ok' ? 'td-dot-ok' : 'td-dot-fail') : (evKind === 'agent' ? 'td-dot-agent' : 'td-dot-chat')))}"></span>
+                    <span class="td-step-tag ${isTool ? 'td-tag-tool' : (isPlanAny ? 'td-tag-plan' : (evKind === 'agent' ? 'td-tag-agent' : 'td-tag-chat'))}">${tagLabel}</span>
                     <span class="td-step-label">${escapeHtml(isTool ? toolName : detailFormatted)}</span>
                     <span class="td-step-num">#${stepNum}</span>
                     <button class="td-step-toggle" data-step="${stepNum}">${isExpandable ? '▸' : ''}</button>

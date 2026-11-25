@@ -129,3 +129,38 @@ def test_generate_image_signature_unchanged():
     sig = inspect.signature(media.generate_image)
     assert list(sig.parameters) == ["base_url", "api_key", "model", "prompt",
                                     "size", "proxy", "extra"]
+
+
+# ---- Task 4: facade paths routing (empty + partial + endpoint) ----
+
+def test_generate_media_all_empty_paths_uses_defaults():
+    """An all-empty paths dict must resolve to DEFAULT_PATH_* for each branch."""
+    up = {"text_to_media": "", "image_to_media": "", "text_image_to_media": "", "voice": ""}
+    assert media._get_path(False, "p", False, up) == media.DEFAULT_PATH_TEXT_TO_MEDIA
+    assert media._get_path(True, "p", False, up) == media.DEFAULT_PATH_TEXT_IMAGE_TO_MEDIA
+    assert media._get_path(True, "", False, up) == media.DEFAULT_PATH_IMAGE_TO_MEDIA
+    assert media._get_path(False, "", True, up) == media.DEFAULT_PATH_VOICE
+
+
+def test_generate_media_partial_paths_verbatim():
+    """A set path is used verbatim; an unset path falls back to DEFAULT."""
+    up = {"image_to_media": "v1/my/custom/image", "text_image_to_media": "", "text_to_media": "", "voice": ""}
+    # image-only branch (has file, prompt empty) -> image_to_media (custom)
+    assert media._get_path(True, "", False, up) == "v1/my/custom/image"
+    # text+image branch -> text_image_to_media empty -> DEFAULT
+    assert media._get_path(True, "prompt", False, up) == media.DEFAULT_PATH_TEXT_IMAGE_TO_MEDIA
+
+
+def test_api_media_generate_with_paths_endpoint():
+    """POST /api/media/generate with a paths dict must not 500 (routes through facade)."""
+    from fastapi.testclient import TestClient
+    import main as app_mod
+    app_mod.server_settings = app_mod.Settings()
+    c = TestClient(app_mod.app)
+    r = c.post("/api/media/generate", json={
+        "kind": "image", "prompt": "a cat", "use_settings_key": True,
+        "paths": {"text_to_media": "", "image_to_media": "", "text_image_to_media": "", "voice": ""},
+    })
+    # A dict response (ok true/false), NOT an HTTP 500
+    assert r.status_code in (200, 400, 502), f"unexpected status {r.status_code}"
+    assert "ok" in r.json(), f"missing 'ok' key in {r.json()}"

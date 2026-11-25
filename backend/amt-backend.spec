@@ -39,6 +39,15 @@ a = Analysis(
         'ai_engine.keymanager', 'ai_engine.tools', 'ai_engine.filegen',
         'ai_engine.media', 'ai_engine.extensions', 'ai_engine.sysinteraction',
         'ai_engine.desktop_tools',
+        # COM/async isolation + browser CDP automation (5-layer resilience fixes)
+        'ai_engine.async_utils',
+        'ai_engine.browser_cdp',
+        # Playwright (CDP connect_over_cdp) — lazy-imported in browser_cdp.py,
+        # so PyInstaller static analysis misses it; bundle it explicitly.
+        'playwright',
+        'playwright.sync_api',
+        'playwright._impl',
+        'playwright.async_api',
         # тяжёлые генераторы файлов
         'docx', 'openpyxl', 'pptx', 'reportlab', 'markdown', 'pygments',
         # UI Automation (Windows UIA — динамический импорт в desktop_tools.py)

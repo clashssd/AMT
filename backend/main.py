@@ -190,10 +190,14 @@ class Settings(BaseModel):
     securityAgentModel: str = ""
     # Voice control — non-secret settings (persisted in settings.json)
     stt_provider: str = "local"       # "cloud" | "local" (local is default — needed for wake word)
-    tts_provider: str = "browser"      # "browser" | "elevenlabs" | "openai"
-    tts_voice_id: str = ""             # empty = system default
-    vosk_model_path: str = ""          # empty = use auto-downloaded default
-    wake_word_string: str = "Астра"    # string to match in Vosk transcript
+    stt_base_url: str = ""            # Cloud STT base URL (OpenAI-compatible)
+    stt_model: str = ""               # Cloud STT model name
+    tts_provider: str = "browser"     # "browser" | "custom" | "elevenlabs" | "openai"
+    tts_base_url: str = ""            # TTS base URL (for custom/elevenlabs/openai)
+    tts_model: str = ""               # TTS model name
+    tts_voice_id: str = ""            # empty = system default
+    vosk_model_path: str = ""         # empty = use auto-downloaded default
+    wake_word_string: str = "Астра"   # string to match in Vosk transcript
     vad_silence_ms: int = 2000
     vad_sensitivity: float = 1.8
     wake_word_aliases: list = []
@@ -4507,7 +4511,7 @@ async def stt_local_transcribe(req: SttLocalRequest):
 async def voice_status():
     """Model readiness for the voice feature. Triggers download if missing."""
     import stt_local
-    return stt_local.ensure_model_downloaded()
+    return await stt_local.ensure_model_downloaded()
 
 
 # ── Voice control: WebSocket wake-word streaming ──────────────────────────
@@ -4525,7 +4529,6 @@ async def ws_wake_word(websocket: "WebSocket"):
     """
     import stt_local
     import json as _json
-    from fastapi import WebSocket as _WS
 
     await websocket.accept()
     try:

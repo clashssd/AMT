@@ -1,0 +1,131 @@
+import base64
+from ai_engine import media  # from backend, via conftest sys.path
+
+
+def test_prepare_payload_minimal():
+    p = media._prepare_payload("make a cat", "model-x")
+    assert p["prompt"] == "make a cat"
+    assert p["model"] == "model-x"
+    assert "image" not in p and "file" not in p
+
+
+def test_prepare_payload_attached_bytes():
+    raw = b"\x89PNG\r\n\x1a\n"
+    p = media._prepare_payload("cat", "m", attached_file=raw)
+    expected = base64.b64encode(raw).decode("ascii")
+    # image bytes -> "image" field
+    assert p["image"] == expected or p["file"] == expected
+
+
+def test_prepare_payload_attached_path(tmp_path):
+    f = tmp_path / "x.png"
+    f.write_bytes(b"imgdata")
+    p = media._prepare_payload("cat", "m", attached_file=str(f))
+    assert p["image"] == base64.b64encode(b"imgdata").decode("ascii") or \
+           p["file"] == base64.b64encode(b"imgdata").decode("ascii")
+
+
+def test_prepare_payload_attached_b64_string_used_as_is():
+    b64val = base64.b64encode(b"rawimg").decode("ascii")
+    p = media._prepare_payload("cat", "m", attached_file=b64val)
+    # a plain base64 string that is NOT a file path -> used as-is
+    assert p["image"] == b64val
+
+
+def test_prepare_payload_attached_data_uri_stripped():
+    b64val = base64.b64encode(b"rawimg").decode("ascii")
+    p = media._prepare_payload("cat", "m", attached_file=f"data:image/png;base64,{b64val}")
+    assert p["image"] == b64val
+
+
+def test_get_path_branches():
+    assert media._get_path(False, "p", False) == media.DEFAULT_PATH_TEXT_TO_MEDIA
+    assert media._get_path(True, "p", False) == media.DEFAULT_PATH_TEXT_IMAGE_TO_MEDIA
+    assert media._get_path(True, "", False) == media.DEFAULT_PATH_IMAGE_TO_MEDIA
+    assert media._get_path(False, "", True) == media.DEFAULT_PATH_VOICE
+
+
+def test_get_path_user_paths_override():
+    up = {"text_to_media": "my/custom/path"}
+    assert media._get_path(False, "p", False, up) == "my/custom/path"
+    # empty user_paths entry falls back to default
+    assert media._get_path(False, "p", False, {"text_to_media": ""}) == media.DEFAULT_PATH_TEXT_TO_MEDIA
+
+
+def test_generate_media_success_custom(monkeypatch):
+    captured = {}
+    def fake_make_request(api_key, base_url, model, path, prompt, attached_file=None):
+        captured.update(api_key=api_key, base_url=base_url, model=model, path=path, prompt=prompt)
+        # provider-style body (what _make_request returns via resp.json())
+        return {"b64": "AAAA", "url": "u"}
+    monkeypatch.setattr(media, "_make_request", fake_make_request)
+    res = media.generate_media("KEY", "https://api.example", "mod-1",
+                               {"text_to_media": "my/path"}, "a cat")
+    # FLAT contract: provider keys land at top level, no "result" nesting
+    assert res["ok"] is True
+    assert res["b64"] == "AAAA"
+    assert "result" not in res
+    assert captured["api_key"] == "KEY"
+    assert captured["base_url"] == "https://api.example"
+    assert captured["model"] == "mod-1"
+    assert captured["path"] == "my/path"
+
+
+def test_generate_media_fallback_to_defaults(monkeypatch):
+    calls = []
+    def fake_make_request(api_key, base_url, model, path, prompt, attached_file=None):
+        calls.append((api_key, base_url, model, path))
+        if api_key == "BAD_KEY":
+            raise RuntimeError("custom failed: 401")
+        return {"b64": "BBBB"}
+    monkeypatch.setattr(media, "_make_request", fake_make_request)
+    res = media.generate_media("BAD_KEY", "https://bad", "bad-model", {}, "prompt", attached_file=b"raw")
+    assert res["ok"] is True
+    assert res["b64"] == "BBBB"      # flat: from the successful default attempt
+    assert "result" not in res
+    assert len(calls) == 2
+    # second call used strict defaults
+    assert calls[1][0] == media.DEFAULT_API_KEY
+    assert calls[1][1] == media.DEFAULT_BASE_URL
+    assert calls[1][2] == media.DEFAULT_MODEL
+
+
+def test_generate_media_double_failure(monkeypatch):
+    def fake_make_request(*a, **k):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(media, "_make_request", fake_make_request)
+    res = media.generate_media("K", "U", "M", {}, "p")
+    assert res["ok"] is False
+    assert res["code"] == "api_error"
+    assert "Ошибка кастомного API" in res["error"]
+    assert "Ошибка дефолтного API" in res["error"]
+
+
+def test_generate_media_whitespace_user_field_substituted(monkeypatch):
+    captured = {}
+    def fake_make_request(api_key, base_url, model, path, prompt, attached_file=None):
+        captured["model"] = model
+        return {"ok": True}
+    monkeypatch.setattr(media, "_make_request", fake_make_request)
+    # whitespace model -> DEFAULT_MODEL on attempt 1
+    media.generate_media("KEY", "BASE", "   ", {}, "p")
+    assert captured["model"] == media.DEFAULT_MODEL
+
+
+def test_generate_media_verbatim_model_not_trimmed(monkeypatch):
+    captured = {}
+    def fake_make_request(api_key, base_url, model, path, prompt, attached_file=None):
+        captured["model"] = model
+        return {"ok": True}
+    monkeypatch.setattr(media, "_make_request", fake_make_request)
+    media.generate_media("KEY", "BASE", "  my-model  ", {}, "p")
+    # verbatim: NOT trimmed
+    assert captured["model"] == "  my-model  "
+
+
+def test_generate_image_signature_unchanged():
+    # generate_image must keep its exact param names
+    import inspect
+    sig = inspect.signature(media.generate_image)
+    assert list(sig.parameters) == ["base_url", "api_key", "model", "prompt",
+                                    "size", "proxy", "extra"]

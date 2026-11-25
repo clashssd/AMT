@@ -35,37 +35,147 @@ def gen_docx(content: str, title: str = "Документ") -> bytes:
     return buf.getvalue()
 
 
-def gen_xlsx(content: str, title: str = "Лист") -> bytes:
-    """content: JSON {"sheets":[{"name":..,"rows":[[..],..]},..]} или CSV."""
-    from openpyxl import Workbook
+# Sanitize a sheet-title string: openpyxl forbids : \ / ? * [ ] (and length > 31)
+def _safe_sheet_name(name, default="Лист"):
     import re as _re
+    s = _re.sub(r'[:\\/?\[\]]', '', str(name)).strip()
+    s = s[:31]  # Excel limit
+    return s or default
+
+
+def gen_xlsx(content: str, title: str = "Лист") -> bytes:
+    """content: JSON {"sheets":[{"name":..,"rows":[[..],..]},..]} или CSV.
+    Optional "chart" key: {"type":"line","title":..,
+    "series":[{"name":..,"values":"=Sheet1!B2:B11","color":"#4472C4"}],
+    "width":600,"height":400,"position":"D8"}."""
+    from openpyxl import Workbook
+    from openpyxl.utils import column_index_from_string
+
     data = None
     if content.strip().startswith("[") or content.strip().startswith("{"):
         try:
             data = json.loads(content)
         except Exception:
             data = None
+
     if isinstance(data, dict) and "sheets" in data:
         wb = Workbook()
         wb.remove(wb.active)
-        for s in data["sheets"]:
-            # Sanitize sheet name: openpyxl forbids : \ / ? * [ ]
-            raw_name = s.get("name", "Лист")
-            safe_name = _re.sub(r'[:\\/?\[\]]', '', str(raw_name)).strip() or "Лист"
-            ws = wb.create_sheet(title=safe_name)
+        for i, s in enumerate(data["sheets"]):
+            raw_name = s.get("name", f"Лист {i+1}")
+            ws = wb.create_sheet(title=_safe_sheet_name(raw_name, f"Лист {i+1}"))
             for row in s.get("rows", []):
                 ws.append(row)
+
+        # === Chart support ===
+        chart_spec = data.get("chart")
+        if chart_spec and isinstance(chart_spec, dict):
+            _add_chart(wb, chart_spec)
+
     else:
         wb = Workbook()
         ws = wb.active
-        ws.title = title or "Лист"
+        ws.title = _safe_sheet_name(title, "Лист")
         if content:
             reader = csv.reader(io.StringIO(content))
             for row in reader:
                 ws.append(row)
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def _add_chart(wb, spec: dict):
+    """Create a chart from spec and attach it to the target sheet."""
+    from openpyxl.chart import LineChart, BarChart, PieChart, Reference, Series
+    from openpyxl.utils import column_index_from_string
+    import re as _re
+
+    chart_type = spec.get("type", "line").lower()
+    if chart_type == "line":
+        chart = LineChart()
+    elif chart_type == "bar":
+        chart = BarChart()
+    elif chart_type == "pie":
+        chart = PieChart()
+    else:
+        chart = LineChart()
+
+    chart.title = spec.get("title", "")
+    chart.width = spec.get("width", 600) / 72.0  # cm
+    chart.height = spec.get("height", 400) / 72.0
+
+    series_defs = spec.get("series", [])
+    if not series_defs:
+        return
+
+    target_ws = wb.worksheets[0] if wb.worksheets else wb.active
+    cats = None
+
+    for sdef in series_defs:
+        name = sdef.get("name", "Series")
+        values_ref = sdef.get("values", "")  # e.g. "=Sheet1!B2:B11"
+        color = sdef.get("color", "#4472C4")
+
+        # Parse "Sheet1!B2:B11" → sheet name + range
+        m = _re.match(
+            r'^=([A-Za-zА-Яа-я0-9_]+)!([A-Z]{1,3}[0-9]{1,4}):([A-Z]{1,3}[0-9]{1,4})$',
+            values_ref
+        )
+        if m:
+            sheet_name = m.group(1)
+            start = m.group(2)
+            end = m.group(3)
+        else:
+            sheet_name = target_ws.title
+            start = "B2"
+            end = "B11"
+
+        # Find the target sheet (may have been sanitized — try to match)
+        src_ws = None
+        for ws in wb.worksheets:
+            if ws.title == sheet_name or ws.title.lower() == sheet_name.lower():
+                src_ws = ws
+                break
+        if src_ws is None:
+            for ws in wb.worksheets:
+                if sheet_name.lower().startswith(ws.title[:10].lower()):
+                    src_ws = ws
+                    break
+        if src_ws is None:
+            src_ws = target_ws
+
+        # Parse column/row from start/end
+        m_start = _re.match(r'^([A-Z]+)(\d+)$', start)
+        m_end = _re.match(r'^([A-Z]+)(\d+)$', end)
+        col_start = m_start.group(1) if m_start else "B"
+        row_start = int(m_start.group(2)) if m_start else 2
+        col_end = m_end.group(1) if m_end else "B"
+        row_end = int(m_end.group(2)) if m_end else 11
+
+        min_col = column_index_from_string(col_start)
+        max_col = column_index_from_string(col_end)
+
+        vals = Reference(src_ws, min_col=min_col, min_row=row_start, max_col=max_col, max_row=row_end)
+
+        s = Series(vals, title=name)
+        chart.series.append(s)
+
+        # Categories: first column of the data range
+        if cats is None:
+            cats = Reference(src_ws, min_col=1, min_row=row_start, max_col=1, max_row=row_end)
+            chart.set_categories(cats)
+
+        # Color
+        try:
+            s.graphicalProperties.solidFill = color
+        except Exception:
+            pass
+
+    # Position the chart on the target sheet
+    position = spec.get("position", "D8")
+    target_ws.add_chart(chart, position)
 
 
 def gen_pptx(content: str, title: str = "Презентация") -> bytes:
@@ -202,7 +312,7 @@ def generate_file(filetype: str, content: str, title: str = "", lang: str = "") 
 # ===== HTML-превью (как файл выглядел бы) =====
 
 def preview_html(filetype: str, content: str, data: bytes = None, title: str = "") -> str:
-    """Возвращает HTML-страницу-превью, которую можно в��троить в <iframe>/<div>."""
+    """Возвращает HTML-страницу-превью, которую можно вставить в <iframe>/<div>."""
     ft = (filetype or "txt").lower().lstrip(".")
     if ft in ("html",):
         return content or ""
@@ -276,7 +386,7 @@ def preview_html(filetype: str, content: str, data: bytes = None, title: str = "
                 if sheets_html:
                     return (f"<html><head><meta charset='utf-8'><title>{title}</title>"
                              f"<style>body{{font-family:system-ui;padding:24px;background:#0f0f16;color:#e8e8f4}}"
-                             f"table{{border-collapse:collapse;width:100%}}th,td{{border:1px solid rgba(255,255,255,.12);"
+                             f"table{{border-collapse:collapse}}th,td{{border:1px solid rgba(255,255,255,.12);"
                              f"padding:6px 10px;text-align:left;font-size:13px}}th{{background:rgba(139,134,201,.12)}}"
                              f"h3{{color:#b8b8d0;font-size:15px}}</style></head><body>"
                              f"<h2>{title or 'Excel'}</h2>{''.join(sheets_html)}</body></html>")

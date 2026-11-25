@@ -229,6 +229,9 @@ const storageExportBtn = document.getElementById('storageExportBtn');
 
 // State for attachments
 let attachedFiles = [];
+// Захват в момент отправки сообщения: чтобы processGenTokens/renderGenInChat
+// могли передать приложенный файл из чата в /api/media/generate как ref_image_b64.
+let _lastChatAttachments = [];
 let agentsCache = [];
 let skillsCache = [];
 let currentAgentId = '';
@@ -1651,6 +1654,10 @@ async function sendMessage() {
     if (hasFiles) {
         attachmentsPayload = await uploadAttachments();
     }
+
+    // Запоминаем приложенные к ЭТОМУ сообщению файлы, чтобы токены [[GEN:...]]
+    // могли передать файл в генерацию медиа (ref_image_b64).
+    _lastChatAttachments = hasFiles ? attachedFiles.slice() : [];
 
     isStreaming = true;
     sendBtn.classList.add('hidden');
@@ -4225,10 +4232,21 @@ async function renderGenInChat(item, hostEl) {
     const post = async (body) => fetch(`${API_BASE}/api/media/generate`, {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
     }).then(r => r.json());
+    // Если к сообщению был приложен файл — передаём первый image/видео-файл
+    // в генерацию как ref_image_b64 (для вида image/video). Читает через
+    // readFileAsBase64 (уже есть). Возвращает Promise<б64|''>.
+    const attachedRefB64 = () => {
+        if (!/^(image|video)$/.test(kind)) return Promise.resolve('');
+        const att = _lastChatAttachments.find(a => a && a.file && /^image\//.test(a.type || ''));
+        if (!att) return Promise.resolve('');
+        return readFileAsBase64(att.file).catch(() => '');
+    };
     if (kind === 'image') {
         wrap.innerHTML = '<div class="gen-inline-note">Генерирую картинку…</div>';
         container.appendChild(wrap);
-        const res = await post({ kind: 'image', prompt: item.prompt, size: '1024x1024', use_settings_key: true, save: true });
+        const ref = await attachedRefB64();
+        const res = await post({ kind: 'image', prompt: item.prompt, size: '1024x1024', use_settings_key: true, save: true,
+                                 ...(ref ? { ref_image_b64: ref } : {}) });
         wrap.innerHTML = '';
         if (res.ok && (res.b64 || res.url)) {
             const img = document.createElement('img');
@@ -4259,7 +4277,9 @@ async function renderGenInChat(item, hostEl) {
     } else if (kind === 'video') {
         wrap.innerHTML = `<div class="gen-inline-note">Генерирую видео (${item.aspect})…</div>`;
         container.appendChild(wrap);
-        const res = await post({ kind: 'video', prompt: item.prompt, aspect_ratio: item.aspect || '16:9', duration: '5', use_settings_key: true, save: true });
+        const refV = await attachedRefB64();
+        const res = await post({ kind: 'video', prompt: item.prompt, aspect_ratio: item.aspect || '16:9', duration: '5', use_settings_key: true, save: true,
+                                 ...(refV ? { ref_image_b64: refV } : {}) });
         wrap.innerHTML = '';
         if (res.ok && res.url && !res.task_id) {
             // Прямой URL видео без task_id — сразу показываем

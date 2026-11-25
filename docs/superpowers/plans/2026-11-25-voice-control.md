@@ -17,6 +17,10 @@
 - Vosk model: Python auto-download on first run to `backend/models/vosk-model-small-ru/` (~50 MB); no npm scripts
 - Porcupine excluded (Free Tier dead 30.06.2026); wake word = Vosk string-match
 - TTS default: browser `speechSynthesis`; mic suspended during playback
+- TTS provider `custom` (OpenAI-compatible): request goes to `{ttsBaseUrl}/v1/audio/speech` with model `ttsModel`; any OpenAI-compatible provider works
+- STT cloud fallback: if cloud STT fails (error/timeout) and local Vosk model is ready → auto-fallback to local
+- TTS cloud fallback: if cloud TTS fails → auto-fallback to browser `speechSynthesis`
+- Browser fallback: `window.api?.secrets?.set(...)` — if no `window.api` (plain browser), use `localStorage` for keys with a warning; app must not crash
 - VAD silence timeout default 2000 ms, range 500–10000; VAD sensitivity default 1.8, range 1.2–3.0
 - Auto-timeout: 10 min in LISTENING with no wake word → OFF
 - Frontend files served via FastAPI `StaticFiles` mount at `127.0.0.1:8000/`
@@ -69,7 +73,7 @@
   - `normalize(s: str) -> str` — lower, ё→е, strip non-alphanumeric (except spaces), collapse whitespace
   - `wake_word_match(transcript_norm: str, target_norm: str, aliases: list[str], threshold: int = 2) -> bool`
   - `lev(a: str, b: str, threshold: int = 2) -> int` — capped Levenshtein, early exit when distance > threshold
-  - `ensure_model_downloaded() -> dict` — returns `{"modelReady": bool, "modelProgress": float, "error": str | None}`; downloads `vosk-model-small-ru.zip` from `https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip` to `backend/models/` if not present
+  - `ensure_model_downloaded() -> dict` — async (uses `asyncio.to_thread` for the blocking download so the FastAPI event loop is never blocked); returns `{"modelReady": bool, "modelProgress": float, "error": str | None}`; downloads `vosk-model-small-ru.zip` from `https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip` to `backend/models/` if not present; 30 s connection timeout
   - `create_wake_word_recognizer(model_path: str | None = None) -> KaldiRecognizer` — factory for the WebSocket handler
 
 - [ ] **Step 1: Write the failing test `tests/test_vosk_local.py`**
@@ -98,7 +102,7 @@ Structure:
 - `lev(a, b, threshold)`: standard 2-row DP; early exit when min row value > threshold
 - `wake_word_match(transcript_norm, target_norm, aliases, threshold)`: check last 5 words against `aliases + [target_norm]` (exact substring, then fuzzy per-word)
 - `transcribe_local(audio_b64, mime, model_path)`: decode b64 → WAV bytes → `KaldiRecognizer` → `AcceptWaveform` loop → `Result()` → return dict; on `FileNotFoundError` → fallback dict
-- `ensure_model_downloaded()`: check `os.path.isdir(DEFAULT_VOSK_PATH)`; if missing, download zip with `urllib.request`, extract with `zipfile`, track progress via a module-level dict; return status dict
+- `ensure_model_downloaded()`: async function; check `os.path.isdir(DEFAULT_VOSK_PATH)`; if missing, download zip with `urllib.request.urlopen(VOSK_MODEL_URL, timeout=30)`, extract with `zipfile`, track progress via a module-level dict; run the blocking download+extract via `asyncio.to_thread` so the FastAPI event loop is never blocked; return status dict
 - `create_wake_word_recognizer(model_path)`: call `load_vosk_model`, return `KaldiRecognizer(model, 16000)`
 
 - [ ] **Step 3: Run test to verify it passes**
@@ -123,7 +127,7 @@ git commit -m "feat: add Vosk local STT module with wake-word matching"
 **Interfaces:**
 - Consumes: `stt_local` module (from Task 1), existing `Settings` pydantic model, existing `app` FastAPI instance
 - Produces:
-  - `Settings` model gains fields: `stt_provider: str = "local"`, `tts_provider: str = "browser"`, `tts_voice_id: str = ""`, `vosk_model_path: str = ""`, `wake_word_string: str = "Астра"`, `vad_silence_ms: int = 2000`, `vad_sensitivity: float = 1.8`, `wake_word_aliases: list[str] = []`, `vad_fuzzy_threshold: int = 2`
+  - `Settings` model gains fields: `stt_provider: str = "local"`, `stt_base_url: str = ""`, `stt_model: str = ""`, `tts_provider: str = "browser"`, `tts_base_url: str = ""`, `tts_model: str = ""`, `tts_voice_id: str = ""`, `vosk_model_path: str = ""`, `wake_word_string: str = "Астра"`, `vad_silence_ms: int = 2000`, `vad_sensitivity: float = 1.8`, `wake_word_aliases: list[str] = []`, `vad_fuzzy_threshold: int = 2`
   - `POST /api/stt-local` — body `{ audio_b64: str, mime: str, model_path?: str }` → delegates to `stt_local.transcribe_local`
   - `GET /api/voice/status` → `{ modelReady: bool, modelProgress: float, error: str | null }`
   - `POST /internal/secrets` — body `{ provider: str, key: str }`; validates `AMT_INTERNAL_TOKEN` from env; stores in in-memory dict; returns `{ ok: true }`
@@ -240,6 +244,7 @@ git commit -m "feat: add /ws/wake-word WebSocket endpoint for continuous Vosk st
     - `clear({ provider })` → `ipcRenderer.invoke('secrets:clear', ...)`
     - `status()` → `ipcRenderer.invoke('secrets:status')` → `{ providers: string[] }`
   - `main.js` startup: generate `AMT_INTERNAL_TOKEN` (crypto.randomUUID()), pass as env var to sidecar spawn; read `secrets.bin` and set `AMT_OPENAI_KEY` / `AMT_ELEVENLABS_KEY` env vars as fallback
+  - **Browser fallback:** all `window.api.secrets` calls in frontend code use safe optional chaining (`window.api?.secrets?.set(...)`). If `window.api` is undefined (plain browser, no Electron), fall back to `localStorage` for key storage with a console warning "safeStorage недоступен — ключи хранятся в localStorage (менее защищённо)". The app must not crash in either environment
 
 - [ ] **Step 1: Implement `electron/secrets.js`**
 
@@ -294,7 +299,7 @@ git commit -m "feat: add safeStorage secrets module with IPC and sidecar injecti
   - `streamViaWebSocket(userText, history, agentId, attachments)` — existing in `main.js` (called via `window.streamViaWebSocket`)
   - `addUserMessage(text)` — existing in `main.js` (called via `window.addUserMessage`)
   - `appendBotContent(el, chunk)` — existing in `main.js`
-  - Settings object: `{ sttProvider, ttsProvider, ttsVoiceId, wakeWordString, vadSilenceMs, vadSensitivity }`
+  - Settings object: `{ sttProvider, sttBaseUrl, sttModel, ttsProvider, ttsBaseUrl, ttsModel, ttsVoiceId, wakeWordString, vadSilenceMs, vadSensitivity }`
 - Produces (public API on `window.voice`):
   - `voice.init(settings)` — called on page load and after settings save; sets up the state machine, attaches click handler to `#voiceBtn`
   - `voice.startListening()` — → LISTENING state; opens `/ws/wake-word`; starts AudioWorklet + ring buffer
@@ -348,17 +353,20 @@ OFF → LISTENING → RECORDING → PROCESSING → RESPONDING → SPEAKING → L
 
 - [ ] **Step 4: Implement `SttClient` in `voice.js`**
 
-- `transcribe(blob, settings)`: 
+- `transcribe(blob, settings)`:
   - If `settings.sttProvider === 'local'`: convert Blob → base64 → `POST /api/stt-local` `{ audio_b64, mime: 'audio/webm' }`
-  - If `settings.sttProvider === 'cloud'`: convert Blob → base64 → `POST /api/stt` `{ audio_b64, mime: 'audio/webm', use_settings_key: true }`
+  - If `settings.sttProvider === 'cloud'`: convert Blob → base64 → `POST /api/stt` `{ audio_b64, mime: 'audio/webm', use_settings_key: true, base_url: settings.sttBaseUrl || undefined, model: settings.sttModel || undefined }`
   - 30 s timeout via `AbortController`
-  - On response: if `ok` → return text; if `error === 'model_not_found'` and `sttProvider === 'local'` → check cloud key via `window.api.secrets.status()` → if cloud key present, retry with cloud; else → throw with specific error message
+  - **Cloud STT fallback:** if `sttProvider === 'cloud'` and the cloud request fails (HTTP error, timeout, or `error` in response) → check if local Vosk model is ready via `GET /api/voice/status`; if `modelReady === true` → retry with `POST /api/stt-local`; show toast "Облачный STT недоступен — использую локальный Vosk"
+  - **Local STT fallback:** if `sttProvider === 'local'` and response has `error === 'model_not_found'` → check cloud key via `window.api?.secrets?.status()` (safe optional chaining); if cloud key present → retry with cloud; else → throw with specific error message
 
 - [ ] **Step 5: Implement `TtsPlayer` in `voice.js`**
 
 - `speak(text, settings)`:
   - If `settings.ttsProvider === 'browser'`: `new SpeechSynthesisUtterance(text)`; set `voice` from `settings.ttsVoiceId` (or default); `speechSynthesis.speak()`; return `onend` promise
-  - If `'elevenlabs'` or `'openai'`: `POST /api/media/generate` `{ kind: 'audio', prompt: text, use_settings_key: true, provider: settings.ttsProvider }` → get audio blob → play via `Audio` element; return `onended` promise
+  - If `settings.ttsProvider === 'custom'` (OpenAI-compatible): `POST {settings.ttsBaseUrl}/v1/audio/speech` with body `{ model: settings.ttsModel, voice: settings.ttsVoiceId, input: text }` and `Authorization: Bearer <key from secrets>`; get audio blob → play via `Audio` element; return `onended` promise
+  - If `'elevenlabs'` or `'openai'`: `POST /api/media/generate` `{ kind: 'audio', prompt: text, use_settings_key: true, provider: settings.ttsProvider, base_url: settings.ttsBaseUrl || undefined, model: settings.ttsModel || undefined }` → get audio blob → play via `Audio` element; return `onended` promise
+  - **Cloud TTS fallback:** if cloud/custom TTS request fails (HTTP error, timeout, or no audio returned) → auto-fallback to browser `speechSynthesis`; show toast "Облачный TTS недоступен — использую браузерный голос"
   - Before speak: call `vadRecorder.pause()` (suspends AudioContext + clears ring buffer)
   - After speak ends: call `vadRecorder.resume()`
 - `cancel()`: `speechSynthesis.cancel()` or stop Audio element
@@ -409,7 +417,7 @@ git commit -m "feat: add voice.js module with state machine, wake word, VAD, STT
   - `#voiceBtn` in `#composerToolsPop` with SVG mic icon + 6 state classes
   - `sec-voice` section: wake word input, VAD silence slider, VAD sensitivity slider, save button
   - `sec-providers` section: STT provider radio (cloud/local), cloud base URL + API key + model, local model path, TTS provider dropdown, TTS voice ID, TTS API key, save + reset buttons
-  - i18n keys: all `voice.*` and `providers.*` strings from spec §i18n
+  - i18n keys: all `voice.*` and `providers.*` strings from spec §i18n, plus: `providers.ttsBaseUrl` ("URL TTS" / "TTS URL"), `providers.ttsModel` ("Модель TTS" / "TTS Model"), `providers.custom` ("OpenAI-совместимый" / "OpenAI-compatible"), `providers.sttFallback` ("Облачный STT недоступен — использую локальный Vosk" / "Cloud STT unavailable — using local Vosk"), `providers.ttsFallback` ("Облачный TTS недоступен — использую браузерный голос" / "Cloud TTS unavailable — using browser voice")
 
 - [ ] **Step 1: Create `frontend/css/voice.css`**
 
@@ -457,9 +465,11 @@ Add two `<section>` elements following the existing pattern (e.g. `sec-media`):
 
 **`sec-providers`:**
 - STT Provider radio: `#sttProviderCloud` / `#sttProviderLocal` (default: local)
-- Cloud STT: `#cloudSttBaseUrl` (text), `#cloudSttKey` (password, shows "•••••••• Saved"), `#cloudSttModel` (text, default "whisper-1")
+- Cloud STT: `#cloudSttBaseUrl` (text, placeholder "https://api.openai.com"), `#cloudSttKey` (password, shows "•••••••• Saved"), `#cloudSttModel` (text, default "whisper-1")
 - Local STT: `#localSttModelPath` (text, empty = auto)
-- TTS Provider dropdown: `#ttsProvider` (browser/elevenlabs/openai, default browser)
+- TTS Provider dropdown: `#ttsProvider` (browser/custom/elevenlabs/openai, default browser)
+- TTS Base URL: `#ttsBaseUrl` (text, shown when provider ≠ browser, placeholder "https://api.openai.com")
+- TTS Model: `#ttsModel` (text, shown when provider ≠ browser, default "gpt-4o-mini-tts")
 - TTS Voice ID: `#ttsVoiceId` (text/select)
 - TTS API Key: `#ttsKey` (password, shows "•••••••• Saved")
 - `#providersSaveBtn`, `#providersResetBtn`
@@ -472,9 +482,9 @@ Add all `voice.*` and `providers.*` keys to both `ru` and `en` objects in the `I
 
 - On page load: read `sec-voice` + `sec-providers` values from `settings.json` (via existing settings load); populate DOM
 - On `#voiceSaveBtn` click: read DOM → save to `settings.json` via existing settings save; call `voice.init(newSettings)`
-- On `#providersSaveBtn` click: read DOM; for API keys → call `window.api.secrets.set({ provider, key })`; for non-secret fields → save to `settings.json`
-- On `#providersResetBtn` click: reset all to defaults; clear keys via `window.api.secrets.clear`
-- On API key fields: on load, call `window.api.secrets.status()` → show "Saved" indicator if provider key exists
+- On `#providersSaveBtn` click: read DOM; for API keys → call `window.api?.secrets?.set({ provider, key })` (safe optional chaining; if no `window.api`, fall back to `localStorage` with warning); for non-secret fields (`ttsBaseUrl`, `ttsModel`, `sttBaseUrl`, `sttModel`, etc.) → save to `settings.json`
+- On `#providersResetBtn` click: reset all to defaults; clear keys via `window.api?.secrets?.clear`
+- On API key fields: on load, call `window.api?.secrets?.status()` → show "Saved" indicator if provider key exists; if no `window.api`, check `localStorage`
 - `beforeunload` listener: call `voice.stopAll()`
 
 - [ ] **Step 6: Commit**

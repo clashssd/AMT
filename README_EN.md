@@ -51,6 +51,17 @@ them in your own repository.
   model). Multi-key with auto-failover on 429 (by priority or round-robin).
   Markdown responses. Paste images/screenshots/files (Ctrl+V) — content
   goes into the AI context. Voice chat: STT + TTS via any provider.
+- **Voice control** — full voice loop: wake-word ("Астра" or any phrase) ->
+   VAD recording with auto-stop on silence -> STT -> LLM -> TTS + chat. The
+   wake-word is detected by a local Vosk over WebSocket (backend, offline,
+   no API key); STT is local Vosk or any OpenAI-compatible cloud; TTS is
+   browser `speechSynthesis` (free) or cloud. The mic is auto-muted while the
+   AI speaks (echo protection). A mic button sits in the composer menu
+   (states: off / listening / recording / processing / responding / speaking).
+   Settings: "Settings -> Voice" (wake-word, silence timer, sensitivity) and
+   "Settings -> Providers" (STT/TTS, keys, URLs). All API keys are stored
+   encrypted in `secrets.bin` (Electron safeStorage/DPAPI), never in
+   `settings.json`.
 - **Agents** — role + system prompt + model/temperature + skill set.
   Core agents (Web Agent, Deep Analyst, No Filters) are auto-created;
   custom agents via UI or import from `agents.json`/JSONL.
@@ -94,20 +105,20 @@ them in your own repository.
 
 ##  Quick install (no build required)
 
-**One file — and you're done.** Run `AMT Chat Setup 1.0.1.exe` from the
+**One file — and you're done.** Run `AMT Chat Setup 1.0.6.exe` from the
 `release/` folder and follow the installer wizard. No need to install
 Python, Node.js, or any other dependencies — everything is bundled in the
 installer.
 
 ```
-release/AMT Chat Setup 1.0.1.exe
+release/AMT Chat Setup 1.0.6.exe
 ```
 
 After installation: **Settings → Connection** — enter your API key, start
-chatting. See `release/AMT-Chat-1.0.1/README.txt` for details.
+chatting.
 
-> Pre-built ZIP: `release/AMT-Chat-1.0.1.zip` (~138 MB). Extract and run
-> `AMT Chat Setup 1.0.1.exe` — installation completes in ~2 minutes.
+> Pre-built ZIP: `release/AMT-Chat-Setup-1.0.6.zip` (~175 MB). Extract and
+> run `AMT Chat Setup 1.0.6.exe` — installation completes in ~2 minutes.
 
 ## How to install (for end users, no manual dependencies)
 

@@ -52,6 +52,17 @@ AMT — это desktop-чат-клиент, который **вы** контро
   round-robin). Markdown-ответы. Вставка картинок/скриншотов/файлов (Ctrl+V) —
   содержимое попадает в контекст ИИ. Голосовой чат: STT + TTS через любой
   провайдер.
+- **Голосовое управление** — полный цикл по голосу: wake-word («Астра» или
+  любая фраза) → запись с VAD-автоостановкой по тишине → STT → ЛЛМ → TTS +
+  чат. Wake-слово детектируется локальным Vosk по WebSocket (бэкенд, офлайн,
+  без API-ключа); STT — локальный Vosk или облачный (любой OpenAI-совместимый
+  провайдер); TTS — браузерный `speechSynthesis` (бесплатно) или облачный.
+  ��ик во время речи ИИ автоматически глушится (эхо-защита). Кнопка-микрофон в
+  меню композера (статусы: выкл / слушание / запись / обработка / ответ /
+  речь). Настройки: «Настройки → Голос» (wake-word, таймер тишины,
+  чувствительность) и «Настройки → Провайдеры» (STT/TTS, ключи, URL). Все
+  API-ключи хранятся шифрованно в `secrets.bin` (Electron safeStorage/DPAPI),
+  никогда не в `settings.json`.
 - **Агенты** — роль + системный промпт + модель/температура + набор скиллов.
   Ядро (Веб-агент, Глубокий аналитик, Без фильтров) создаётся автоматически,
   свои агенты — через UI или импортом `agents.json`/JSONL.
@@ -94,40 +105,37 @@ AMT — это desktop-чат-клиент, который **вы** контро
 
 ##  Быстрая установка (без сборки)
 
-**Один файл — и всё готово.** Запустите `AMT Chat Setup 1.0.1.exe` из папки
+**Один файл — и всё готово.** Запустите `AMT Chat Setup 1.0.6.exe` из папки
 `release/` и следуйте мастеру установки. Не нужно устанавливать Python,
 Node.js или другие зависимости — всё уже включено в инсталлятор.
 
 ```
-release/AMT Chat Setup 1.0.1.exe
+release/AMT Chat Setup 1.0.6.exe
 ```
 
 После установки: **Настройки → Подключение** — введите API-ключ, начните чат.
-Подробности — в `release/AMT-Chat-1.0.1/README.txt`.
 
-> Готовый ZIP-архив: `release/AMT-Chat-1.0.1.zip` (~138 МБ). Распакуйте и
-> запустите `AMT Chat Setup 1.0.1.exe` — установка завершится за 2 минуты.
+> Готовый ZIP-архив: `release/AMT-Chat-Setup-1.0.6.zip` (~175 МБ). Распакуйте и
+> запустите `AMT Chat Setup 1.0.6.exe` — установка завершится за 2 минуты.
 
 ### Скачать из GitHub Release
 
-Готовый ZIP-архив (exe + README.txt) лежит в релизе
-[`v1.0.1`](https://github.com/clashssd/AMT/releases/tag/v1.0.1) как attachment
-`AMT-Chat-1.0.1.zip` (~138 МБ).
+Готовый ZIP-архив с установщиком лежит в релизе
+[`v1.0.6`](https://github.com/clashssd/AMT/releases/tag/v1.0.6) как attachment
+`AMT-Chat-Setup-1.0.6.zip` (~175 МБ).
 
 1. Откройте страницу релиза:
-   `https://github.com/clashssd/AMT/releases/tag/v1.0.1`
-2. Нажмите на `AMT-Chat-1.0.1.zip` в блоке **Assets** — файл скачается.
-3. Распакуйте архив → запустите `AMT-Chat-1.0.1/AMT Chat Setup 1.0.1.exe`.
+   `https://github.com/clashssd/AMT/releases/tag/v1.0.6`
+2. Нажмите на `AMT-Chat-Setup-1.0.6.zip` в блоке **Assets** — файл скачается.
+3. Распакуйте архив → запустите `AMT Chat Setup 1.0.6.exe`.
 4. В приложении: **Настройки → Подключение** — введите API-ключ. Готово.
 
 > Содержимое ZIP:
 > ```
-> AMT-Chat-1.0.1/
-> ├── AMT Chat Setup 1.0.1.exe   ← установщик (NSIS, 138 МБ)
-> └── README.txt                  ← краткая инструкция (RU + EN)
+> └── AMT Chat Setup 1.0.6.exe   ← установщик (NSIS, ~175 МБ)
 > ```
-> Всё необходимое (Python, Node.js, Electron, бэкенд) уже включено в
-> установщик — дополнительные зависимости ставить **не нужно**.
+> Всё необходимое (Python, Node.js, Electron, бэкенд, локальный Vosk-STT)
+> уже включено в установщик — дополнительные зависимости ставить **не нужно**.
 
 ## Как установить (для обычного пользователя, без ручных зависимостей)
 
@@ -190,6 +198,8 @@ main.js               Electron main process (frameless-окно, sidecar, IPC)
 electron/             sidecar.js, ipc.js, preload.js
 backend/              FastAPI-бэкенд
   main.py             точки входа API + StaticFiles-раздача фронтенда
+  stt_local.py        локальный Vosk-STT: wake-word, batch-распознавание,
+                       авто-загрузка модели
   ai_engine/          agents.py, orchestrator.py, memory.py, media.py,
                       tools.py, web_scraper.py, keymanager.py,
                       extensions.py, filegen.py, sysinteraction.py
@@ -200,6 +210,7 @@ backend/              FastAPI-бэкенд
 frontend/             HTML/JS/CSS (vanilla, без фреймворков)
   home.html           основной UI (SPA)
   js/                 main.js и вспомогательные модули
+                       voice.js (голос: state machine, wake-word, VAD, STT, TTS)
   css/style.css       стили
   assets/icon.svg     иконка приложения (источник), favicon.ico (сгенерирована)
 extensions/           папки расширений (пример: extensions/example)

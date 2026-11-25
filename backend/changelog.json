@@ -1,8 +1,24 @@
 {
-  "version": "1.0.5",
+  "version": "1.0.6",
   "name": "AMT Chat",
   "latest_at": "2026-11-25",
   "releases": [
+    {
+      "version": "1.0.6",
+      "date": "2026-11-25",
+      "title": "Голосовое управление: wake-word + локальный Vosk-STT + TTS",
+      "changes": [
+        "Полный голосовой цикл: wake-word («Астра» или любая фраза) → VAD-запись с авто-остановкой по тишине → STT → ЛЛМ → TTS + чат.",
+        "Кнопка-микрофон в меню композера (6 статусов: в��кл/слушание/запись/обработка/ответ/речь).",
+        "Wake-word: локальный Vosk по WebSocket /ws/wake-word (16 kHz mono Int16, 100 мс чанки), офлайн, без API-ключа; fuzzy-матч (Levenshtein ≤2) + алиасы.",
+        "Локальный Vosk-STT: /api/stt-local + авто-загрузка модели (~50 МБ) при первом запуске; /api/voice/status для прогресса.",
+        "STT-фолбэк: облачный STT недоступен → локальный Vosk (и наоборот, если модели нет).",
+        "TTS: браузерный speechSynthesis (бесплатно) или облачный (OpenAI-совместимый / ElevenLabs / OpenAI); облачный недоступен → браузерный голос. Микрофон глушится во время речи (эхо-защита).",
+        "Кнопки настроек: «Голос» (wake-word, таймер тишины, чувствительность) и «Провайдеры» (STT/TTS, ключи, URL).",
+        "API-ключи шифруются в secrets.bin (Electron safeStorage/DPAPI), не в settings.json; runtime-инжекция в бэкенд через /internal/secrets с токеном.",
+        "Воск-зависимость: requirements.txt (vosk>=0.3.45), PyInstaller-бандл с нативными DLL. Тесты: test_vosk_local.py (16), test_voice_state.js (20), test_secrets.js."
+      ]
+    },
     {
       "version": "1.0.5",
       "date": "2026-11-25",

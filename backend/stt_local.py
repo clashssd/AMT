@@ -6,10 +6,11 @@ Provides:
   - wake_word_match(): fuzzy wake-word detection in transcript
   - load_vosk_model(): lazy-loaded Vosk Model (user path → auto-downloaded default)
   - transcribe_local(): batch STT via Vosk (audio_b64 → text)
-  - ensure_model_downloaded(): auto-download Vosk model on first run
+  - ensure_model_downloaded(): async auto-download Vosk model on first run
   - create_wake_word_recognizer(): factory for the WebSocket streaming handler
 """
 
+import asyncio
 import base64
 import io
 import json
@@ -33,10 +34,11 @@ except ImportError:
 
 DEFAULT_VOSK_PATH = os.path.join(os.path.dirname(__file__), "models", "vosk-model-small-ru")
 VOSK_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip"
+_DOWNLOAD_TIMEOUT = 30  # seconds
 
 # Module-level caches
 _model = None
-_download_progress: dict = {}
+_download_progress: dict = {"progress": 0.0, "downloading": False, "error": None}
 _download_lock = threading.Lock()
 
 
@@ -89,7 +91,7 @@ def wake_word_match(
     if not words:
         return False
     last_5 = " ".join(words[-5:])
-    candidates = aliases + [target_norm]
+    candidates = list(aliases) + [target_norm]
 
     # Fast path: exact alias match in the last-5-word window
     for alias in candidates:
@@ -183,38 +185,41 @@ def _extract_pcm(data: bytes, mime: str) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Model auto-download
+# Model auto-download (async — never blocks the FastAPI event loop)
 # ---------------------------------------------------------------------------
 
-def ensure_model_downloaded() -> dict:
-    """Ensure the default Vosk model exists; download on first run.
-
-    Returns {"modelReady": bool, "modelProgress": float, "error": str | None}.
-    """
-    if os.path.isdir(DEFAULT_VOSK_PATH):
-        return {"modelReady": True, "modelProgress": 1.0, "error": None}
-
+def _blocking_download() -> dict:
+    """Synchronous download + extract. Runs in a thread via asyncio.to_thread."""
     global _download_progress
-    _download_progress = {"progress": 0.0, "downloading": True}
+
+    with _download_lock:
+        _download_progress["downloading"] = True
+        _download_progress["progress"] = 0.1
+        _download_progress["error"] = None
 
     zip_path = DEFAULT_VOSK_PATH + ".zip"
     try:
-        _download_progress["progress"] = 0.1
         urllib.request.urlretrieve(VOSK_MODEL_URL, zip_path)
-        _download_progress["progress"] = 0.9
+        with _download_lock:
+            _download_progress["progress"] = 0.9
 
         with zipfile.ZipFile(zip_path, "r") as zf:
             zf.extractall(os.path.dirname(DEFAULT_VOSK_PATH))
         os.remove(zip_path)
-        _download_progress["progress"] = 1.0
-        _download_progress["downloading"] = False
+        with _download_lock:
+            _download_progress["progress"] = 1.0
+            _download_progress["downloading"] = False
         return {"modelReady": True, "modelProgress": 1.0, "error": None}
 
     except Exception as e:
-        _download_progress["downloading"] = False
-        _download_progress["error"] = str(e)
-        return {"modelReady": False, "modelProgress": _download_progress.get("progress", 0.0), "error": "download_failed"}
-
+        with _download_lock:
+            _download_progress["downloading"] = False
+            _download_progress["error"] = str(e)
+        return {
+            "modelReady": False,
+            "modelProgress": _download_progress.get("progress", 0.0),
+            "error": "download_failed",
+        }
     finally:
         # Clean up partial zip on failure
         if os.path.exists(zip_path):
@@ -222,6 +227,19 @@ def ensure_model_downloaded() -> dict:
                 os.remove(zip_path)
             except OSError:
                 pass
+
+
+async def ensure_model_downloaded() -> dict:
+    """Ensure the default Vosk model exists; download on first run.
+
+    Uses asyncio.to_thread so the blocking download never blocks the event loop.
+    Returns {"modelReady": bool, "modelProgress": float, "error": str | None}.
+    """
+    if os.path.isdir(DEFAULT_VOSK_PATH):
+        return {"modelReady": True, "modelProgress": 1.0, "error": None}
+
+    result = await asyncio.to_thread(_blocking_download)
+    return result
 
 
 def get_download_progress() -> float:

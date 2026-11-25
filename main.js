@@ -88,6 +88,29 @@ function createWindow() {
   // points to the Python server and all existing fetch() calls work unchanged.
   win.loadURL(`http://127.0.0.1:${PORT}/`);
 
+  // Security (audit fix 6.4): block navigation away from our origin.
+  // External links must go through the built-in browser window or
+  // shell.openExternal — never through the main window.
+  win.webContents.on('will-navigate', (e, url) => {
+    const allowed = `http://127.0.0.1:${PORT}`;
+    if (!url.startsWith(allowed) && !url.startsWith('file://')) {
+      e.preventDefault();
+    }
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    const allowed = `http://127.0.0.1:${PORT}`;
+    if (url.startsWith(allowed) || url.startsWith('file://')) {
+      // Allow same-origin popups (rare, but e.g. devtools)
+      return { action: 'allow' };
+    }
+    // Route everything else to the external browser
+    const { shell } = require('electron');
+    if (/^https?:\/\//i.test(url)) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
   win.on('closed', () => { win = null; });
   return win;
 }

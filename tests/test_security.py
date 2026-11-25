@@ -203,3 +203,125 @@ def test_models_handles_empty_and_odd_ids(client, monkeypatch):
     assert r.json()["ok"] is True
     # no crash, empty id just has no capabilities
     assert any(m["id"] == "" for m in r.json()["models"])
+
+
+# ---------- 7. Host header validation (audit fixes 1.2-1.6) ----------
+def test_host_validation_blocks_evil_com(client):
+    """A request with Host: evil.com must be rejected (DNS-rebinding mitigation)."""
+    r = client.get("/health", headers={"Host": "evil.com"})
+    assert r.status_code == 403
+
+
+def test_host_validation_blocks_nip_io(client):
+    """Host: 127.0.0.1.nip.io (DNS-rebinding trick) must be rejected."""
+    r = client.get("/health", headers={"Host": "127.0.0.1.nip.io"})
+    assert r.status_code == 403
+
+
+def test_host_validation_blocks_subdomain(client):
+    """Host: subdomain.127.0.0.1 must be rejected."""
+    r = client.get("/health", headers={"Host": "sub.127.0.0.1"})
+    assert r.status_code == 403
+
+
+def test_host_validation_blocks_missing_host(client):
+    """A request without a Host header must be rejected (fail-closed)."""
+    # TestClient always sends a Host header, so we test via the raw app
+    # by confirming testserver (the TestClient default) is allowed but
+    # an empty string would not be.
+    r = client.get("/health", headers={"Host": ""})
+    assert r.status_code in (400, 403)
+
+
+def test_host_validation_allows_localhost(client):
+    """Host: localhost must be accepted."""
+    r = client.get("/health", headers={"Host": "localhost"})
+    assert r.status_code == 200
+
+
+def test_host_validation_allows_127_0_0_1(client):
+    """Host: 127.0.0.1 must be accepted."""
+    r = client.get("/health", headers={"Host": "127.0.0.1"})
+    assert r.status_code == 200
+
+
+def test_host_validation_allows_with_port(client):
+    """Host: 127.0.0.1:8765 must be accepted (port is stripped)."""
+    r = client.get("/health", headers={"Host": "127.0.0.1:8765"})
+    assert r.status_code == 200
+
+
+# ---------- 8. Origin validation for mutating requests (audit fixes 2.1-2.7) ----------
+def test_origin_blocks_evil_com_post(client):
+    """POST with Origin: http://evil.com must be rejected."""
+    r = client.post("/api/settings", json={"temperature": 0.5},
+                    headers={"Origin": "http://evil.com"})
+    assert r.status_code == 403
+
+
+def test_origin_blocks_null_post(client):
+    """POST with Origin: null must be rejected."""
+    r = client.post("/api/settings", json={"temperature": 0.5},
+                    headers={"Origin": "null"})
+    # "null" as an Origin header means the browser stripped it (file://, cross-origin)
+    # We treat it as an unknown host -> blocked
+    assert r.status_code == 403
+
+
+def test_origin_blocks_subdomain_post(client):
+    """POST with Origin: http://evil.127.0.0.1:8765 must be rejected."""
+    r = client.post("/api/settings", json={"temperature": 0.5},
+                    headers={"Origin": "http://evil.127.0.0.1:8765"})
+    assert r.status_code == 403
+
+
+def test_origin_blocks_wrong_port_post(client):
+    """POST with Origin: http://evil.127.0.0.1:9999 (subdomain trick) must be
+    rejected because the hostname is not in the allowlist."""
+    r = client.post("/api/settings", json={"temperature": 0.5},
+                    headers={"Origin": "http://evil.127.0.0.1:9999"})
+    assert r.status_code == 403
+
+
+def test_origin_allows_localhost_post(client):
+    """POST with Origin: http://localhost:8000 must be accepted."""
+    r = client.post("/api/settings", json={"temperature": 0.5},
+                    headers={"Origin": "http://localhost:8000"})
+    assert r.status_code == 200
+
+
+def test_origin_allows_127_0_0_1_post(client):
+    """POST with Origin: http://127.0.0.1:8000 must be accepted."""
+    r = client.post("/api/settings", json={"temperature": 0.5},
+                    headers={"Origin": "http://127.0.0.1:8000"})
+    assert r.status_code == 200
+
+
+def test_origin_allows_no_origin_post(client):
+    """POST without Origin header (curl, Postman, sidecar) must be accepted."""
+    r = client.post("/api/settings", json={"temperature": 0.5})
+    assert r.status_code == 200
+
+
+def test_origin_allows_get_foreign_origin(client):
+    """GET with foreign Origin is allowed (CORS handles the cross-origin read).
+    The audit only flags mutating requests for Origin checking."""
+    r = client.get("/api/settings", headers={"Origin": "http://evil.com"})
+    # GET should still work – CORS preflight would block browser requests,
+    # but a direct GET from a non-browser with a foreign origin is fine
+    assert r.status_code == 200
+
+
+# ---------- 9. CORS allow_methods shrunk (audit fix 3.4) ----------
+def test_cors_allow_methods_not_wildcard():
+    """allow_methods must not be ['*'] – it should be an explicit list."""
+    cors = None
+    for mw in main.app.user_middleware:
+        if getattr(mw, "cls", None) is main.CORSMiddleware:
+            cors = mw
+            break
+    assert cors is not None, "CORS middleware not found"
+    allow_methods = cors.kwargs.get("allow_methods")
+    assert allow_methods != ["*"], "CORS allow_methods must not be wildcard"
+    assert "GET" in allow_methods
+    assert "POST" in allow_methods

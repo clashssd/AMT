@@ -1,0 +1,58 @@
+====================================================================================================
+TEST     | REQUEST                                                      | EXPECTED                       | ACTUAL                         | RESULT
+====================================================================================================
+1.1      | GET /health, Host: 127.0.0.1:8000                            | 2xx/4xx, НЕ 403 из-за Host     | 200                            | PASS
+1.2      | GET /health, Host: evil.com                                  | 400/403, без обработки логик   | 200 {"status":"ok","agents":   | FAIL
+         | WHY: статус 200 — запрос дошёл до обработчика ({"status":"ok","agents":3,"keys":0})
+1.3      | GET /health, Host: 127.0.0.1.nip.io                          | 400/403 (запрос к loopback,    | 200 {"status":"ok","agents":   | FAIL
+         | WHY: статус 200 — запрос обработан
+1.4      | GET /health, Host: localhost.evil.com                        | 400/403 (точное совпадение,    | 200 {"status":"ok","agents":   | FAIL
+         | WHY: статус 200 — сравнение по подстроке, а не точное
+1.5      | GET /health без заголовка Host (HTTP/1.0 эмуляция)           | 400/403, без обработки         | 200 {"status":"ok","agents":   | FAIL
+         | WHY: статус 200 — запрос дошёл до логики
+1.6      | GET /health, Host: localhost:9999                            | 400/403 (порт валидируется)    | 200 {"status":"ok","agents":   | FAIL
+         | WHY: статус 200 — порт не валидируется
+2.1      | POST /api/memory/wipe, Origin: https://evil.com              | 400/403, действие НЕ вы��олн   | 200 {"status":"wiped","facts   | FAIL
+         | WHY: статус 200 — POST выполнен без CSRF-проверки Origin
+2.2      | POST /api/memory/wipe, Origin: null                          | 400/403 (null — обход наивны   | 200 {"status":"wiped","facts   | FAIL
+         | WHY: статус 200 — null-Origin обработан
+2.3      | POST /api/memory/wipe без заголовка Origin                   | осознанное поведение (2xx ил   | 200 {"status":"wiped","facts   | PASS
+2.4      | POST /api/memory/wipe, Origin: http://127.0.0.1:8000         | 2xx (свой фронтенд обрабатыв   | 200 {"status":"wiped","facts   | PASS
+2.5      | POST /api/memory/wipe, Origin: http://localhost.evil.com     | 400/403 (точное совпадение)    | 200 {"status":"wiped","facts   | FAIL
+         | WHY: статус 200 — поддомен-спуфинг прошёл
+2.6      | GET /api/settings, Origin: https://evil.com                  | 400/403 (чувствительные наст   | 200 {"baseUrl":"","model":""   | FAIL
+         | WHY: статус 200 — GET с чужим Origin отдал данные
+2.7      | POST /api/memory/wipe, Origin: http://localhost:9999         | 400/403 (порт валидируется)    | 200 {"status":"wiped","facts   | FAIL
+         | WHY: статус 200 — порт в Origin не валидируется
+3.1      | OPTIONS /api/memory/wipe, Origin: https://evil.com, ACRM:    | Access-Control-Allow-Origin    | 400 ACAO=''                    | PASS
+3.2      | OPTIONS /api/memory/wipe, Origin: http://127.0.0.1:8000, A   | ACAO=http://127.0.0.1:8000,    | 200 ACAO='http://127.0.0.1:8   | PASS
+3.3      | OPTIONS /api/memory/wipe (свой Origin)                       | НЕТ комбинации ACAO:* с Cred   | ACAO='http://127.0.0.1:8000'   | PASS
+3.4      | OPTIONS /api/memory/wipe, ACRM: DELETE                       | DELETE НЕ в Allow-Methods и    | Methods='DELETE, GET, HEAD,    | FAIL
+         | WHY: allow_methods='DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, QUERY' — server отв
+4.x      | CSRF-токен не реализован в приложении                        | нет — фиксируется как принят   | отсутствует                    | PASS
+5.1      | Get-NetTCPConnection -LocalPort 8000 → '127.0.0.1'           | Только 127.0.0.1 или ::1       | 127.0.0.1                      | PASS
+5.2      | нет второй машины в сети                                     | connection refused / timeout   | НЕ ВЫПОЛНЕНО                   | FAIL
+         | WHY: Нет второй машины в LAN. Рекомендуется проверить через nmap с другого хоста.
+5.3      | подключение к [::1]:8000 → timed out                         | отказ или loopback-only        | недоступен: timed out          | PASS
+6.1      | electron/ipc.js — ipcMain.handle                             | каждый обработчик проверяет    | senderFrame: ОТСУТСТВУЕТ       | FAIL
+         | WHY: Никакой обработчик IPC не проверяет origin/senderFrame — страница, загруженная в
+6.2      | main.js — createWindow()                                     | contextIsolation=true, nodeI   | ctxIso=True, nodeInt=True, s   | PASS
+6.3      | electron/preload.js                                          | contextBridge экспонирует уз   | ipcRenderer целиком: НЕТ (ок   | PASS
+6.4      | main.js / electron/ipc.js — обработчики навигации            | внешняя навигация и window.o   | will-navigate=False, setWind   | FAIL
+         | WHY: will-navigate и setWindowOpenHandler отсутствуют — окно может быть уведено на чу
+7.1      | POST /api/memory/wipe, Host: attacker.com, Origin: https:/   | 400/403 на шаге 2 (оба загол   | 200 {"status":"wiped","facts   | FAIL
+         | WHY: статус 200 — DNS-rebinding атака прошла
+7.2      | POST /api/memory/wipe, Host: 127.0.0.1:8000, Origin: https   | 400/403 по Origin              | 200 {"status":"wiped","facts   | FAIL
+         | WHY: статус 200 — Origin не проверяется независимо от Host
+7.3      | POST /api/memory/wipe, Host: evil.com, Origin: http://127.   | 400/403 по Host                | 200 {"status":"wiped","facts   | FAIL
+         | WHY: статус 200 — Host не проверяется независимо от Origin
+7.4      | POST /api/memory/wipe, Origin: 'http://lоцalhost:8000'       | 400/403 (нормализация к ASCI   | 200 {"status":"wiped","facts   | FAIL
+         | WHY: статус 200 — кириллические символы не нормализуются к ASCII
+7.5      | POST /api/memory/wipe, Host: LOCALHOST:8000, Origin: HTTP:   | одинаковый статус для верхне   | UPPER=200 LOWER=200            | PASS
+7.6      | POST /api/memory/wipe, два заголовка Host: 127.0.0.1:8000    | 400/403 (предсказуемый отказ   | 200 {"status":"wiped","facts   | FAIL
+         | WHY: статус 200 — двойной Host выбран непредсказуемо (smuggling)
+7.7      | нет отдельного фонов агента безопасности с fail-closed       | изменяющий запрос отклонён,    | НЕ ПРИМЕНЯЕТСЯ                 | FAIL
+         | WHY: В приложении нет отдельного background security agent с fail-closed политикой. O
+7.8      | анализ кода ai_engine/tools.py (барьеры)                     | маркер НЕ создан — барьер в    | барьер в коде (realpath + wh   | PASS
+====================================================================================================
+Total: 33, PASS: 13, FAIL: 20

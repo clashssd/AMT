@@ -18,12 +18,29 @@ function registerIpc(sidecar) {
   const port = () => sidecar.port;
 
   /**
+   * Verify the calling renderer is one of ours (audit fix 6.1).
+   * Rejects IPC calls from cross-origin or unknown sender frames.
+   * @param {any} event - IPC event
+   */
+  function _checkSender(event) {
+    const url = event?.senderFrame?.url || '';
+    if (
+      !url.startsWith('http://127.0.0.1:') &&
+      !url.startsWith('http://localhost:') &&
+      !url.startsWith('file://')
+    ) {
+      throw new Error('Blocked: untrusted sender frame');
+    }
+  }
+
+  /**
    * Proxy a fetch request to the Python backend.
    * @param {any} event - IPC event
    * @param {string} urlPath - e.g. "/api/chat"
    * @param {object} opts - { method, headers, body } (body is a string)
    */
   ipcMain.handle('backend:fetch', async (event, urlPath, opts = {}) => {
+    _checkSender(event);
     const target = `http://127.0.0.1:${port()}${urlPath}`;
     const res = await fetch(target, {
       method: opts.method || 'GET',
@@ -51,6 +68,7 @@ function registerIpc(sidecar) {
    * Proxies to POST /api/projects/select with { root: path }.
    */
   ipcMain.handle('project:create', async (event, name, root) => {
+    _checkSender(event);
     const res = await fetch(`http://127.0.0.1:${port()}/api/projects/select`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -65,6 +83,7 @@ function registerIpc(sidecar) {
    * Proxies to POST /api/projects/select with { root: path }.
    */
   ipcMain.handle('project:select', async (event, id) => {
+    _checkSender(event);
     const res = await fetch(`http://127.0.0.1:${port()}/api/projects/select`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -79,6 +98,7 @@ function registerIpc(sidecar) {
    * Proxies to POST /api/tools/execute.
    */
   ipcMain.handle('tools:execute', async (event, tool, args, approved) => {
+    _checkSender(event);
     const res = await fetch(`http://127.0.0.1:${port()}/api/tools/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,6 +113,7 @@ function registerIpc(sidecar) {
    * (most sites send X-Frame-Options: DENY).
    */
   ipcMain.handle('shell:openExternal', async (event, url) => {
+    _checkSender(event);
     const { shell } = require('electron');
     if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
       await shell.openExternal(url);
@@ -109,6 +130,7 @@ function registerIpc(sidecar) {
    * сохраняются и при fullscreen (CSS filter не сбрасывается).
    */
   ipcMain.handle('window:toggleFullscreen', async (event) => {
+    _checkSender(event);
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win) {
       win.setFullScreen(!win.isFullScreen());
@@ -122,6 +144,7 @@ function registerIpc(sidecar) {
    * restore / close. Используется кнопками #winTitlebar в frontend/home.html.
    */
   ipcMain.handle('window:control', async (event, action) => {
+    _checkSender(event);
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return { ok: false };
     switch (action) {
@@ -142,6 +165,7 @@ function registerIpc(sidecar) {
    */
   const _shotWindows = new Map();
   ipcMain.handle('web:screenshot', async (event, url) => {
+    _checkSender(event);
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
       return { ok: false, reason: 'Некорректный URL' };
     }
@@ -177,6 +201,7 @@ function registerIpc(sidecar) {
    */
   const _browserWindows = new Map();
   ipcMain.handle('web:openBrowserWindow', async (event, url, opts = {}) => {
+    _checkSender(event);
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
       return { ok: false, reason: 'Некорректный URL' };
     }
@@ -250,6 +275,7 @@ function registerIpc(sidecar) {
    * Не создаёт отдельное ОС-окно — использует shell.openExternal.
    */
   ipcMain.handle('web:openExternalBrowser', async (event, url) => {
+    _checkSender(event);
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
       return { ok: false, reason: 'Некорректный URL' };
     }
@@ -264,6 +290,7 @@ function registerIpc(sidecar) {
 
   /** Закрыть встроенное browser-окно. */
   ipcMain.handle('web:closeBrowserWindow', async (event, windowId) => {
+    _checkSender(event);
     if (windowId !== undefined) {
       const win = _browserWindows.get(windowId);
       if (win) { try { if (!win.isDestroyed()) win.close(); } catch {} _browserWindows.delete(windowId); }
@@ -326,6 +353,7 @@ function registerIpc(sidecar) {
    * Open a directory picker (for project selection).
    */
   ipcMain.handle('dialog:openDirectory', async (event, defaultPath) => {
+    _checkSender(event);
     const { dialog } = require('electron');
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory'],

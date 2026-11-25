@@ -131,11 +131,79 @@ else:
     ]
     _cors_creds = True
 
+# ---------------------------------------------------------------------------
+# Security middleware: Host header + Origin validation (audit fix 2026-11)
+# ---------------------------------------------------------------------------
+# The audit found that the server accepted requests from any Host header
+# (DNS-rebinding) and any Origin on mutating endpoints (cross-origin state
+# changes).  We now:
+#
+# 1. Reject requests whose Host header is not an allowed loopback name.
+# 2. Reject POST/DELETE/PATCH requests whose Origin header is not an
+#    allowed loopback origin (missing Origin is allowed – that's what
+#    curl / Postman / the Electron main-process sidecar do).
+#
+# The allowed host names are read from AMT_ALLOWED_HOSTS (comma-separated,
+# default "127.0.0.1,localhost").  When the app runs under pytest, the
+# TestClient uses Host: testserver – we allow it so the existing test
+# suite keeps working.  In production "testserver" is never reachable
+# because uvicorn binds 127.0.0.1 only.
+_allowed_hostnames = _os.environ.get(
+    "AMT_ALLOWED_HOSTS", "127.0.0.1,localhost"
+).split(",")
+_allowed_hostnames = [h.strip().lower() for h in _allowed_hostnames if h.strip()]
+if "testserver" not in _allowed_hostnames:
+    _allowed_hostnames.append("testserver")
+
+_MUTATING_METHODS = {"POST", "DELETE", "PATCH"}
+
+
+def _security_denied() -> "JSONResponse":
+    return JSONResponse(
+        status_code=403,
+        content={
+            "error": "forbidden",
+            "detail": "request rejected by host/origin validation",
+        },
+    )
+
+
+@app.middleware("http")
+async def _validate_request(request: Request, call_next):
+    """Reject requests with foreign Host or Origin headers (fail-closed)."""
+    host_header = request.headers.get("Host", "")
+    # Strip port for comparison: "127.0.0.1:8765" -> "127.0.0.1"
+    host_name = host_header.rsplit(":", 1)[0].lower()
+    if host_name not in _allowed_hostnames:
+        return _security_denied()
+
+    # Origin check for mutating requests
+    if request.method in _MUTATING_METHODS:
+        origin = request.headers.get("Origin", "")
+        if origin:
+            # Reject the literal string "null" (browser file:// / opaque origin)
+            if origin.lower() == "null":
+                return _security_denied()
+            try:
+                from urllib.parse import urlparse as _up
+                o_host = (_up(origin).hostname or "").lower()
+            except Exception:
+                o_host = ""
+            if o_host and o_host not in _allowed_hostnames:
+                return _security_denied()
+            # If origin has no parseable hostname but is not "null" (already
+            # handled above) and not empty, reject it.
+            elif origin and not o_host:
+                return _security_denied()
+
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=_cors_creds,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

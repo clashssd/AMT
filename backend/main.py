@@ -255,6 +255,7 @@ class Settings(BaseModel):
     mediaPathImage: str = ""       # путь: только изображение -> медиа
     mediaPathTextImage: str = ""   # путь: текст+изображение -> медиа
     mediaPathVoice: str = ""       # путь: голос/TTS
+    mediaPathVideo: str = ""       # путь: видео -> медиа
     # Отдельный ключ/эндпоинт для кодинга (если пусто — используется общий)
     codingKey: str = ""
     codingBaseUrl: str = ""
@@ -524,6 +525,7 @@ async def get_settings():
         "mediaPathImage": server_settings.mediaPathImage,
         "mediaPathTextImage": server_settings.mediaPathTextImage,
         "mediaPathVoice": server_settings.mediaPathVoice,
+        "mediaPathVideo": server_settings.mediaPathVideo,
         "codingKey": server_settings.codingKey,
         "codingBaseUrl": server_settings.codingBaseUrl,
         "codingModel": server_settings.codingModel,
@@ -542,7 +544,8 @@ async def save_settings(new_settings: Settings):
     for f in ("imageKey", "imageBaseUrl", "imageModel", "videoKey", "videoBaseUrl",
               "videoModel", "audioKey", "audioBaseUrl", "audioModel", "audioVoiceId",
               "sttModel", "codingKey", "codingBaseUrl", "codingModel",
-              "mediaPathText", "mediaPathImage", "mediaPathTextImage", "mediaPathVoice"):
+              "mediaPathText", "mediaPathImage", "mediaPathTextImage", "mediaPathVoice",
+              "mediaPathVideo"):
         if not getattr(new_settings, f, "") and getattr(server_settings, f, ""):
             setattr(new_settings, f, getattr(server_settings, f))
     server_settings = new_settings
@@ -4698,11 +4701,13 @@ async def _media_generate_inner(req: MediaGenRequest):
     if req.paths is not None or req.ref_image_b64:
         attached = req.ref_image_b64 or req.video_example_b64 or None
         is_voice = (req.kind == "audio")
+        is_video = (req.kind == "video")
         # Все kind-specific параметры передаются ТОЧЬ-В-ТОЧЬ, иначе провайдер
         # отклонит запрос (например, TTS без voice → 500).
         return media_gen.generate_media(cfg["key"], cfg["base"], cfg["model"],
                                         req.paths, req.prompt,
                                         attached_file=attached, is_voice=is_voice,
+                                        is_video=is_video,
                                         voice_id=cfg["voice_id"],
                                         voice_settings=req.audio_settings,
                                         extra=req.custom_params)

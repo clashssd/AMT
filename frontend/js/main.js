@@ -240,6 +240,7 @@ function buildPathsObj() {
         image_to_media: settings?.mediaPathImage || '',
         text_image_to_media: settings?.mediaPathTextImage || '',
         voice: settings?.mediaPathVoice || '',
+        video: settings?.mediaPathVideo || '',
     };
 }
 let agentsCache = [];
@@ -1096,7 +1097,7 @@ async function loadSettings() {
     setVal('videoKey', settings.videoKey); setVal('videoBaseUrl', settings.videoBaseUrl); setVal('videoModel', settings.videoModel);
     setVal('audioKey', settings.audioKey); setVal('audioBaseUrl', settings.audioBaseUrl); setVal('audioModel', settings.audioModel); setVal('audioVoiceId', settings.audioVoiceId);
     setVal('mediaPathText', settings.mediaPathText); setVal('mediaPathImage', settings.mediaPathImage);
-    setVal('mediaPathTextImage', settings.mediaPathTextImage); setVal('mediaPathVoice', settings.mediaPathVoice);
+    setVal('mediaPathTextImage', settings.mediaPathTextImage); setVal('mediaPathVoice', settings.mediaPathVoice); setVal('mediaPathVideo', settings.mediaPathVideo);
     setVal('codingKey', settings.codingKey); setVal('codingBaseUrl', settings.codingBaseUrl); setVal('codingModel', settings.codingModel);
     setStatus('idle');
 }
@@ -1139,6 +1140,7 @@ function buildSettingsFromInputs() {
         audioVoiceId: document.getElementById('audioVoiceId')?.value.trim() || '',
         sttModel: document.getElementById('sttModel')?.value.trim() || '',
         mediaPathText: document.getElementById('mediaPathText')?.value.trim() || '',
+        mediaPathVideo: document.getElementById('mediaPathVideo')?.value.trim() || '',
         mediaPathImage: document.getElementById('mediaPathImage')?.value.trim() || '',
         mediaPathTextImage: document.getElementById('mediaPathTextImage')?.value.trim() || '',
         mediaPathVoice: document.getElementById('mediaPathVoice')?.value.trim() || '',
@@ -1210,6 +1212,7 @@ function toBackendSettings(s) {
         audioModel: s.audioModel || '',
         audioVoiceId: s.audioVoiceId || '',
         mediaPathText: s.mediaPathText || '',
+        mediaPathVideo: s.mediaPathVideo || '',
         mediaPathImage: s.mediaPathImage || '',
         mediaPathTextImage: s.mediaPathTextImage || '',
         mediaPathVoice: s.mediaPathVoice || '',
@@ -3312,7 +3315,7 @@ function loadMediaKeysUI() {
     setVal('videoKey', s.videoKey); setVal('videoBaseUrl', s.videoBaseUrl); setVal('videoModel', s.videoModel);
     setVal('audioKey', s.audioKey); setVal('audioBaseUrl', s.audioBaseUrl); setVal('audioModel', s.audioModel); setVal('audioVoiceId', s.audioVoiceId);
     setVal('mediaPathText', s.mediaPathText); setVal('mediaPathImage', s.mediaPathImage);
-    setVal('mediaPathTextImage', s.mediaPathTextImage); setVal('mediaPathVoice', s.mediaPathVoice);
+    setVal('mediaPathTextImage', s.mediaPathTextImage); setVal('mediaPathVoice', s.mediaPathVoice); setVal('mediaPathVideo', s.mediaPathVideo);
     setVal('sttModel', s.sttModel);
 }
 async function saveMediaKeys() {

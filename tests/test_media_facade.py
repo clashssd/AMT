@@ -159,11 +159,34 @@ def test_generate_image_signature_unchanged():
 
 def test_generate_media_all_empty_paths_uses_defaults():
     """An all-empty paths dict must resolve to DEFAULT_PATH_* for each branch."""
-    up = {"text_to_media": "", "image_to_media": "", "text_image_to_media": "", "voice": ""}
+    up = {"text_to_media": "", "image_to_media": "", "text_image_to_media": "", "voice": "", "video": ""}
     assert media._get_path(False, "p", False, up) == media.DEFAULT_PATH_TEXT_TO_MEDIA
     assert media._get_path(True, "p", False, up) == media.DEFAULT_PATH_TEXT_IMAGE_TO_MEDIA
     assert media._get_path(True, "", False, up) == media.DEFAULT_PATH_IMAGE_TO_MEDIA
     assert media._get_path(False, "", True, up) == media.DEFAULT_PATH_VOICE
+    # video branch (is_video=True) -> DEFAULT video path
+    assert media._get_path(False, "p", False, up, is_video=True) == media.DEFAULT_PATH_VIDEO
+
+
+def test_generate_media_video_path_custom_verbatim():
+    """A set video path is used verbatim; unset falls back to DEFAULT_PATH_VIDEO."""
+    up = {"video": "v1/my/custom/video", "text_to_media": ""}
+    assert media._get_path(False, "p", False, up, is_video=True) == "v1/my/custom/video"
+    up2 = {"video": ""}
+    assert media._get_path(False, "p", False, up2, is_video=True) == media.DEFAULT_PATH_VIDEO
+
+
+def test_generate_media_is_video_routes_video_path(monkeypatch):
+    """generate_media with is_video=True must send the video path (custom or default)."""
+    captured = {}
+    def fake_make_request(api_key, base_url, model, path, prompt, attached_file=None,
+                          voice_id=None, voice_settings=None, extra=None):
+        captured["path"] = path
+        return {"ok": True, "b64": "V"}
+    monkeypatch.setattr(media, "_make_request", fake_make_request)
+    media.generate_media("K", "BASE", "M", {"video": "v1/videos/custom"}, "a dog",
+                         is_video=True)
+    assert captured["path"] == "v1/videos/custom"
 
 
 def test_generate_media_partial_paths_verbatim():

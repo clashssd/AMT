@@ -19,7 +19,8 @@ def test_settings_get_has_path_fields():
     r = c.get("/api/settings")
     assert r.status_code == 200
     body = r.json()
-    for k in ("mediaPathText", "mediaPathImage", "mediaPathTextImage", "mediaPathVoice"):
+    for k in ("mediaPathText", "mediaPathImage", "mediaPathTextImage", "mediaPathVoice",
+              "mediaPathVideo"):
         assert k in body, f"GET /api/settings missing key {k}"
         assert body[k] == "", f"expected empty default for {k}, got {body[k]!r}"
 
@@ -39,10 +40,18 @@ def test_settings_post_sets_paths():
     assert app_mod.server_settings.mediaPathVoice == "v1/audio/custom"
 
 
+def test_settings_post_sets_video_path():
+    c = _fresh_client()
+    r = c.post("/api/settings", json={"mediaPathVideo": "v1/videos/custom"})
+    assert r.status_code == 200
+    assert app_mod.server_settings.mediaPathVideo == "v1/videos/custom"
+
+
 def test_settings_defaults_provider_neutral():
-    """All 4 new fields default to empty (no baked-in provider path)."""
+    """All media path fields default to empty (no baked-in provider path)."""
     s = app_mod.Settings()
     assert s.mediaPathText == ""
     assert s.mediaPathImage == ""
     assert s.mediaPathTextImage == ""
     assert s.mediaPathVoice == ""
+    assert s.mediaPathVideo == ""

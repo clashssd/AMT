@@ -98,6 +98,7 @@ DEFAULT_PATH_TEXT_TO_MEDIA = os.environ.get("AMT_PATH_TEXT_TO_MEDIA", "v1/images
 DEFAULT_PATH_IMAGE_TO_MEDIA = os.environ.get("AMT_PATH_IMAGE_TO_MEDIA", "v1/images/generations")
 DEFAULT_PATH_TEXT_IMAGE_TO_MEDIA = os.environ.get("AMT_PATH_TEXT_IMAGE_TO_MEDIA", "v1/images/generations")
 DEFAULT_PATH_VOICE = os.environ.get("AMT_PATH_VOICE", "v1/audio/speech")
+DEFAULT_PATH_VIDEO = os.environ.get("AMT_PATH_VIDEO", "v1/videos/text2video")
 
 
 def _is_empty(v) -> bool:
@@ -105,14 +106,19 @@ def _is_empty(v) -> bool:
     return (v is None) or (str(v).strip() == "")
 
 
-def _get_path(has_file: bool, prompt: str, is_voice: bool, user_paths: Optional[dict] = None) -> str:
-    """Выбирает endpoint-путь по наличию файла/голоса/промпта.
+def _get_path(has_file: bool, prompt: str, is_voice: bool, user_paths: Optional[dict] = None,
+              is_video: bool = False) -> str:
+    """Выбирает endpoint-путь по наличию файла/голоса/видео/промпта.
 
-    Ключи в user_paths: voice, text_image_to_media, image_to_media, text_to_media.
+    Ключи в user_paths: voice, video, text_image_to_media, image_to_media, text_to_media.
     Значение из user_paths берётся ТОЧЬ-В-ТОЧЬ (verbatim), если оно задано;
     иначе подставляется соответствующая DEFAULT_PATH_* константа.
+    Приоритет: is_video и is_voice первичны (конкретный тип), затем файл+промпт.
     """
-    if is_voice:
+    if is_video:
+        key = "video"
+        default = DEFAULT_PATH_VIDEO
+    elif is_voice:
         key = "voice"
         default = DEFAULT_PATH_VOICE
     elif has_file and prompt:
@@ -193,7 +199,7 @@ def _make_request(api_key: str, base_url: str, model: str, path: str,
 
 
 def generate_media(user_api_key, user_base_url, user_model, user_paths,
-                   prompt, attached_file=None, is_voice=False,
+                   prompt, attached_file=None, is_voice=False, is_video=False,
                    voice_id=None, voice_settings=None, extra=None) -> dict:
     """Универсальный фасад генерации медиа.
 
@@ -206,14 +212,15 @@ def generate_media(user_api_key, user_base_url, user_model, user_paths,
     """
     has_file = bool(attached_file)
     # путь для дефолтной попытки (строгие дефолты)
-    default_path = _get_path(has_file, prompt, is_voice)
+    default_path = _get_path(has_file, prompt, is_voice, is_video=is_video)
     up = user_paths or {}
 
     # ПОПЫТКА 1: кастомные значения (verbatim, если заданы), иначе DEFAULT_*
     active_api_key = user_api_key if not _is_empty(user_api_key) else DEFAULT_API_KEY
     active_base_url = user_base_url if not _is_empty(user_base_url) else DEFAULT_BASE_URL
     active_model = user_model if not _is_empty(user_model) else DEFAULT_MODEL
-    active_path_key = "voice" if is_voice else \
+    active_path_key = "video" if is_video else \
+        "voice" if is_voice else \
         "text_image_to_media" if has_file and prompt else \
         "image_to_media" if has_file else "text_to_media"
     active_path = up.get(active_path_key) if not _is_empty(up.get(active_path_key)) else default_path

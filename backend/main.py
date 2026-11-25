@@ -248,6 +248,13 @@ class Settings(BaseModel):
     audioModel: str = ""
     audioVoiceId: str = ""
     sttModel: str = ""       # Модель STT (Whisper) — отдельно от TTS
+    # Пути эндпоинтов для медиа-фасада (опционально; пусто = дефолтный путь из media.py).
+    # Ключи совпадают с _get_path/generate_media в ai_engine/media.py:
+    #   text_to_media / image_to_media / text_image_to_media / voice
+    mediaPathText: str = ""        # путь: текст -> медиа
+    mediaPathImage: str = ""       # путь: только изображение -> медиа
+    mediaPathTextImage: str = ""   # путь: текст+изображение -> медиа
+    mediaPathVoice: str = ""       # путь: голос/TTS
     # Отдельный ключ/эндпоинт для кодинга (если пусто — используется общий)
     codingKey: str = ""
     codingBaseUrl: str = ""
@@ -512,6 +519,11 @@ async def get_settings():
         "audioModel": server_settings.audioModel,
         "audioVoiceId": server_settings.audioVoiceId,
         "sttModel": server_settings.sttModel,
+        # Пути эндпоинтов медиа-фасада (опционально; пусто = дефолт)
+        "mediaPathText": server_settings.mediaPathText,
+        "mediaPathImage": server_settings.mediaPathImage,
+        "mediaPathTextImage": server_settings.mediaPathTextImage,
+        "mediaPathVoice": server_settings.mediaPathVoice,
         "codingKey": server_settings.codingKey,
         "codingBaseUrl": server_settings.codingBaseUrl,
         "codingModel": server_settings.codingModel,
@@ -529,7 +541,8 @@ async def save_settings(new_settings: Settings):
     # Медиа-ключи: не затираем старые, если не переданы
     for f in ("imageKey", "imageBaseUrl", "imageModel", "videoKey", "videoBaseUrl",
               "videoModel", "audioKey", "audioBaseUrl", "audioModel", "audioVoiceId",
-              "sttModel", "codingKey", "codingBaseUrl", "codingModel"):
+              "sttModel", "codingKey", "codingBaseUrl", "codingModel",
+              "mediaPathText", "mediaPathImage", "mediaPathTextImage", "mediaPathVoice"):
         if not getattr(new_settings, f, "") and getattr(server_settings, f, ""):
             setattr(new_settings, f, getattr(server_settings, f))
     server_settings = new_settings

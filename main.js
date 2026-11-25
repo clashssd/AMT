@@ -10,6 +10,7 @@ const { app, BrowserWindow, Menu } = require('electron');
 const path = require('path');
 const { startSidecar, stopSidecar } = require('./electron/sidecar');
 const { registerIpc } = require('./electron/ipc');
+const { registerSecretsIpc, injectAllSecrets, setToken } = require('./electron/secrets');
 
 const PORT = parseInt(process.env.AMT_PORT || '8000', 10);
 let win = null;
@@ -35,12 +36,25 @@ app.whenReady().then(async () => {
     await startSidecar(PORT);
     log('sidecar started OK');
     sidecar.port = PORT;
+
+    // Generate internal token for the secrets channel and inject stored secrets
+    const crypto = require('crypto');
+    const internalToken = crypto.randomUUID();
+    setToken(internalToken);
+    process.env.AMT_INTERNAL_TOKEN = internalToken;
+    try {
+      await injectAllSecrets(PORT);
+      log('secrets injected into sidecar');
+    } catch (e) {
+      log('secrets injection failed: ' + e.message);
+    }
   } catch (err) {
     try { fs.appendFileSync(path.join(process.env.APPDATA || '', 'AMT Chat', 'debug.log'), 'ERROR: ' + err.message + '\n'); } catch {}
     // Continue anyway — frontend will show connection errors
   }
 
   registerIpc(sidecar);
+  registerSecretsIpc(() => sidecar.port);
 
   // Убираем стандартное светлое меню (File/Edit/View/Window) — оставляем только
   // тёмный заголовок окна, без серой полоски.

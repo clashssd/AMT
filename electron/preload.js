@@ -55,4 +55,11 @@ contextBridge.exposeInMainWorld('api', {
 
   /** Открыть URL системным браузером (Firefox/Chrome/Edge или пользовательский путь) */
   openExternalBrowser: (url) => ipcRenderer.invoke('web:openExternalBrowser', url),
+
+  /** Secrets (safeStorage-backed API key store) */
+  secrets: {
+    set: (opts) => ipcRenderer.invoke('secrets:set', opts),
+    clear: (opts) => ipcRenderer.invoke('secrets:clear', opts),
+    status: () => ipcRenderer.invoke('secrets:status'),
+  },
 });

@@ -19,6 +19,8 @@ comtypes>=1.1.0
 playwright>=1.40.0
 # build tooling (для PyInstaller sidecar; не нужен в runtime)
 pyinstaller>=6.0
+# Voice control — local STT + wake-word detection (Vosk model auto-downloaded on first run)
+vosk>=0.3.45
 # dev / testing (нужны для запуска тест-сьюта backend/tests/, не для runtime)
 pytest>=8.0
 pytest-asyncio>=0.23

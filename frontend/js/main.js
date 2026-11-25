@@ -1646,7 +1646,6 @@ async function sendMessage() {
     if (assistantText && assistantText !== 'Ошибка соединения') {
         updateCurrentChatMessage(assistantText, 'assistant');
         // Генерация медиа/файлов прямо в чате (токены [[GEN:...]])
-        const gen = parseGenTokens(assistantText);
         await processGenTokens(assistantText);
     }
 
@@ -4285,14 +4284,24 @@ async function renderGenInChat(item, hostEl) {
     }
 }
 async function pollVideoTaskChat(taskId, videoEl, noteEl, modelName = "") {
-    for (let i = 0; i < 30; i++) {
-        await new Promise(r => setTimeout(r, 5000));
-        const body = { task_id: taskId, use_settings_key: true };
-        if (modelName) body.model_name = modelName;
-        const st = await fetch(`${API_BASE}/api/media/task`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(body),
-        }).then(x => x.json());
+    const MAX_POLLS = 60; // 60 × 5s = 5 минут (Agnes-видео генерируется 2-5 мин)
+    const POLL_MS = 5000;
+    for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise(r => setTimeout(r, POLL_MS));
+        let st;
+        try {
+            const body = { task_id: taskId, use_settings_key: true };
+            if (modelName) body.model_name = modelName;
+            st = await fetch(`${API_BASE}/api/media/task`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body),
+            }).then(x => x.json());
+        } catch (netErr) {
+            // Сетевая ошибка — не считаем это попыткой, просто повторяем
+            if (noteEl) noteEl.textContent = 'Генерация видео… (нет связи с сервером, повторяю)';
+            i--;
+            continue;
+        }
         if (st.status === 'succeed' && st.url) {
             videoEl.src = st.url;
             if (noteEl) noteEl.textContent = '';
@@ -4308,8 +4317,13 @@ async function pollVideoTaskChat(taskId, videoEl, noteEl, modelName = "") {
             if (noteEl) noteEl.textContent = 'Ошибка видео: ' + (st.error || st.status);
             return;
         }
+        // queued / processing — обновляем прогресс
+        if (noteEl) {
+            const prog = st.progress && st.progress !== '' ? ` (${st.progress})` : '';
+            noteEl.textContent = 'Генерация видео…' + prog;
+        }
     }
-    if (noteEl) noteEl.textContent = 'Таймаут видео.';
+    if (noteEl) noteEl.textContent = 'Таймаут видео (5 мин). Видео может ещё генерироваться на стороне провайдера — проверьте учётную запись или повторите запрос.';
 }
 
 // ===== МЕДИА-ОВЕРЛЕЙ (видео-плеер / фото / аудио / файлы) =====

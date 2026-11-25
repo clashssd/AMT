@@ -96,7 +96,7 @@ def test_media_task_base_resolution_precedence(c, monkeypatch, tmp_backend):
     import main as m
     captured = {}
 
-    def fake_check(base, key, task_id, proxy=""):
+    def fake_check(base, key, task_id, proxy="", model_name=""):
         captured["base"] = base
         return {"ok": True, "status": "completed", "url": "https://example.com/out.mp4"}
 

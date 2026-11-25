@@ -20,6 +20,8 @@ release/
 # Ready-made distributable installer (too large for Git; distribute via GitHub
 # Releases instead of committing to the repo)
 AMT Chat Setup.exe
+AMT Chat *.release.zip
+AMT Chat * release.zip
 
 # Runtime data (per-user; in frozen desktop mode these live under %APPDATA%\AMT Chat\)
 backend/logs/

@@ -1041,6 +1041,49 @@ main.page.active {
     border-bottom-right-radius: 4px;
 }
 
+/* Карточка файла в пуле пользователя (иконка + имя, клик = скачать) */
+.msg-file-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: rgba(59, 130, 246, 0.10);
+    border: 1px solid rgba(59, 130, 246, 0.20);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    max-width: 240px;
+}
+.msg-file-card:hover {
+    background: rgba(59, 130, 246, 0.16);
+    border-color: rgba(59, 130, 246, 0.40);
+}
+.msg-file-card-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #60a5fa;
+    flex-shrink: 0;
+}
+.msg-file-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.msg-file-card-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: #e0e0f0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+}
+
 .message.bot .message-content {
     background: rgba(255, 255, 255, 0.04);
     color: #d0d0d0;
@@ -1118,6 +1161,7 @@ main.page.active {
 /* ===== ПОЛЕ ВВОДА ===== */
 .chat-input-box {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
     gap: 10px;
     padding: 12px 16px;
@@ -3505,23 +3549,34 @@ input[type="number"] {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
-    margin-bottom: 8px;
+    flex-basis: 100%;
+    width: 100%;
+    margin-bottom: 4px;
+}
+.attachment-area:empty {
+    display: none;
 }
 .attachment-item {
     background: rgba(255,255,255,0.05);
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 6px;
-    padding: 6px 10px;
-    font-size: 12px;
+    padding: 4px 8px;
+    font-size: 11px;
     color: #a0a0b5;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
+    max-width: 220px;
+}
+.attachment-item .attachment-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .attachment-thumb {
-    width: 36px; height: 36px;
+    width: 28px; height: 28px;
     object-fit: cover;
-    border-radius: 6px;
+    border-radius: 4px;
     flex-shrink: 0;
     border: 1px solid rgba(255,255,255,0.1);
 }
@@ -4400,6 +4455,52 @@ input[type="file"], input[type="file"].opt-input {
     background: #000;
 }
 .gen-inline-audio { max-width: 320px; }
+
+/* GEN:file карточка (выглядит как прикреплённый файл: иконка + имя + размер) */
+.gen-file-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.18);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    max-width: 280px;
+}
+.gen-file-card:hover {
+    background: rgba(59, 130, 246, 0.14);
+    border-color: rgba(59, 130, 246, 0.35);
+}
+.gen-file-card-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #60a5fa;
+    flex-shrink: 0;
+}
+.gen-file-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.gen-file-card-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #e0e0f0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+.gen-file-card-size {
+    font-size: 11px;
+    color: #8888a0;
+}
 
 /* Кнопка «открыть» под медиа */
 .media-open-btn {

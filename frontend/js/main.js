@@ -596,6 +596,23 @@ async function renderMessages(chat) {
         let el;
         if (m.role === 'user') {
             el = appendMessageEl(m.content, 'user');
+            // Рендерим карточки файлов в пуле пользователя
+            if (m.files && m.files.length) {
+                const contentEl = el.querySelector('.message-content');
+                m.files.forEach(fname => {
+                    const card = document.createElement('div');
+                    card.className = 'msg-file-card';
+                    card.innerHTML = `<div class="msg-file-card-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M8 4h8l4 4v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z" fill="rgba(59,130,246,0.15)"/><path d="M16 4v4h4"/><path d="M10 13h4M10 17h4" stroke-linecap="round"/></svg></div><div class="msg-file-card-info"><span class="msg-file-card-name">${escapeHtml(fname)}</span></div>`;
+                    // Клик — скачать/открыть файл
+                    card.addEventListener('click', () => {
+                        const a = document.createElement('a');
+                        a.href = `${API_BASE}/api/files/${encodeURIComponent(fname)}`;
+                        a.download = fname;
+                        a.click();
+                    });
+                    contentEl.appendChild(card);
+                });
+            }
         } else {
             el = addBotPlaceholder();
             setBotContent(el, m.content);
@@ -981,10 +998,12 @@ function attachFileToEditingMessage(file) {
     }
 }
 
-async function updateCurrentChatMessage(content, role) {
+async function updateCurrentChatMessage(content, role, files = null) {
     const chat = getCurrentChat();
     if (!chat) return;
-    chat.messages.push({ role, content, timestamp: Date.now() });
+    const msg = { role, content, timestamp: Date.now() };
+    if (files && files.length) msg.files = files;
+    chat.messages.push(msg);
     chat.updated_at = Date.now();
     if (role === 'user' && chat.title === 'Новый чат') {
         chat.title = content.length > 30 ? content.slice(0, 30) + '…' : content;
@@ -1253,14 +1272,14 @@ function hideWelcome() {
     if (welcome) welcome.style.display = 'none';
 }
 
-function addUserMessage(text, save = true) {
+function addUserMessage(text, save = true, files = null) {
     hideWelcome();
     const div = document.createElement('div');
     div.className = 'message user';
     div.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
     chatMessages.appendChild(div);
     scrollToBottom();
-    if (save) updateCurrentChatMessage(text, 'user');
+    if (save) updateCurrentChatMessage(text, 'user', files);
     // Кнопки действий должны появляться СРАЗУ (без ожидания релоада):
     // индекс = последняя запись в chat.messages (только что дописанное сообщение)
     const chat = getCurrentChat();
@@ -1601,16 +1620,20 @@ async function sendMessage() {
     adjustTextareaHeight();
     hideWelcome();
 
-    // Если есть файлы, добавляем их в текст
+    // Если есть файлы — они уже видны как карточки в attachment-area.
+    // Текст-заглушка [Файл: name] НЕ добавляем в сообщение: бэкенд получает
+    // файлы через структурированный payload (attachments), а не через текст.
     let finalText = text;
     let attachmentsPayload = [];
     if (hasFiles) {
-        const fileLines = attachedFiles.map(f => `[Файл: ${f.name}]`).join('\n');
-        finalText = text ? `${text}\n${fileLines}` : fileLines;
+        // Если текст пустой, показываем в пуле краткую подпись о файлах
+        if (!text) {
+            finalText = attachedFiles.map(f => f.name).join(', ');
+        }
         renderAttachments(); // очистим после отправки
     }
 
-    addUserMessage(finalText);
+    addUserMessage(finalText, true, hasFiles ? attachedFiles.map(f => f.name) : null);
 
     const chat = getCurrentChat();
     const historyForApi = chat.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
@@ -2414,7 +2437,7 @@ function renderAttachments() {
         }
         div.innerHTML = `
             ${thumbHtml}
-            <span>${item.name} (${formatFileSize(item.size)})</span>
+            <span class="attachment-name">${item.name} (${formatFileSize(item.size)})</span>
             <span class="attachment-remove" data-idx="${idx}" title="Удалить">✕</span>
         `;
         attachmentArea.appendChild(div);
@@ -4129,31 +4152,42 @@ function parseCustom(id) {
 }
 // ===== МЕДИА / ФАЙЛЫ ПРЯМО В ЧАТЕ (токены [[GEN:...]] или [GEN:...]) =====
 // LLM иногда пишет один bracket вместо двух — принимаем оба варианта.
-const GEN_TOKEN_RE = /\[+GEN:([a-z_]+)\|([^\]]*)\]+/gi;
+const GEN_TOKEN_RE = /\[+GEN:([a-z_]+)\|(.+?)\]\]/gi;
+const GEN_TOKEN_RE_SINGLE = /\[GEN:([a-z_]+)\|(.+)\]/gi;
+function _parseGenMatch(m) {
+    const kind = m[1];
+    const rest = m[2];
+    if (kind === 'image') {
+        const [aspect, prompt] = splitGenArgs(rest, 2);
+        return { kind: 'image', prompt: prompt || rest, aspect: aspect || '1:1' };
+    } else if (kind === 'video') {
+        const [aspect, prompt] = splitGenArgs(rest, 2);
+        return { kind: 'video', prompt: prompt || rest, aspect: aspect || '16:9' };
+    } else if (kind === 'audio') {
+        return { kind: 'audio', prompt: rest };
+    } else if (kind === 'file') {
+        const [ftype, desc] = splitGenArgs(rest, 2);
+        return { kind: 'file', prompt: desc || rest, ftype: ftype || 'txt' };
+    } else {
+        return { kind, prompt: rest };
+    }
+}
 function parseGenTokens(text) {
     const out = [];
     let m;
     GEN_TOKEN_RE.lastIndex = 0;
     while ((m = GEN_TOKEN_RE.exec(text))) {
-        const kind = m[1];
-        const rest = m[2];
-        if (kind === 'image') {
-            const [aspect, prompt] = splitGenArgs(rest, 2);
-            out.push({ kind: 'image', prompt: prompt || rest, aspect: aspect || '1:1' });
-        } else if (kind === 'video') {
-            const [aspect, prompt] = splitGenArgs(rest, 2);
-            out.push({ kind: 'video', prompt: prompt || rest, aspect: aspect || '16:9' });
-        } else if (kind === 'audio') {
-            out.push({ kind: 'audio', prompt: rest });
-        } else if (kind === 'file') {
-            const [ftype, desc] = splitGenArgs(rest, 2);
-            out.push({ kind: 'file', prompt: desc || rest, ftype: ftype || 'txt' });
-        } else {
-            out.push({ kind, prompt: rest });
+        out.push(_parseGenMatch(m));
+    }
+    // fallback: single-bracket [GEN:kind|args] (rare LLM output)
+    if (out.length === 0) {
+        GEN_TOKEN_RE_SINGLE.lastIndex = 0;
+        while ((m = GEN_TOKEN_RE_SINGLE.exec(text))) {
+            out.push(_parseGenMatch(m));
         }
     }
-    // удалить токены из отображаемого текста
-    const cleanText = text.replace(GEN_TOKEN_RE, '').trim();
+    // remove tokens from display text
+    const cleanText = text.replace(GEN_TOKEN_RE, '').replace(GEN_TOKEN_RE_SINGLE, '').trim();
     return { items: out, cleanText };
 }
 function splitGenArgs(s, n) {
@@ -4276,8 +4310,17 @@ async function renderGenInChat(item, hostEl) {
             const bytes = Uint8Array.from(atob(g.b64), c => c.charCodeAt(0));
             const blob = new Blob([bytes], { type: g.mime || 'application/octet-stream' });
             const url = URL.createObjectURL(blob);
-            wrap.innerHTML = `<div class="gen-inline-file"><a class="test-btn primary" download="${g.filename}" href="${url}">⬇ ${escapeHtml(g.filename)} (${g.size} Б)</a></div>`;
-            setTimeout(() => URL.revokeObjectURL(url), 60000);
+            // File card (как прикреплённый файл: иконка + имя + размер, клик = скачать)
+            const iconSvg = '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M8 4h8l4 4v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z" fill="rgba(59,130,246,0.15)"/><path d="M16 4v4h4"/><path d="M10 13h4M10 17h4" stroke-linecap="round"/></svg>';
+            const sizeLabel = g.size < 1024 ? g.size + ' B' : g.size < 1048576 ? (g.size / 1024).toFixed(1) + ' KB' : (g.size / 1048576).toFixed(1) + ' MB';
+            wrap.innerHTML = `<div class="gen-file-card"><div class="gen-file-card-icon">${iconSvg}</div><div class="gen-file-card-info"><span class="gen-file-card-name">${escapeHtml(g.filename)}</span><span class="gen-file-card-size">${sizeLabel}</span></div></div>`;
+            wrap.querySelector('.gen-file-card').addEventListener('click', () => {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = g.filename;
+                a.click();
+            });
+            setTimeout(() => URL.revokeObjectURL(url), 120000);
         } else {
             wrap.innerHTML = `<div class="gen-inline-err">Ошибка файла: ${escapeHtml(g.message || g.status)}</div>`;
         }

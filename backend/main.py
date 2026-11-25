@@ -504,16 +504,9 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     # Проще: если есть хоть одно десктоп-слово — авто-включаем
     # НО: «скинь/покажи фото/картинку/видео» — это media-запрос, а не десктопное действие.
     # Такие запросы обрабатываются через [[GEN:...]] токены, а не через sysinteraction.
-    _media_hint = re.search(
-        r'\b(скинь|покажи|сгенерируй|создай|сделай)\s*'
-        r'(своё|свое|свой|свою|моё|мое|мой|мою|мне|тебе)?\s*'
-        r'(фото|фотк[ау]|картинк[ау]|картин|видео|изображен[иея]|файл[ау]?|документ[ау]?|аватар|портрет)\b',
-        user_message or "", re.IGNORECASE
-    )
-    _desktop_hint = _DESKTOP_KW.search(user_message or "") is not None and not _media_hint
-    if _desktop_hint and not sysinteraction:
-        sysinteraction = True
-        log_chat_event("SYSINTERACTION_AUTO", {"reason": "desktop_keywords", "msg": (user_message or "")[:100]})
+    # Sysinteraction ВКЛЮЧАЕТСЯ ТОЛЬКО ЯВЛЬНО ПОЛЬЗОВАТЕЛЕМ (кнопка-тоггл в UI).
+    # Авто-включение по ключевым словам УБРАНО (было ложное срабатывание на «сделай файл»,
+    # «сгенерируй фото» и т.п.).
 
     web_auto = _VIDEO_KW.search(user_message or "") is not None
     # ВАЖНО: если sysinteraction активен — НЕ включаем core_web автоматически.

@@ -4410,6 +4410,9 @@ class MediaGenRequest(BaseModel):
     video_example_b64: str = ""  # video: пример-видео (video2video)
     audio_settings: dict = None  # audio: {speed, stability, style, similarity, output_format}
     custom_params: dict = None   # любые доп. параметры для API (перемешиваются в body)
+    paths: dict = None           # OPTIONAL: user_paths для фасада generate_media
+                                 #   {text_to_media, image_to_media, text_image_to_media, voice}
+                                 #   — пути указываются в настройках и исполняются точь-в-точь.
     save: bool = True           # сохранить результат в FILES_DIR
     use_settings_key: bool = True
 
@@ -4497,6 +4500,15 @@ async def media_generate(req: MediaGenRequest):
 
 async def _media_generate_inner(req: MediaGenRequest):
     cfg = _media_cfg(req)
+    # Универсальный фасад: если пользователь указал пути (paths) или приложил файл —
+    # идёт через generate_media (fallback кастомные→дефолты). Иначе — существующая
+    # диспетчеризация по kind (без изменений).
+    if req.paths is not None or req.ref_image_b64:
+        attached = req.ref_image_b64 or req.video_example_b64 or None
+        is_voice = (req.kind == "audio")
+        return media_gen.generate_media(cfg["key"], cfg["base"], cfg["model"],
+                                        req.paths, req.prompt,
+                                        attached_file=attached, is_voice=is_voice)
     if req.kind == "image":
         if req.ref_image_b64:
             res = media_gen.generate_image_ref(cfg["base"], cfg["key"], cfg["model"],

@@ -121,3 +121,11 @@ def test_generate_media_verbatim_model_not_trimmed(monkeypatch):
     media.generate_media("KEY", "BASE", "  my-model  ", {}, "p")
     # verbatim: NOT trimmed
     assert captured["model"] == "  my-model  "
+
+
+def test_generate_image_signature_unchanged():
+    # generate_image must keep its exact param names
+    import inspect
+    sig = inspect.signature(media.generate_image)
+    assert list(sig.parameters) == ["base_url", "api_key", "model", "prompt",
+                                    "size", "proxy", "extra"]

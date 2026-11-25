@@ -1010,10 +1010,17 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
         "  [[GEN:file|py|<что в файле>]] — файл (py/md/html/json/csv/txt/docx/xlsx/pptx/pdf)\n"
         "ВАЖНО для [[GEN:file]]: в поле содержимого пиши РЕАЛЬНЫЙ код/данные файла, НЕ описание.\n"
         "  - py/js/ts/html/css/md/txt/json/csv: сам код или текст (полный, рабочий)\n"
-        "  - xlsx: JSON вида {\"sheets\":[{\"name\":\"Лист\",\"rows\":[[\"Кол1\",\"Кол2\"],[1,2],...]}]}\n"
-        "    + опционально \"chart\":{\"type\":\"line|bar|pie\",\"title\":\"Заголовок\",\"series\":"
+        "  - xlsx: JSON вида {\"sheets\":[{\"name\":\"Лист\",\"rows\":[[\"Кол1\",\"Кол2\"],[1,2],...]}]}"
+        " + опционально \"chart\":{\"type\":\"line|bar|pie\",\"title\":\"Заголовок\",\"series\":"
         "[{\"name\":\"Сериал\",\"values\":\"=Лист1!B2:B11\",\"color\":\"#4472C4\"}],"
         "\"width\":600,\"height\":400,\"position\":\"D8\"}. values = ссылка на диапазон ячеек.\n"
+        "  ВАЖНО: весь JSON (sheets + chart) пиши ОДНИМ блоком внутри [[GEN:file|xlsx|...]]. "
+        "НЕ разбирай его по частям в тексте. Пример:\n"
+        "  [[GEN:file|xlsx|{\"sheets\":[{\"name\":\"Имя\",\"rows\":[[\"Имя\"],[\"Иван\"],...]},\n"
+        "  {\"name\":\"Фамилия\",\"rows\":[[\"Фамилия\"],[\"Петров\"],...]}],\n"
+        "  \"chart\":{\"type\":\"pie\",\"title\":\"Распределение\",\"series\":[\n"
+        "  {\"name\":\"Фамилия\",\"values\":\"=Фамилия!A2:A11\",\"color\":\"#ED7D31\"}],\n"
+        "  \"position\":\"D8\"}}]]\n"
         "  - pptx: JSON вида {\"slides\":[{\"title\":\"Заголовок\",\"body\":\"Текст\"},...]}\n"
         "  - docx: текст документа (абзацы, # = заголовок)\n"
         "  - pdf: текст (бэкенд нарисует PDF)\n"
@@ -1951,6 +1958,7 @@ def _fmt_websearch_results(res: dict) -> str:
 # LLM иногда выводит JSON (xlsx/pptx) без токен-обёртки. Обернём его,
 # чтобы фронтенд мог распознать и сгенерировать файл.
 import re as _re_auto_wrap
+import json as _json_auto_wrap
 _XLSX_JSON_RE = _re_auto_wrap.compile(
     r'```(?:json)?\s*\n(\{["\']?sheets["\']?\s*:).*?```',
     _re_auto_wrap.DOTALL
@@ -1961,18 +1969,117 @@ _PPTX_JSON_RE = _re_auto_wrap.compile(
 )
 
 
+def _try_parse_xlsx_json(text: str) -> str | None:
+    """Try to find a complete xlsx JSON spec (with "sheets") in plain text.
+    Returns the JSON string if found and valid, else None."""
+    # Find all top-level JSON objects that contain "sheets"
+    # Strategy: look for { ... "sheets" ... } patterns
+    for m in _re_auto_wrap.finditer(r'\{[^{}]*"sheets"[^{}]*\}', text):
+        candidate = m.group(0)
+        try:
+            data = _json_auto_wrap.loads(candidate)
+            if isinstance(data, dict) and "sheets" in data:
+                return candidate
+        except Exception:
+            pass
+    # Fallback: try to find the largest JSON block starting with {
+    # and containing "sheets" somewhere inside
+    start = text.find('{"sheets"')
+    if start == -1:
+        start = text.find('{\n"sheets"')
+    if start == -1:
+        # Try to find any { that eventually contains "sheets"
+        for i, ch in enumerate(text):
+            if ch == '{' and '"sheets"' in text[i:i+500]:
+                start = i
+                break
+    if start == -1:
+        return None
+    # Walk forward counting braces to find the matching closing brace
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape:
+            escape = False
+            continue
+        if ch == '\\' and in_string:
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+        elif not in_string:
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    candidate = text[start:i+1]
+                    try:
+                        data = _json_auto_wrap.loads(candidate)
+                        if isinstance(data, dict) and "sheets" in data:
+                            return candidate
+                    except Exception:
+                        pass
+                    break
+    return None
+
+
+def _try_parse_pptx_json(text: str) -> str | None:
+    """Try to find a complete pptx JSON spec (with "slides") in plain text."""
+    for m in _re_auto_wrap.finditer(r'\{[^{}]*"slides"[^{}]*\}', text):
+        candidate = m.group(0)
+        try:
+            data = _json_auto_wrap.loads(candidate)
+            if isinstance(data, dict) and "slides" in data:
+                return candidate
+        except Exception:
+            pass
+    start = text.find('{"slides"')
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape:
+            escape = False
+            continue
+        if ch == '\\' and in_string:
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+        elif not in_string:
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    candidate = text[start:i+1]
+                    try:
+                        data = _json_auto_wrap.loads(candidate)
+                        if isinstance(data, dict) and "slides" in data:
+                            return candidate
+                    except Exception:
+                        pass
+                    break
+    return None
+
+
 def _auto_wrap_gen_file_tokens(text: str) -> str:
     """Если текст содержит raw JSON для xlsx/pptx (без [[GEN:file|...]]),
     оборачиваем его в токен. Уже обёрнутые токены не трогаем."""
     if not text or "[[GEN:file|" in text:
         return text  # уже есть токен — не дублируем
 
+    # 1) Fenced JSON (```json ... ```)
     m = _XLSX_JSON_RE.search(text)
     if m:
         json_body = m.group(0).strip()
-        # Убираем markdown-обёртку (```json ... ```)
         json_body = json_body.replace('```json', '').replace('```', '').strip()
-        # Убираем текст ДО JSON (вступление) и ПОСЛЕ (если есть)
         prefix = text[:m.start()].rstrip()
         suffix = text[m.end():].lstrip()
         return f"{prefix}\n[[GEN:file|xlsx|{json_body}]]{suffix}"
@@ -1984,6 +2091,20 @@ def _auto_wrap_gen_file_tokens(text: str) -> str:
         prefix = text[:m.start()].rstrip()
         suffix = text[m.end():].lstrip()
         return f"{prefix}\n[[GEN:file|pptx|{json_body}]]{suffix}"
+
+    # 2) Raw JSON without fences (LLM output plain JSON in text)
+    xlsx_json = _try_parse_xlsx_json(text)
+    if xlsx_json:
+        # Remove the raw JSON from text and insert the token
+        prefix = text[:text.index(xlsx_json)].rstrip()
+        suffix = text[text.index(xlsx_json)+len(xlsx_json):].lstrip()
+        return f"{prefix}\n[[GEN:file|xlsx|{xlsx_json}]]{suffix}"
+
+    pptx_json = _try_parse_pptx_json(text)
+    if pptx_json:
+        prefix = text[:text.index(pptx_json)].rstrip()
+        suffix = text[text.index(pptx_json)+len(pptx_json):].lstrip()
+        return f"{prefix}\n[[GEN:file|pptx|{pptx_json}]]{suffix}"
 
     return text
 

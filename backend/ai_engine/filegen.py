@@ -61,10 +61,31 @@ def gen_xlsx(content: str, title: str = "Лист") -> bytes:
     if isinstance(data, dict) and "sheets" in data:
         wb = Workbook()
         wb.remove(wb.active)
-        for i, s in enumerate(data["sheets"]):
+        sheets = data["sheets"]
+        # Normalization: LLM may send sheets as dict instead of list
+        if isinstance(sheets, dict):
+            sheets = [sheets]
+        elif isinstance(sheets, str):
+            # Maybe it's a JSON string of a list
+            try:
+                parsed = json.loads(sheets)
+                sheets = parsed if isinstance(parsed, list) else [parsed]
+            except Exception:
+                sheets = [{"name": "Лист 1", "rows": [[sheets]]}]
+        for i, s in enumerate(sheets):
+            if not isinstance(s, dict):
+                continue
             raw_name = s.get("name", f"Лист {i+1}")
             ws = wb.create_sheet(title=_safe_sheet_name(raw_name, f"Лист {i+1}"))
-            for row in s.get("rows", []):
+            rows = s.get("rows", [])
+            # If rows is a dict (e.g. {"col1": [...], "col2": [...]}), convert
+            if isinstance(rows, dict):
+                keys = list(rows.keys())
+                cols = [rows[k] for k in keys]
+                rows = [keys] + [list(c) for c in zip(*cols)] if cols else []
+            for row in rows:
+                if isinstance(row, dict):
+                    row = list(row.values())
                 ws.append(row)
 
         # === Chart support ===

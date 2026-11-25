@@ -63,7 +63,7 @@ all data stay on your machine.
 - **Desktop** — Electron + bundled Python backend (sidecar, PyInstaller),
   NSIS installer for Windows.
 
-## 🚀 Quick install (no build required)
+##  Quick install (no build required)
 
 **One file — and you're done.** Run `AMT Chat Setup 1.0.1.exe` from the
 `release/` folder and follow the installer wizard. No need to install

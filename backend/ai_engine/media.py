@@ -18,9 +18,13 @@
 import os
 import time
 import json
+import base64
+import logging
 from typing import Optional
 
 import httpx
+
+_log = logging.getLogger(__name__)
 
 # Известные профили (структура эндпоинтов). Ключ, модель И base_url — от пользователя.
 # Provider-neutral: default_base оставлен ПУСТЫМ для всех профилей — приложение
@@ -80,6 +84,93 @@ _FB_VIDEO_MODEL = _FALLBACK_MODELS.get("video", "")
 # ElevenLabs: отдельный протокол (заголовок xi-api-key, path /v1/text-to-speech/{voice},
 # body model_id, ответ voices[]). Автоопределение по base_url.
 _ELEVENLABS_HOST = "elevenlabs.io"
+
+# ---------------------------------------------------------------------------
+# Универсальный фасад (generate_media): дефолтные константы + helper'ы.
+# Provider-neutral: ключ/URL/модель ПУСТЫЕ по умолчанию (не привязаны к
+# конкретному провайдеру), переопределяются через env. Путь-константы имеют
+# нейтральные OpenAI-совместимые дефолты, которые пользователь может заменить.
+# ---------------------------------------------------------------------------
+DEFAULT_API_KEY = os.environ.get("AMT_DEFAULT_API_KEY", "")
+DEFAULT_BASE_URL = os.environ.get("AMT_DEFAULT_BASE_URL", "")
+DEFAULT_MODEL = os.environ.get("AMT_DEFAULT_MODEL", "")
+DEFAULT_PATH_TEXT_TO_MEDIA = os.environ.get("AMT_PATH_TEXT_TO_MEDIA", "v1/images/generations")
+DEFAULT_PATH_IMAGE_TO_MEDIA = os.environ.get("AMT_PATH_IMAGE_TO_MEDIA", "v1/images/generations")
+DEFAULT_PATH_TEXT_IMAGE_TO_MEDIA = os.environ.get("AMT_PATH_TEXT_IMAGE_TO_MEDIA", "v1/images/generations")
+DEFAULT_PATH_VOICE = os.environ.get("AMT_PATH_VOICE", "v1/audio/speech")
+
+
+def _is_empty(v) -> bool:
+    """None/''/только пробелы считается «не задано» -> подставляем дефолт."""
+    return (v is None) or (str(v).strip() == "")
+
+
+def _get_path(has_file: bool, prompt: str, is_voice: bool, user_paths: Optional[dict] = None) -> str:
+    """Выбирает endpoint-путь по наличию файла/голоса/промпта.
+
+    Ключи в user_paths: voice, text_image_to_media, image_to_media, text_to_media.
+    Значение из user_paths берётся ТОЧЬ-В-ТОЧЬ (verbatim), если оно задано;
+    иначе подставляется соответствующая DEFAULT_PATH_* константа.
+    """
+    if is_voice:
+        key = "voice"
+        default = DEFAULT_PATH_VOICE
+    elif has_file and prompt:
+        key = "text_image_to_media"
+        default = DEFAULT_PATH_TEXT_IMAGE_TO_MEDIA
+    elif has_file:
+        key = "image_to_media"
+        default = DEFAULT_PATH_IMAGE_TO_MEDIA
+    else:
+        key = "text_to_media"
+        default = DEFAULT_PATH_TEXT_TO_MEDIA
+    up = user_paths or {}
+    chosen = up.get(key)
+    if not _is_empty(chosen):
+        return chosen  # verbatim, без trim
+    return default
+
+
+def _prepare_payload(prompt: str, model: str, attached_file=None) -> dict:
+    """Собирает JSON payload. prompt/model — ТОЧЬ-В-ТОЧЬ (без trim).
+
+    attached_file обрабатывается по типу (фронт отправляет base64-строки,
+    поэтому строка НЕ считается путём по умолчанию):
+      - bytes                -> base64-кодирование
+      - str "data:..." URI   -> отбросить префикс до запятой (включая), остаток = base64
+      - str, путь к существующему файлу (os.path.exists) -> прочитать + base64
+      - str, иначе (готовый base64) -> использовать как есть, open() НЕ вызывать
+    """
+    payload = {"prompt": prompt, "model": model}
+    if attached_file is not None:
+        if isinstance(attached_file, (bytes, bytearray)):
+            payload["image"] = base64.b64encode(bytes(attached_file)).decode("ascii")
+        elif isinstance(attached_file, str):
+            if attached_file.startswith("data:"):
+                # data URI: data:<mime>;base64,<value>
+                value = attached_file.split(",", 1)[1] if "," in attached_file else attached_file
+                payload["image"] = value
+            elif os.path.exists(attached_file):
+                with open(attached_file, "rb") as fh:
+                    payload["image"] = base64.b64encode(fh.read()).decode("ascii")
+            else:
+                # обычный base64-строка (не путь, не data URI) — используем как есть
+                payload["image"] = attached_file
+    return payload
+
+
+def _make_request(api_key: str, base_url: str, model: str, path: str,
+                  prompt: str, attached_file=None) -> dict:
+    """Склеивает URL (структурная нормализация только хвост/начало), POST-ит,
+    делает raise_for_status, возвращает JSON тела.
+    """
+    url = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
+    payload = _prepare_payload(prompt, model, attached_file)
+    resp = httpx.post(url, json=payload,
+                      headers={"Authorization": f"Bearer {api_key}"},
+                      timeout=60)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def provider_profile(kind: str, base_url: str = "", api_key: str = "", model: str = "",

@@ -804,6 +804,12 @@
                                 <input type="text" id="imageKey" class="opt-input" placeholder="ВАШ_API_KEY (пусто = общий ключ)">
                                 <input type="text" id="imageBaseUrl" class="opt-input" style="margin-top:8px" placeholder="Base URL (пусто = общий)">
                                 <input type="text" id="imageModel" class="opt-input" style="margin-top:8px" placeholder="Модель картинок (например, gpt-image-1)">
+                                <input type="text" id="mediaPathImage" class="opt-input" style="margin-top:8px" placeholder="Путь: только изображение → медиа (пусто = дефолт)">
+                                <input type="text" id="mediaPathTextImage" class="opt-input" style="margin-top:8px" placeholder="Путь: текст + изображение → медиа (пусто = дефолт)">
+                            </div>
+                            <div class="form-group">
+                                <label>Текст → медиа</label>
+                                <input type="text" id="mediaPathText" class="opt-input" placeholder="Путь: текст → медиа (например, v1/images/generations; пусто = дефолт)">
                             </div>
                             <div class="form-group">
                                 <label>Видео</label>
@@ -817,6 +823,7 @@
                                 <input type="text" id="audioBaseUrl" class="opt-input" style="margin-top:8px" placeholder="Base URL (например, https://easyvoice.ae/api/v1)">
                                 <input type="text" id="audioModel" class="opt-input" style="margin-top:8px" placeholder="Модель (например, kokoro-82m)">
                                 <input type="text" id="audioVoiceId" class="opt-input" style="margin-top:8px" placeholder="Голос (например, af_aoede)">
+                                <input type="text" id="mediaPathVoice" class="opt-input" style="margin-top:8px" placeholder="Путь: голос/TTS (например, v1/audio/speech; пусто = дефолт)">
                             </div>
                             <div class="form-group">
                                 <label>Коддинг</label>

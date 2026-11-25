@@ -4326,9 +4326,18 @@ async function renderGenInChat(item, hostEl) {
                 content = content.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
             }
         }
+        // Чистое имя файла: desc для xlsx/pptx — это JSON-спецификация, не заголовок
+        let fileTitle;
+        if ((ftype === 'xlsx' && (looksLikeXlsxJson || (content.startsWith('{') && content.includes('"sheets"')))) ||
+            (ftype === 'pptx' && (looksLikePptxJson || (content.startsWith('{') && content.includes('"slides"'))))) {
+            fileTitle = ftype === 'xlsx' ? 'Excel' : 'Презентация';
+        } else {
+            // Для кода/текста: первые 40 символов описания — нормально
+            fileTitle = desc.slice(0, 40);
+        }
         const g = await fetch(`${API_BASE}/api/filegen/generate`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ filetype: ftype, content, title: desc.slice(0, 40) }),
+            body: JSON.stringify({ filetype: ftype, content, title: fileTitle }),
         }).then(r => r.json());
         container.appendChild(wrap);
         if (g.status === 'ok') {
@@ -4347,7 +4356,9 @@ async function renderGenInChat(item, hostEl) {
             });
             setTimeout(() => URL.revokeObjectURL(url), 120000);
         } else {
-            wrap.innerHTML = `<div class="gen-inline-err">Ошибка файла: ${escapeHtml(g.message || g.status)}</div>`;
+            const errMsg = g.message || g.status || 'неизвестная ошибка';
+            console.error('[filegen] Error:', g);
+            wrap.innerHTML = `<div class="gen-inline-err">Ошибка файла: ${escapeHtml(errMsg)}<br><small style="opacity:0.6">Данные: ${escapeHtml(ftype)} · ${content.length} символов</small></div>`;
         }
     }
 }

@@ -4152,8 +4152,8 @@ function parseCustom(id) {
 }
 // ===== МЕДИА / ФАЙЛЫ ПРЯМО В ЧАТЕ (токены [[GEN:...]] или [GEN:...]) =====
 // LLM иногда пишет один bracket вместо двух — принимаем оба варианта.
-const GEN_TOKEN_RE = /\[+GEN:([a-z_]+)\|(.+?)\]\]/gi;
-const GEN_TOKEN_RE_SINGLE = /\[GEN:([a-z_]+)\|(.+)\]/gi;
+const GEN_TOKEN_RE = /\[+GEN:([a-z_]+)\|([\s\S]+?)\]\]/gi;
+const GEN_TOKEN_RE_SINGLE = /\[GEN:([a-z_]+)\|([\s\S]+)\]/gi;
 function _parseGenMatch(m) {
     const kind = m[1];
     const rest = m[2];
@@ -4166,7 +4166,10 @@ function _parseGenMatch(m) {
     } else if (kind === 'audio') {
         return { kind: 'audio', prompt: rest };
     } else if (kind === 'file') {
-        const [ftype, desc] = splitGenArgs(rest, 2);
+        // Разделяем только на ПЕРВОМ | — остаток (включая все последующие |) = содержимое
+        const firstPipe = rest.indexOf('|');
+        const ftype = firstPipe > 0 ? rest.slice(0, firstPipe).trim() : 'txt';
+        const desc = firstPipe > 0 ? rest.slice(firstPipe + 1) : rest;
         return { kind: 'file', prompt: desc || rest, ftype: ftype || 'txt' };
     } else {
         return { kind, prompt: rest };
@@ -4282,25 +4285,47 @@ async function renderGenInChat(item, hostEl) {
             wrap.innerHTML = `<div class="gen-inline-err">Ключ не поддерживает видео. Укажите другой: ${escapeHtml(res.error || '')}</div>`;
         }
     } else if (kind === 'file') {
-        // файл: спросить ИИ содержимое, сгенерировать, дать скачать
+        // файл: содержимое из токена уже реальный код/данные (LLM пишет его сам)
         const desc = item.prompt;
         const ftype = item.ftype || 'txt';
-        // Передаём активные ядровые агенты + ключ, чтобы обход фильтров действовал
-        // и при внутренней генерации файла (как в DeepSeek: файл приходит приложением).
-        const activeCore = activeCoreAgentList();
-        const chatBody = {
-            message: `Создай содержимое ${ftype} файла: "${desc}". Верни только содержимое, без пояснений.`,
-            history: [],
-            settings: toBackendSettings(buildSettingsFromInputs()),
-            core_agents: activeCore,
-        };
-        if (currentKeyId) chatBody.key_id = currentKeyId;
-        if (currentSystemPromptOverride) chatBody.systemPromptOverride = currentSystemPromptOverride;
-        const aiRes = await fetch(`${API_BASE}/api/chat`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(chatBody),
-        }).then(r => r.json());
-        const content = aiRes.response || '';
+        let content = desc.trim();
+        // Убрать markdown-обёртку (```...```) если ИИ её добавил
+        if (content.startsWith('```')) {
+            content = content.replace(/^```(?:json|javascript|js|python|py|html|css|csv|txt)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+        }
+        // Для xlsx/pptx: если содержимое — не JSON, а описание → попросить ИИ переписать в JSON
+        const looksLikeXlsxJson = ftype === 'xlsx' && content.startsWith('{') && content.includes('"sheets"');
+        const looksLikePptxJson = ftype === 'pptx' && content.startsWith('{') && content.includes('"slides"');
+        if ((ftype === 'xlsx' && !looksLikeXlsxJson) || (ftype === 'pptx' && !looksLikePptxJson)) {
+            // Контент не в нужном формате — делаем второй запрос к ИИ с чёткой инструкцией
+            const activeCore = activeCoreAgentList();
+            let contentPrompt;
+            if (ftype === 'xlsx') {
+                contentPrompt = `По запросу: "${desc}" создай содержимое Excel. ` +
+                    `Верни ТОЛЬКО валидный JSON: {"sheets":[{"name":"Лист","rows":[["Кол1","Кол2"],["знач1","знач2"]]}]} ` +
+                    `Без пояснений, без markdown.`;
+            } else {
+                contentPrompt = `По запросу: "${desc}" создай презентацию. ` +
+                    `Верни ТОЛЬКО валидный JSON: {"slides":[{"title":"Заголовок","body":"Текст"},...]} ` +
+                    `Без пояснений, без markdown.`;
+            }
+            const chatBody = {
+                message: contentPrompt,
+                history: [],
+                settings: toBackendSettings(buildSettingsFromInputs()),
+                core_agents: activeCore,
+            };
+            if (currentKeyId) chatBody.key_id = currentKeyId;
+            if (currentSystemPromptOverride) chatBody.systemPromptOverride = currentSystemPromptOverride;
+            const aiRes = await fetch(`${API_BASE}/api/chat`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(chatBody),
+            }).then(r => r.json());
+            content = (aiRes.response || '').trim();
+            if (content.startsWith('```')) {
+                content = content.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+            }
+        }
         const g = await fetch(`${API_BASE}/api/filegen/generate`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ filetype: ftype, content, title: desc.slice(0, 40) }),

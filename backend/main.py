@@ -1008,10 +1008,16 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
         "  [[GEN:audio|<текст речи>]] — голос (text-to-speech)\n"
         "  [[GEN:video|9:16|<промпт видео>]] — видео (16:9 или 9:16; 9:16 = «кружок»)\n"
         "  [[GEN:file|py|<что в файле>]] — файл (py/md/html/json/csv/txt/docx/xlsx/pptx/pdf)\n"
-        "Если пользователь просит код на любом языке («сделай код на питон», «напиши скрипт», «дай функцию») — "
-        "сначала кратко объясни, затем в конце отдельной строкой добавь токен "
-        "[[GEN:file|<ext>|краткое описание]], где <ext>=py/js/ts/html/css/json/txt/md. Код будет отправлен "
-        "файлом-вложением, как в DeepSeek.\n"
+        "ВАЖНО для [[GEN:file]]: в поле содержимого пиши РЕАЛЬНЫЙ код/данные файла, НЕ описание.\n"
+        "  - py/js/ts/html/css/md/txt/json/csv: сам код или текст (полный, рабочий)\n"
+        "  - xlsx: JSON вида {\"sheets\":[{\"name\":\"Лист\",\"rows\":[[\"Кол1\",\"Кол2\"],[1,2],...]}]}\n"
+        "  - pptx: JSON вида {\"slides\":[{\"title\":\"Заголовок\",\"body\":\"Текст\"},...]}\n"
+        "  - docx: текст документа (абзацы, # = заголовок)\n"
+        "  - pdf: текст (бэкенд нарисует PDF)\n"
+        "Если пользователь просит код («сделай скрипт», «напиши функцию») — сначала кратко объясни, "
+        "затем в конце отдельной строкой добавь токен [[GEN:file|<ext>|<ПОЛНЫЙ код>]].\n"
+        "Пример: [[GEN:file|py|import os\nprint(os.getcwd())]]\n"
+        "Для многострочного кода/контента используй переносы строк внутри токена.\n"
         "Промпт для картинки/видео — короткий, на английском, описывающий сцену. Токен добавляй в конце, "
         "отдельной строкой. Если запрос неоднозначен — задай уточняющий вопрос БЕЗ токена.\n"
         "ВАЖНО про голос: токен [[GEN:audio|...]] добавляй ТОЛЬКО если пользователь явно просит "
@@ -4318,21 +4324,83 @@ async def upload_file(request: FileUploadRequest):
 
 # ===== РАЗБОРКА ФАЙЛОВ ДЛЯ AI =====
 def parse_file_for_ai(file_path: str, mime_type: str) -> str:
-    """Читает файл и возвращает текст для передачи в AI"""
+    """Читает файл и возвращает текст для передачи в AI.
+    Поддерживает: текст, JSON, XML, XLSX, DOCX, PPTX. Остальное — плейсхолдер."""
+    name = os.path.basename(file_path)
     try:
-        if mime_type.startswith("text/") or mime_type in ["application/json", "application/xml"]:
+        # --- Текстовые форматы ---
+        if mime_type.startswith("text/") or mime_type in (
+            "application/json", "application/xml",
+            "application/x-python", "application/x-javascript",
+            "application/typescript", "application/ld+json",
+            "application/javascript",
+        ):
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 return f.read()
+        # --- XLSX: читать через openpyxl → строки ---
+        elif mime_type in (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel",
+        ) or name.lower().endswith((".xlsx", ".xls")):
+            try:
+                import openpyxl
+                wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+                parts = []
+                for ws in wb.worksheets:
+                    rows = []
+                    for row in ws.iter_rows(values_only=True):
+                        cells = [str(c) if c is not None else "" for c in row]
+                        if any(cells):
+                            rows.append(",".join(cells))
+                    if rows:
+                        parts.append(f"[Лист: {ws.title}]\n" + "\n".join(rows[:200]))  # cap 200 rows
+                wb.close()
+                return "\n\n".join(parts) if parts else f"[Пустой XLSX: {name}]"
+            except Exception:
+                return f"[XLSX: {name} — не удалось разобрать содержимое]"
+        # --- DOCX: читать через python-docx → абзацы ---
+        elif mime_type in (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ) or name.lower().endswith((".docx", ".doc")):
+            try:
+                from docx import Document
+                doc = Document(file_path)
+                paras = [p.text for p in doc.paragraphs if p.text.strip()]
+                return "\n".join(paras) if paras else f"[Пустой DOCX: {name}]"
+            except Exception:
+                return f"[DOCX: {name} — не удалось разобрать содержимое]"
+        # --- PPTX: читать через python-pptx → текст слайдов ---
+        elif mime_type in (
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ) or name.lower().endswith((".pptx", ".ppt")):
+            try:
+                from pptx import Presentation
+                prs = Presentation(file_path)
+                slides_text = []
+                for i, slide in enumerate(prs.slides, 1):
+                    texts = []
+                    for shape in slide.shapes:
+                        if shape.has_text_frame:
+                            for para in shape.text_frame.paragraphs:
+                                t = para.text.strip()
+                                if t:
+                                    texts.append(t)
+                    if texts:
+                        slides_text.append(f"[Слайд {i}]\n" + "\n".join(texts))
+                return "\n\n".join(slides_text) if slides_text else f"[Пустой PPTX: {name}]"
+            except Exception:
+                return f"[PPTX: {name} — не удалось разобрать содержимое]"
+        # --- Медиа: плейсхолдеры ---
         elif mime_type.startswith("image/"):
-            return f"[Изображение: {os.path.basename(file_path)}]"
+            return f"[Изображение: {name}]"
         elif mime_type.startswith("audio/"):
-            return f"[Аудио: {os.path.basename(file_path)}]"
+            return f"[Аудио: {name}]"
         elif mime_type.startswith("video/"):
-            return f"[Видео: {os.path.basename(file_path)}]"
+            return f"[Видео: {name}]"
         else:
-            return f"[Файл: {os.path.basename(file_path)}]"
+            return f"[Файл: {name}]"
     except Exception:
-        return f"[Не удалось прочитать файл: {os.path.basename(file_path)}]"
+        return f"[Не удалось прочитать файл: {name}]"
 
 
 # ===== ПРОЕКТЫ (PROJECT_ROOT) =====

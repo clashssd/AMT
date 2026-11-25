@@ -1,8 +1,19 @@
 {
-  "version": "1.0.3",
+  "version": "1.0.4",
   "name": "AMT Chat",
   "latest_at": "2026-11-25",
   "releases": [
+    {
+      "version": "1.0.4",
+      "date": "2026-11-25",
+      "title": "Filegen: реальное содержимое файлов + парсинг вложений",
+      "changes": [
+        "GEN:file теперь содержит РЕАЛЬНОЕ содержимое файла (код, JSON для xlsx/pptx), а не описание. Фронтенд пропускает содержимое напрямую в filegen без второго API-вызова (для кода/текста/xlsx/pptx).",
+        "parse_file_for_ai: XLSX (openpyxl), DOCX (python-docx), PPTX (python-pptx) — ИИ видит реальное содержимое вложений (не плейсхолдер [Файл: name]).",
+        "MEDIA_CAPABILITY: LLM пишет полный код/данные в токен [[GEN:file|ext|content]], не краткое описание. Для xlsx — JSON {\"sheets\":[{...}]}, для pptx — JSON {\"slides\":[{...}]}.",
+        "Frontend: GEN_TOKEN_RE с dotAll ([\\s\\S]) для многострочного контента; splitGenArgs разбивает только на первый | (pipe в коде сохраняется); markdown-fence stripping расширен (python, html, css, csv)."
+      ]
+    },
     {
       "version": "1.0.3",
       "date": "2026-11-25",

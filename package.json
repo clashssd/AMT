@@ -1,7 +1,7 @@
 {
   "name": "amt-chat",
   "productName": "AMT Chat",
-  "version": "1.0.5",
+  "version": "1.0.1",
   "description": "Local AI assistant with desktop shell and extension system",
   "main": "main.js",
   "scripts": {

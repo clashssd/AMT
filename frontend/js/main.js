@@ -232,6 +232,16 @@ let attachedFiles = [];
 // Захват в момент отправки сообщения: чтобы processGenTokens/renderGenInChat
 // могли передать приложенный файл из чата в /api/media/generate как ref_image_b64.
 let _lastChatAttachments = [];
+// Пути эндпоинтов медиа-фасада (из настроек). Пустые значения = дефолтный путь
+// (решает media.py: _get_path/generate_media). Ключи совпадают с _get_path.
+function buildPathsObj() {
+    return {
+        text_to_media: settings?.mediaPathText || '',
+        image_to_media: settings?.mediaPathImage || '',
+        text_image_to_media: settings?.mediaPathTextImage || '',
+        voice: settings?.mediaPathVoice || '',
+    };
+}
 let agentsCache = [];
 let skillsCache = [];
 let currentAgentId = '';
@@ -4281,7 +4291,7 @@ async function renderGenInChat(item, hostEl) {
         wrap.innerHTML = '<div class="gen-inline-note">Генерирую картинку…</div>';
         container.appendChild(wrap);
         const ref = await attachedRefB64();
-        const res = await post({ kind: 'image', prompt: item.prompt, size: '1024x1024', use_settings_key: true, save: true,
+        const res = await post({ kind: 'image', prompt: item.prompt, size: '1024x1024', use_settings_key: true, save: true, paths: buildPathsObj(),
                                  ...(ref ? { ref_image_b64: ref } : {}) });
         wrap.innerHTML = '';
         if (res.ok && (res.b64 || res.url)) {
@@ -4298,7 +4308,7 @@ async function renderGenInChat(item, hostEl) {
     } else if (kind === 'audio') {
         wrap.innerHTML = '<div class="gen-inline-note">Генерирую голос…</div>';
         container.appendChild(wrap);
-        const res = await post({ kind: 'audio', prompt: item.prompt, use_settings_key: true, save: true });
+        const res = await post({ kind: 'audio', prompt: item.prompt, use_settings_key: true, save: true, paths: buildPathsObj() });
         wrap.innerHTML = '';
         if (res.ok && res.b64) {
             const a = document.createElement('audio');
@@ -4314,7 +4324,7 @@ async function renderGenInChat(item, hostEl) {
         wrap.innerHTML = `<div class="gen-inline-note">Генерирую видео (${item.aspect})…</div>`;
         container.appendChild(wrap);
         const refV = await attachedRefB64();
-        const res = await post({ kind: 'video', prompt: item.prompt, aspect_ratio: item.aspect || '16:9', duration: '5', use_settings_key: true, save: true,
+        const res = await post({ kind: 'video', prompt: item.prompt, aspect_ratio: item.aspect || '16:9', duration: '5', use_settings_key: true, save: true, paths: buildPathsObj(),
                                  ...(refV ? { ref_image_b64: refV } : {}) });
         wrap.innerHTML = '';
         if (res.ok && res.url && !res.task_id) {
@@ -6025,7 +6035,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             flashStatus('Тест STT: синтезирую голос…');
             try {
                 // Step 1: TTS — текст → аудио
-                const ttsBody = { kind: 'audio', prompt: text, use_settings_key: true };
+                const ttsBody = { kind: 'audio', prompt: text, use_settings_key: true, paths: buildPathsObj() };
                 if (base) ttsBody.base_url = base;
                 if (key) ttsBody.api_key = key;
                 if (ttsModel) ttsBody.model = ttsModel;

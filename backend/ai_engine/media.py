@@ -173,6 +173,52 @@ def _make_request(api_key: str, base_url: str, model: str, path: str,
     return resp.json()
 
 
+def generate_media(user_api_key, user_base_url, user_model, user_paths,
+                   prompt, attached_file=None, is_voice=False) -> dict:
+    """Универсальный фасад генерации медиа.
+
+    Все настройки (ключ, base_url, модель, пути) ОПЦИОНАЛЬНЫ: пустые/None/
+    только пробелы подменяются DEFAULT_*; заданные значения уходят ТОЧЬ-В-ТОЧЬ.
+    Алгоритм: (1) попытка с кастомными настройками; (2) при сбое — строго
+    дефолтные. Возвращает ПЛОСКИЙ dict: ключи тела провайдера на верхнем
+    уровне (без вложенного "result"); при двойном сбое —
+    {"ok": False, "code": "api_error", "error": "..."}.
+    """
+    has_file = bool(attached_file)
+    # путь для дефолтной попытки (строгие дефолты)
+    default_path = _get_path(has_file, prompt, is_voice)
+    up = user_paths or {}
+
+    # ПОПЫТКА 1: кастомные значения (verbatim, если заданы), иначе DEFAULT_*
+    active_api_key = user_api_key if not _is_empty(user_api_key) else DEFAULT_API_KEY
+    active_base_url = user_base_url if not _is_empty(user_base_url) else DEFAULT_BASE_URL
+    active_model = user_model if not _is_empty(user_model) else DEFAULT_MODEL
+    active_path_key = "voice" if is_voice else \
+        "text_image_to_media" if has_file and prompt else \
+        "image_to_media" if has_file else "text_to_media"
+    active_path = up.get(active_path_key) if not _is_empty(up.get(active_path_key)) else default_path
+
+    try:
+        result = _make_request(active_api_key, active_base_url, active_model,
+                               active_path, prompt, attached_file)
+        out = {"ok": True}
+        out.update(result if isinstance(result, dict) else {"data": result})
+        return out
+    except Exception as e:
+        err1 = str(e)
+        _log.warning("media: кастомная конфигурация не сработала, fallback на дефолты: %s", err1)
+        try:
+            result = _make_request(DEFAULT_API_KEY, DEFAULT_BASE_URL, DEFAULT_MODEL,
+                                   default_path, prompt, attached_file)
+            out = {"ok": True}
+            out.update(result if isinstance(result, dict) else {"data": result})
+            return out
+        except Exception as e2:
+            err2 = str(e2)
+            return {"ok": False, "code": "api_error",
+                    "error": f"Ошибка кастомного API: {err1}. Ошибка дефолтного API: {err2}"}
+
+
 def provider_profile(kind: str, base_url: str = "", api_key: str = "", model: str = "",
                      voice_id: str = "", proxy: str = "") -> dict:
     p = dict(PROVIDERS.get(kind, {}))

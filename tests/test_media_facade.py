@@ -50,3 +50,74 @@ def test_get_path_user_paths_override():
     assert media._get_path(False, "p", False, up) == "my/custom/path"
     # empty user_paths entry falls back to default
     assert media._get_path(False, "p", False, {"text_to_media": ""}) == media.DEFAULT_PATH_TEXT_TO_MEDIA
+
+
+def test_generate_media_success_custom(monkeypatch):
+    captured = {}
+    def fake_make_request(api_key, base_url, model, path, prompt, attached_file=None):
+        captured.update(api_key=api_key, base_url=base_url, model=model, path=path, prompt=prompt)
+        # provider-style body (what _make_request returns via resp.json())
+        return {"b64": "AAAA", "url": "u"}
+    monkeypatch.setattr(media, "_make_request", fake_make_request)
+    res = media.generate_media("KEY", "https://api.example", "mod-1",
+                               {"text_to_media": "my/path"}, "a cat")
+    # FLAT contract: provider keys land at top level, no "result" nesting
+    assert res["ok"] is True
+    assert res["b64"] == "AAAA"
+    assert "result" not in res
+    assert captured["api_key"] == "KEY"
+    assert captured["base_url"] == "https://api.example"
+    assert captured["model"] == "mod-1"
+    assert captured["path"] == "my/path"
+
+
+def test_generate_media_fallback_to_defaults(monkeypatch):
+    calls = []
+    def fake_make_request(api_key, base_url, model, path, prompt, attached_file=None):
+        calls.append((api_key, base_url, model, path))
+        if api_key == "BAD_KEY":
+            raise RuntimeError("custom failed: 401")
+        return {"b64": "BBBB"}
+    monkeypatch.setattr(media, "_make_request", fake_make_request)
+    res = media.generate_media("BAD_KEY", "https://bad", "bad-model", {}, "prompt", attached_file=b"raw")
+    assert res["ok"] is True
+    assert res["b64"] == "BBBB"      # flat: from the successful default attempt
+    assert "result" not in res
+    assert len(calls) == 2
+    # second call used strict defaults
+    assert calls[1][0] == media.DEFAULT_API_KEY
+    assert calls[1][1] == media.DEFAULT_BASE_URL
+    assert calls[1][2] == media.DEFAULT_MODEL
+
+
+def test_generate_media_double_failure(monkeypatch):
+    def fake_make_request(*a, **k):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(media, "_make_request", fake_make_request)
+    res = media.generate_media("K", "U", "M", {}, "p")
+    assert res["ok"] is False
+    assert res["code"] == "api_error"
+    assert "Ошибка кастомного API" in res["error"]
+    assert "Ошибка дефолтного API" in res["error"]
+
+
+def test_generate_media_whitespace_user_field_substituted(monkeypatch):
+    captured = {}
+    def fake_make_request(api_key, base_url, model, path, prompt, attached_file=None):
+        captured["model"] = model
+        return {"ok": True}
+    monkeypatch.setattr(media, "_make_request", fake_make_request)
+    # whitespace model -> DEFAULT_MODEL on attempt 1
+    media.generate_media("KEY", "BASE", "   ", {}, "p")
+    assert captured["model"] == media.DEFAULT_MODEL
+
+
+def test_generate_media_verbatim_model_not_trimmed(monkeypatch):
+    captured = {}
+    def fake_make_request(api_key, base_url, model, path, prompt, attached_file=None):
+        captured["model"] = model
+        return {"ok": True}
+    monkeypatch.setattr(media, "_make_request", fake_make_request)
+    media.generate_media("KEY", "BASE", "  my-model  ", {}, "p")
+    # verbatim: NOT trimmed
+    assert captured["model"] == "  my-model  "

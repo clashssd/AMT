@@ -7,7 +7,7 @@ from typing import Any, Callable, Optional
 log = logging.getLogger(__name__)
 
 # --- Tuning constants (from spec) ---
-MAX_TOOL_ITERATIONS = 5
+MAX_TOOL_ITERATIONS = 5  # Default; can be overridden by settings.tool_iter_limit
 TOOL_RESULT_MAX_BYTES = 4096
 
 

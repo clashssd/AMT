@@ -293,6 +293,8 @@ class Settings(BaseModel):
     tts_model: str = ""               # TTS model name
     tts_voice_id: str = ""            # empty = system default
     vosk_model_path: str = ""         # empty = use auto-downloaded default
+    # Tool-calling iteration limit (0 = default 5, max 50)
+    tool_iter_limit: int = 0
     wake_word_string: str = "Астра"   # string to match in Vosk transcript
     vad_silence_ms: int = 2000
     vad_sensitivity: float = 1.8
@@ -1397,10 +1399,12 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                 # --- Native tool-calling loop (only when toolCalling enabled) ---
                 # If the LLM returned tool_calls, execute them via the registry,
                 # append the results as `tool` messages, and re-call the LLM — up
-                # to MAX_TOOL_ITERATIONS times. Uses the open `client`/`url`/
-                # headers so 429 key-rotation and proxy config stay consistent.
+                # to MAX_TOOL_ITERATIONS times (or settings.tool_iter_limit if set).
+                # Uses the open `client`/`url`/headers so 429 key-rotation and proxy config stay consistent.
                 if settings.toolCalling and msg.get("tool_calls"):
-                    for _iteration in range(MAX_TOOL_ITERATIONS):
+                    # Use dynamic iteration limit from settings (0 = default MAX_TOOL_ITERATIONS)
+                    iter_limit = settings.tool_iter_limit if settings.tool_iter_limit > 0 else MAX_TOOL_ITERATIONS
+                    for _iteration in range(iter_limit):
                         # Append the assistant message (with its tool_calls) to context
                         assistant_msg = {"role": "assistant", "content": msg.get("content")}
                         if msg.get("tool_calls"):

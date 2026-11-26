@@ -855,6 +855,21 @@
                         <div class="settings-block">
                             <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M6.5 6.5a3.5 3.5 0 1 1 7 0v3a3.5 3.5 0 1 1-7 0z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17.5" cy="9" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="18" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span> MCP-серверы</h3>
                             <p class="block-desc">Подключите внешние MCP-серверы (STDIO-процессы или HTTP-эндпоинты). Их инструменты автоматически появятся в доступных инструментах м��дели (при включённом tool-calling).</p>
+                            <!-- Пресеты быстрой установки -->
+                            <div class="mcp-presets">
+                                <button class="test-btn mcp-preset-btn" onclick="mcpPresetAdd('rag')">📚 База знаний (RAG)</button>
+                                <button class="test-btn mcp-preset-btn" onclick="mcpPresetAdd('media')">🎨 Медиа-генерация</button>
+                                <button class="test-btn mcp-preset-btn" onclick="mcpPresetAdd('files')">📁 Генератор файлов</button>
+                            </div>
+
+                            <!-- Лимит итераций tool-calling -->
+                            <div class="form-group">
+                                <label for="toolIterLimit">Лимит итераций tool-calling (0 = по умолчанию 5)</label>
+                                <input type="number" id="toolIterLimit" class="opt-input" min="0" max="50" value="0">
+                                <small>Максимум итераций tool-calling в одном ответе. 0 ��� использовать значение по умолчанию (5).</small>
+                            </div>
+                            <button class="test-btn primary" id="toolIterSaveBtn" onclick="saveToolIterLimit()">Сохранить лимит</button>
+
                             <div id="mcp-server-list" class="mcp-list"><div class="mcp-empty">Загрузка…</div></div>
                             <button class="test-btn primary" id="mcp-add-btn" onclick="mcpShowAddForm()">＋ Добавить MCP-сервер</button>
                             <div id="mcp-add-form" class="mcp-form" style="display:none"></div>

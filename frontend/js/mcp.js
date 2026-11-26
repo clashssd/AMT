@@ -207,6 +207,85 @@ async function mcpSubmit(existingId) {
     }
 }
 
+// ===== Пресеты MCP-серверов =====
+function mcpPresetAdd(preset) {
+    const presets = {
+        rag: {
+            id: 'knowledge-base',
+            name: 'База знаний (RAG)',
+            transport: 'stdio',
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()],
+            enabled: true,
+            auto_approve: true,
+        },
+        media: {
+            id: 'media-gen',
+            name: 'Медиа-генерация',
+            transport: 'stdio',
+            command: 'npx',
+            args: ['-y', 'mcp-media-generator'],
+            enabled: true,
+            auto_approve: false,
+        },
+        files: {
+            id: 'file-gen',
+            name: 'Генератор файлов',
+            transport: 'stdio',
+            command: 'node',
+            args: ['./mcp-file-generator/server.js'],
+            enabled: true,
+            auto_approve: true,
+        },
+    };
+    
+    const p = presets[preset];
+    if (!p) return;
+    
+    // Show the add form with preset values
+    mcpShowAddForm(null);
+    const form = document.getElementById('mcp-add-form');
+    document.getElementById('mcp-name').value = p.name;
+    document.getElementById('mcp-id').value = p.id;
+    document.getElementById('mcp-command').value = p.command;
+    document.getElementById('mcp-args').value = p.args.join(' ');
+    document.getElementById('mcp-enabled').checked = p.enabled;
+    document.getElementById('mcp-auto-approve').checked = p.auto_approve;
+    
+    // Auto-submit
+    mcpSubmit(null);
+}
+
+// ===== Лимит итераций tool-calling =====
+async function saveToolIterLimit() {
+    const limit = parseInt(document.getElementById('toolIterLimit').value, 10) || 0;
+    try {
+        const resp = await fetch(`${API_BASE}/api/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tool_iter_limit: limit }),
+        });
+        if (resp.ok) {
+            flashStatus('Лимит итераций tool-calling сохранён: ' + limit);
+        } else {
+            flashStatus('Ошибка при сохранении лимита');
+        }
+    } catch (e) {
+        flashStatus('Ошибка сети: ' + e);
+    }
+}
+
+// Load tool iter limit on settings page load
+async function loadToolIterLimit() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/settings`);
+        const settings = await resp.json();
+        if (settings.tool_iter_limit !== undefined) {
+            document.getElementById('toolIterLimit').value = settings.tool_iter_limit;
+        }
+    } catch { /* ignore */ }
+}
+
 // ===== Хранилище: секция «MCP-серверы» =====
 async function renderMcpStorage() {
     const list = document.getElementById('mcp-storage-list');

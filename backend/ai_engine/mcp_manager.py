@@ -41,6 +41,63 @@ class MCPServerConfig:
     enabled: bool = True
     auto_approve: bool = False
 
+
+@dataclass
+class _SessionHolder:
+    """Holds an open MCP session + the async CMs that keep it alive."""
+    session: Any = None
+    cm_outer: Any = None   # client CM (stdio/http) — must be exited last
+    cm_inner: Any = None   # ClientSession CM (mcp v2) — exit before outer
+    proc: Any = None       # subprocess handle, if discoverable
+
+
+def _find_proc(read, write):
+    """Best-effort discovery of the underlying subprocess handle."""
+    for cand in (read, write):
+        if cand is None:
+            continue
+        for attr in ("_proc", "process", "transport"):
+            v = getattr(cand, attr, None)
+            if v is not None and hasattr(v, "pid"):
+                return v
+    return None
+
+
+async def _teardown(holder: _SessionHolder) -> None:
+    """Close CMs in reverse order (inner session first, then outer client).
+
+    anyio task groups can't always be exited from a different task than they
+    were entered in (we scheduled teardown off the connect task); that error is
+    benign because the subprocess is terminated separately. Downgrade it to
+    debug; log everything else as a warning.
+    """
+    async def _close(cm, label):
+        ex = getattr(cm, "__aexit__", None)
+        if ex is None:
+            return
+        try:
+            result = ex(None, None, None)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception as e:
+            msg = str(e)
+            if "different task" in msg or "cancel scope" in msg:
+                log.debug("MCP %s teardown skipped (cross-task anyio scope): %s", label, msg)
+            else:
+                log.warning("MCP %s teardown error: %s", label, msg)
+
+    await _close(holder.cm_inner, "inner")
+    await _close(holder.cm_outer, "outer")
+    proc = holder.proc
+    if proc is not None and getattr(proc, "returncode", None) is None:
+        try:
+            proc.terminate()
+            if platform.system() == "Windows" and getattr(proc, "pid", None):
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                               capture_output=True, timeout=5)
+        except Exception as e:
+            log.warning("MCP proc teardown error: %s", e)
+
 class MCPManager:
     def __init__(self, data_dir: str):
         self.data_dir = data_dir
@@ -127,10 +184,14 @@ class MCPManager:
     # ---- Connection lifecycle ----
     #
     # The mcp SDK's stdio_client()/streamable_http_client() are *factories* that
-    # return an async context manager. We enter the CM, keep the yielded session
-    # in self._clients, and remember the CM so we can re-enter it for teardown
-    # on disconnect/shutdown. Tests inject a plain AsyncMock where `connect`
-    # simply stores it; the SDK CM machinery is exercised only on real connect.
+    # return an async context manager. In mcp v2 they yield a 2-tuple
+    # (read_stream, write_stream); the ClientSession is a *second* async CM that
+    # must be entered to start its JSON-RPC dispatcher task group. Both CMs
+    # must stay open for the session to work. We enter both, store them in a
+    # _SessionHolder, and exit them in reverse on disconnect/shutdown.
+    #
+    # Tests inject a mock CM that already carries a `_session` attribute; we
+    # store it directly with no CM to exit.
 
     async def connect(self, server_id: str) -> None:
         cfg = self.servers.get(server_id)
@@ -146,47 +207,83 @@ class MCPManager:
         else:
             raise ValueError(f"Unknown transport: {cfg.transport}")
 
-        # SDK CM factory yields (read, write, session). Tests inject a mock that
-        # already carries a `_session` attribute; we store it directly. Real SDK
-        # CMs don't have `_session` — enter them and keep the yielded session.
+        # Fast-path: test mock CM already carries a `_session`. No CM to hold open.
         if hasattr(cm, "_session"):
-            session = cm._session
-            self._clients[server_id] = {"session": session, "cm": None, "proc": None}
+            self._clients[server_id] = _SessionHolder(session=cm._session,
+                                                       cm_outer=None, cm_inner=None, proc=None)
             self._procs[server_id] = None
-        else:
-            async with cm as payload:
-                read, write, session = payload
-                proc = getattr(read, "_proc", None) or getattr(write, "_proc", None) or getattr(read, "process", None)
-                self._clients[server_id] = {"session": session, "cm": cm, "proc": proc}
-                self._procs[server_id] = proc
+            log.info("MCP server '%s' connected (%s, mock)", server_id, cfg.transport)
+            return
 
+        # Real SDK path. Manually ENTER the async CMs (not via `async with`) so
+        # they stay open until disconnect/shutdown calls __aexit__. stdio_client()
+        # and ClientSession() are both async context managers.
+        outer_cm = cm
+        holder = _SessionHolder(cm_outer=outer_cm)
+        payload = await outer_cm.__aenter__()
+
+        if hasattr(payload, "call_tool") and hasattr(payload, "list_tools"):
+            # A ready session was yielded (v1 3-tuple w/ session, or a mock).
+            holder.session = payload
+            holder.proc = None
+            self._clients[server_id] = holder
+            self._procs[server_id] = None
+            log.info("MCP server '%s' connected (%s, ready session)", server_id, cfg.transport)
+            return
+        try:
+            read, write, _maybe = payload  # v1 3-tuple
+            holder.session = _maybe if _maybe is not None else None
+            holder.proc = _find_proc(read, write)
+            if holder.session is None:
+                raise RuntimeError("3-tuple CM yielded no session")
+            self._clients[server_id] = holder
+            self._procs[server_id] = holder.proc
+            log.info("MCP server '%s' connected (%s, v1)", server_id, cfg.transport)
+            return
+        except (TypeError, ValueError):
+            read, write = payload  # v2 2-tuple
+            from mcp import ClientSession
+            inner_cm = ClientSession(read, write)
+            holder.cm_inner = inner_cm
+            holder.proc = _find_proc(read, write)
+            s = await inner_cm.__aenter__()
+            try:
+                await s.initialize()
+            except Exception:
+                pass  # some builds auto-init on first RPC
+            holder.session = s
+
+        self._clients[server_id] = holder
+        self._procs[server_id] = holder.proc
         log.info("MCP server '%s' connected (%s)", server_id, cfg.transport)
 
     async def disconnect(self, server_id: str) -> None:
-        entry = self._clients.pop(server_id, None)
-        if entry is None:
+        holder = self._clients.pop(server_id, None)
+        if holder is None:
             return
-        cm = entry.get("cm")
-        if cm is not None and hasattr(cm, "__aexit__"):
-            try:
-                await cm.__aexit__(None, None, None)
-            except Exception as e:
-                log.warning("MCP disconnect '%s' error: %s", server_id, e)
+        await _teardown(holder)
         self._procs.pop(server_id, None)
 
     def _get_session(self, server_id: str):
-        entry = self._clients.get(server_id)
-        if entry is None:
+        holder = self._clients.get(server_id)
+        if holder is None:
             return None
-        # connect() stores a dict {"session":...}; tests may store the client object
-        # directly (with a `_session` attribute, matching the mcp SDK session name).
-        if isinstance(entry, dict):
-            return entry.get("session")
-        # Prefer the explicit `_session` convention (test + SDK), then `session`.
-        s = getattr(entry, "_session", None)
+        # New _SessionHolder carries `.session`. Legacy test objects (AsyncMock
+        # with `._session`) carry `_session`. `_SessionHolder` has no `_session`,
+        # so check the holder attribute first, then the legacy convention.
+        if isinstance(holder, _SessionHolder):
+            return holder.session
+        s = getattr(holder, "_session", None)
         if s is None:
-            s = getattr(entry, "session", None)
+            s = getattr(holder, "session", None)
         return s
+
+    @staticmethod
+    def _proc_of(holder):
+        """Return the subprocess handle for a stored client (holder or legacy)."""
+        if isinstance(holder, _SessionHolder):
+            return holder.proc
+        return getattr(holder, "_proc", None) or getattr(holder, "proc", None)
 
     async def list_tools(self, server_id: str) -> list[dict]:
         session = self._get_session(server_id)
@@ -207,7 +304,15 @@ class MCPManager:
         for t in tools:
             name = t.name if hasattr(t, "name") else t.get("name", "")
             desc = t.description if hasattr(t, "description") else t.get("description", "")
-            schema = t.inputSchema if hasattr(t, "inputSchema") else t.get("inputSchema", {})
+            # mcp v1 exposes `inputSchema` (camelCase); mcp v2 exposes
+            # `input_schema` (snake_case). Accept both, plus plain dicts.
+            schema = None
+            for attr in ("inputSchema", "input_schema"):
+                schema = getattr(t, attr, None)
+                if schema is not None:
+                    break
+            if schema is None and isinstance(t, dict):
+                schema = t.get("inputSchema") or t.get("input_schema") or {}
             out.append({"name": name, "description": desc or "", "inputSchema": schema or {}})
         return out
 
@@ -242,22 +347,57 @@ class MCPManager:
         return {"status": "disconnected", "message": "Not connected"}
 
     def shutdown(self) -> None:
+        """Tear down all open sessions. Sync-safe (atexit): terminates the
+        subprocess and schedules CM teardown on the running loop if one exists,
+        otherwise closes streams inline (best effort)."""
         for sid in list(self._clients.keys()):
-            entry = self._clients.pop(sid, None)
-            if entry is None:
+            holder = self._clients.pop(sid, None)
+            self._procs.pop(sid, None)
+            if holder is None:
                 continue
-            proc = self._procs.pop(sid, None) or entry.get("proc")
+            proc = self._proc_of(holder)
             if proc is not None and getattr(proc, "returncode", None) is None:
                 try:
                     proc.terminate()
-                    if platform.system() == "Windows":
-                        pid = getattr(proc, "pid", None)
-                        if pid:
-                            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                                           capture_output=True, timeout=5)
+                    if platform.system() == "Windows" and getattr(proc, "pid", None):
+                        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                                       capture_output=True, timeout=5)
                 except Exception as e:
-                    log.warning("MCP shutdown '%s' error: %s", sid, e)
+                    log.warning("MCP shutdown '%s' proc error: %s", sid, e)
+            # Schedule async CM teardown if a loop is running; else inline-close.
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._teardown_holder(sid, holder))
+            except RuntimeError:
+                # No loop (atexit on a sync thread). Close streams best-effort.
+                self._teardown_nowait(holder)
             log.info("MCP server '%s' shut down", sid)
+
+    @staticmethod
+    def _as_holder(stored) -> _SessionHolder:
+        """Coerce a stored client (new holder or legacy mock) into a holder so
+        teardown can read its CMs/proc uniformly."""
+        if isinstance(stored, _SessionHolder):
+            return stored
+        return _SessionHolder(
+            session=getattr(stored, "_session", None),
+            cm_outer=None,
+            cm_inner=None,
+            proc=getattr(stored, "_proc", None),
+        )
+
+    async def _teardown_holder(self, sid: str, holder: _SessionHolder) -> None:
+        try:
+            await _teardown(self._as_holder(holder))
+        except Exception as e:
+            log.warning("MCP async teardown '%s' error: %s", sid, e)
+
+    def _teardown_nowait(self, holder: _SessionHolder) -> None:
+        h = self._as_holder(holder)
+        for cm in (h.cm_inner, h.cm_outer):
+            # Without a running loop we can't await async CM exits; the
+            # subprocess was already terminated, so just drop references.
+            del cm
 
 
 # Module-level singleton (initialized lazily in main.py)

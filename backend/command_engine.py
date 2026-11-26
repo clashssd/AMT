@@ -7,8 +7,27 @@ from dataclasses import dataclass, field
 from typing import List, Set, Optional, Dict, Any
 from pathlib import Path
 
-# Загружаем реестр команд
-COMMAND_REGISTRY_PATH = Path(__file__).parent / 'command_registry.json'
+# Загружаем реестр команд — работает и в dev, и в PyInstaller-бандле
+def _find_registry_path() -> Path:
+    """Ищет command_registry.json в dev и packaged-окружениях."""
+    import sys
+    if getattr(sys, 'frozen', False):
+        # PyInstaller: _internal/ каталог рядом с exe
+        base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent / '_internal'))
+        candidate = base / 'command_registry.json'
+        if candidate.exists():
+            return candidate
+    # Dev: рядом с модулем
+    candidate = Path(__file__).parent / 'command_registry.json'
+    if candidate.exists():
+        return candidate
+    # Fallback: в текущей папке
+    candidate = Path.cwd() / 'command_registry.json'
+    if candidate.exists():
+        return candidate
+    raise FileNotFoundError('command_registry.json not found in any known location')
+
+COMMAND_REGISTRY_PATH = _find_registry_path()
 
 def load_command_registry() -> Dict[str, Any]:
     """Загружает реестр команд из JSON."""

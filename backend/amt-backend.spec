@@ -39,6 +39,8 @@ a = Analysis(
         (_FRONTEND, os.path.join('frontend')),
         # Расширения (manifest + js + py) -> _internal/extensions
         (_EXTENSIONS, os.path.join('extensions')),
+        # Реестр slash-команд -> _internal/command_registry.json
+        (os.path.join(_BACKEND_DIR, 'command_registry.json'), '.'),
     ],
     hiddenimports=[
         # uvicorn + httpx ASGI-сервер

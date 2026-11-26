@@ -4,3 +4,165 @@
    tokens.css. Здесь ЗАПРЕЩЕНО хардкодить цвета — только var(--token).
    (Заполняется в Фазах 3–8.)
    ==========================================================================*/
+
+/* ============ Полный редактор тем (Фаза 2) ============ */
+#themeEditor {
+    margin-top: 8px;
+}
+
+/* Живой предпросмотр — double-bezel карточка */
+.te-preview {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin: 14px 0;
+    padding: 14px;
+    border-radius: var(--radius-xl, 26px);
+    background: var(--glass-bg-2);
+    border: 1px solid var(--border);
+}
+.te-preview-card {
+    padding: 18px;
+    border-radius: calc(var(--radius-xl, 26px) - 6px);
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    color: var(--text);
+}
+.te-preview-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; color: var(--text-strong); }
+.te-preview-text { font-size: 13px; color: var(--text-dim); margin-bottom: 12px; }
+.te-preview-field input {
+    width: 100%;
+    background: var(--field-bg);
+    color: var(--field-text);
+    border: 1px solid var(--field-border);
+    border-radius: var(--radius-md, 14px);
+    padding: 8px 12px;
+    font: inherit;
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+.te-preview-btns { display: flex; gap: 8px; }
+.te-preview-btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--accent-contrast);
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill, 999px);
+    padding: 7px 16px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+}
+.te-preview-btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill, 999px);
+    padding: 7px 16px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.te-contrast { font-size: 11px; color: var(--text-dim); text-align: center; }
+
+/* Группы (details) */
+.te-group {
+    margin: 12px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 14px);
+    background: var(--glass-bg-2);
+    overflow: hidden;
+}
+.te-group summary {
+    padding: 10px 14px;
+    font-size: 12px; font-weight: 600;
+    color: var(--text-strong);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.te-group summary::before { content: "▸"; color: var(--accent); transition: transform var(--motion-fast) var(--ease-out); }
+.te-group[open] summary::before { transform: rotate(90deg); }
+.te-group .te-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+    padding: 12px 14px;
+}
+
+/* Ячейка контрола */
+.te-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.te-cell label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+.te-cell input[type="color"] {
+    width: 100%;
+    height: 30px;
+    padding: 2px;
+    background: var(--field-bg);
+    border: 1px solid var(--field-border);
+    border-radius: var(--radius-sm, 10px);
+    cursor: pointer;
+}
+.te-cell input[type="range"] {
+    width: 100%;
+    accent-color: var(--control-checked);
+    color-scheme: dark;
+}
+.te-cell select {
+    width: 100%;
+    background: var(--field-bg);
+    color: var(--field-text);
+    border: 1px solid var(--field-border);
+    border-radius: var(--radius-md, 14px);
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 12px;
+}
+.te-cell-val { font-size: 10px; color: var(--text-dim); }
+
+/* Действия */
+.te-actions { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+.te-name-row { display: flex; flex-direction: column; gap: 4px; }
+.te-name-row input {
+    background: var(--field-bg);
+    color: var(--field-text);
+    border: 1px solid var(--field-border);
+    border-radius: var(--radius-md, 14px);
+    padding: 8px 12px;
+    font: inherit;
+}
+.te-btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.te-btn-row button {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill, 999px);
+    padding: 8px 14px;
+    font-size: 12px; font-weight: 500;
+    cursor: pointer;
+    transition: background-color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out);
+}
+.te-btn-row button:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.te-btn-row button.primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--accent-contrast);
+    border: 1px solid transparent;
+}
+.te-btn-row button.danger { color: var(--danger); }
+.te-warning {
+    font-size: 11px;
+    color: var(--warning);
+    background: var(--warning-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm, 10px);
+    padding: 8px 10px;
+}

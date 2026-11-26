@@ -311,10 +311,8 @@
         await runCodingTool(sub || 'git_status');
         break;
       case 'code_test': {
-        const runner = (sub || 'pytest').toLowerCase();
-        const argv = runner === 'node' ? ['node', '--test'] : ['pytest', '-q'];
-        if (restStr) argv.push(restStr);
-        await runCodingTool('run_command', { argv });
+        const extraArgs = restStr ? restStr.split(/\s+/) : [];
+        await runCodingTool('run_tests', { extra_args: extraArgs });
         break;
       }
       case 'code_mcp':

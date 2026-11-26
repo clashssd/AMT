@@ -129,3 +129,38 @@ def test_coding_tool_endpoint_rejects_missing_root(tmp_backend):
 
     assert resp.status_code == 400
     assert "root" in resp.json()["detail"].lower() or "проект" in resp.json()["detail"].lower()
+
+
+def test_coding_tool_endpoint_rejects_high_risk_tools(tmp_backend, tmp_path):
+    import main
+    from fastapi.testclient import TestClient
+
+    root = tmp_path / "repo"
+    root.mkdir(parents=True)
+    client = TestClient(main.app)
+
+    for tool in ("git_commit", "git_push", "fs_write", "fs_apply_patch", "run_command"):
+        resp = client.post(
+            "/api/coding/tool",
+            json={"root": str(root), "tool": tool, "args": {}},
+        )
+        assert resp.status_code in (400, 404), f"{tool} should be restricted from direct execution"
+
+
+def test_coding_tool_endpoint_run_tests_reports_missing_test_runner(tmp_backend, tmp_path):
+    import main
+    from fastapi.testclient import TestClient
+
+    root = tmp_path / "repo"
+    root.mkdir(parents=True)
+    client = TestClient(main.app)
+
+    resp = client.post(
+        "/api/coding/tool",
+        json={"root": str(root), "tool": "run_tests", "args": {}},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("ok") is False
+    assert "test runner" in body.get("error", "").lower()

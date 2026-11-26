@@ -4486,6 +4486,14 @@ async def coding_tool(req: CodingToolIn):
     if not os.path.isdir(root):
         raise HTTPException(400, "Проектная директория не найдена")
 
+    direct_coding_tools = {
+        "fs_read", "fs_list", "fs_search",
+        "git_status", "git_diff", "git_log", "git_branch",
+        "run_tests",
+    }
+    if req.tool not in direct_coding_tools:
+        raise HTTPException(404, f"Coding tool {req.tool!r} is not available for direct execution")
+
     context = ProjectContext(
         root=root,
         allow_write=True,
@@ -4499,11 +4507,11 @@ async def coding_tool(req: CodingToolIn):
         raise HTTPException(404, f"Unknown coding tool: {req.tool}")
 
     args = dict(req.args or {})
-    if req.tool == "run_command":
-        argv = args.pop("argv", args.get("command", []))
-        if isinstance(argv, str):
-            argv = argv.split()
-        args["argv"] = argv
+    if req.tool == "run_tests" and "extra_args" in args:
+        extra_args = args.get("extra_args") or []
+        if isinstance(extra_args, str):
+            extra_args = extra_args.split()
+        args["extra_args"] = extra_args
     if req.tool == "fs_read" and "limit" not in args:
         args["limit"] = None
 

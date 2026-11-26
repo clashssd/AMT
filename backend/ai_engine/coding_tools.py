@@ -455,3 +455,30 @@ class CodingToolset:
         if branch:
             cmd.append(branch)
         return self.run_command(cmd, timeout=120)
+
+    def run_tests(self, extra_args: Optional[list[str]] = None) -> dict:
+        """Run the most likely test runner for the project.
+
+        Detects pytest for Python projects and ``node --test`` for Node
+        projects.  This is intended for explicit ``/code_test`` commands,
+        not for arbitrary shell execution.
+        """
+        if not self.ctx.allow_commands:
+            return {"ok": False, "error": "Command execution is not enabled for this project context"}
+
+        root = self.ctx.root
+        if os.path.isfile(os.path.join(root, "package.json")):
+            cmd = ["node", "--test"]
+        elif (
+            os.path.isfile(os.path.join(root, "pyproject.toml"))
+            or os.path.isfile(os.path.join(root, "setup.py"))
+            or os.path.isfile(os.path.join(root, "requirements.txt"))
+            or os.path.isdir(os.path.join(root, "tests"))
+        ):
+            cmd = ["pytest", "-q"]
+        else:
+            return {"ok": False, "error": "No supported test runner found (package.json or pytest project)"}
+
+        if extra_args:
+            cmd.extend(str(a) for a in extra_args)
+        return self.run_command(cmd, timeout=300)

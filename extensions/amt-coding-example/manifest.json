@@ -1,8 +1,8 @@
 {
   "name": "amt-coding-example",
   "version": "1.0.0",
-  "description": "AMT coding extension example",
+  "description": "AMT coding extension example with backend diagnostics hook",
   "coding": true,
-  "frontend": false,
-  "backend": false
+  "frontend": true,
+  "backend": true
 }

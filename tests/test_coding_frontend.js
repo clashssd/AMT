@@ -42,6 +42,8 @@ assert(logsDashboard.includes('coding_tool_calls'), 'logsDashboard.js should sho
 assert(main.includes('codingExtensions = []'), 'main.js should accept coding extensions in storage');
 assert(main.includes("/api/extensions/coding"), 'main.js should fetch coding extensions');
 assert(fs.existsSync(path.join(__dirname, '..', 'extensions', 'amt-coding-example', 'manifest.json')), 'sample coding extension manifest should exist');
+assert(fs.existsSync(path.join(__dirname, '..', 'extensions', 'amt-coding-example', 'backend.py')), 'sample coding extension backend should exist');
+assert(fs.existsSync(path.join(__dirname, '..', 'extensions', 'amt-coding-example', 'index.js')), 'sample coding extension frontend should exist');
 assert(home.includes('codingMaxIterations'), 'home.html should include coding max iterations input');
 assert(main.includes('codingMaxIterations'), 'main.js should persist coding max iterations');
 assert(main.includes('effective_max_iterations') || main.includes('maxIterations') || main.includes('codingMaxIterations'), 'main.js should expose or use coding iteration value');
@@ -49,9 +51,13 @@ assert(home.includes('codingOrchestratorChildren'), 'home.html should expose orc
 assert(main.includes('codingOrchestratorChildren'), 'main.js should render orchestrator child sessions');
 assert(main.includes('refreshCodingOrchestratorChildren'), 'main.js should refresh orchestrator child sessions');
 assert(home.includes('codingOrchestratorSessions'), 'home.html should expose orchestrator session cards');
+assert(main.includes('coding-orch-child-trace'), 'main.js should render child trace for orchestrator sessions');
 assert(main.includes('openCodingFile'), 'main.js should open files from tree, symbols, and diff');
 assert(main.includes('openCodingFile'), 'main.js should expose an openCodingFile helper');
 assert(home.includes('id="codingSymbolSearch"'), 'home.html should expose a symbol search input');
+assert(home.includes('id="codingRefQuery"'), 'home.html should expose a find-references input');
+assert(main.includes('find_references'), 'main.js should call find_references');
+assert(main.includes('refreshCodingFindReferences'), 'main.js should refresh references');
 assert(main.includes('refreshCodingSymbols'), 'main.js should refresh the symbols panel with search');
 assert(home.includes('id="codingTerminalLine"'), 'home.html should expose a jump-to-line input');
 assert(main.includes('jumpCodingTerminalLine'), 'main.js should support jump-to-line in terminal');

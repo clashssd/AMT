@@ -3632,7 +3632,21 @@ async function refreshCodingFindDefinitions() {
     const defs = res.ok ? (res.definitions || []) : [];
     _codingSymbols = defs.map(d => ({ path: d.path, line: d.line, text: d.text }));
     _renderCodingSymbols(_codingSymbols);
-    if (defs.length) openCodingFile(defs[0].path);
+    if (defs.length) openCodingFile(defs[0].path, defs[0].line);
+}
+
+async function refreshCodingFindReferences() {
+    const queryEl = document.getElementById('codingRefQuery');
+    const query = (queryEl && queryEl.value || '').trim();
+    if (!query) {
+        refreshCodingSymbols();
+        return;
+    }
+    const res = await codingPanelCall('find_references', { query, path: _codingActiveFilePath || '.' });
+    const refs = res.ok ? (res.references || []) : [];
+    _codingSymbols = refs.map(d => ({ path: d.path, line: d.line, text: d.text }));
+    _renderCodingSymbols(_codingSymbols);
+    if (refs.length) openCodingFile(refs[0].path, refs[0].line);
 }
 async function refreshCodingPanels() {
     const c = currentCodingPanelChat();
@@ -3660,6 +3674,7 @@ document.addEventListener('click', (e) => {
     if (e.target.closest && e.target.closest('[data-coding-tree-refresh]')) { refreshCodingFileTree(); return; }
     if (e.target.closest && e.target.closest('[data-coding-symbols-refresh]')) { refreshCodingSymbols(); return; }
     if (e.target.closest && e.target.closest('[data-coding-find]')) { refreshCodingFindDefinitions(); return; }
+    if (e.target.closest && e.target.closest('[data-coding-refs]')) { refreshCodingFindReferences(); return; }
     if (e.target.closest && e.target.closest('[data-coding-jump-line]')) { jumpCodingTerminalLine(); return; }
     if (e.target.closest && e.target.closest('[data-coding-line-diff]')) { refreshCodingLineDiff(); return; }
 });
@@ -3667,6 +3682,7 @@ document.addEventListener('input', (e) => {
     if (e.target && e.target.id === 'codingTreeSearch') refreshCodingFileTree();
     if (e.target && e.target.id === 'codingSymbolSearch') _renderCodingSymbols(_codingSymbols);
     if (e.target && e.target.id === 'codingFindQuery') refreshCodingFindDefinitions();
+    if (e.target && e.target.id === 'codingRefQuery') refreshCodingFindReferences();
     if (e.target && e.target.id === 'codingDiffPath') {
         const v = e.target.value.trim();
         if (v) openCodingFile(v);
@@ -3725,6 +3741,10 @@ function refreshCodingOrchestratorChildren(run) {
             ch.result ? JSON.stringify(ch.result).slice(0, 120) : ''
         ].filter(Boolean).join(' · ');
         card.appendChild(meta);
+        const trace = document.createElement('pre');
+        trace.className = 'coding-orch-child-trace';
+        trace.textContent = ch.trace ? JSON.stringify(ch.trace, null, 2).slice(0, 400) : '';
+        card.appendChild(trace);
         el.appendChild(card);
     });
 }

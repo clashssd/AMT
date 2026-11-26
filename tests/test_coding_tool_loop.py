@@ -204,6 +204,17 @@ def test_coding_tool_endpoint_allows_list_symbols(tmp_backend, tmp_path):
     assert any("alpha" in (s.get("text") or "") for s in symbols)
 
 
+def test_coding_tool_endpoint_runs_find_references(tmp_backend, tmp_path):
+    import main
+    from fastapi.testclient import TestClient
+    (tmp_path / "b.py").write_text("def beta():\n    return 2\n\ndef other():\n    return beta()\n", encoding="utf-8")
+    client = TestClient(main.app)
+    resp = client.post("/api/coding/tool", json={"root": str(tmp_path), "tool": "find_references", "args": {"query": "beta", "path": "b.py"}})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("ok") is True
+    assert any(x["line"] == 5 for x in data.get("references", []))
+
 def test_coding_tool_endpoint_runs_find_definitions(tmp_backend, tmp_path):
     import main
     from fastapi.testclient import TestClient

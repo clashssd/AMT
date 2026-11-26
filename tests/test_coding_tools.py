@@ -5,7 +5,12 @@ import pytest
 
 
 def _git(args, cwd):
-    result = subprocess.run([sys.executable, "-m", "pip", "show", "git"], capture_output=True, text=True)
+    env = os.environ.copy()
+    env.setdefault("GIT_AUTHOR_NAME", "Test Author")
+    env.setdefault("GIT_AUTHOR_EMAIL", "test@example.com")
+    env.setdefault("GIT_COMMITTER_NAME", "Test Author")
+    env.setdefault("GIT_COMMITTER_EMAIL", "test@example.com")
+    result = subprocess.run(["git"] + args, cwd=cwd, env=env, capture_output=True, text=True)
     return result
 
 
@@ -195,6 +200,36 @@ def test_git_diff_rejects_path_outside_root(tmp_path):
     result = toolset.git_diff(path="..")
     assert result["ok"] is False
 
+
+def test_incremental_git_diff_returns_line_hunks(tmp_path):
+    from ai_engine.coding_tools import ProjectContext, CodingToolset
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "a.py").write_text("x = 1\n", encoding="utf-8")
+    root.joinpath("b.py").write_text("y = 2\n", encoding="utf-8")
+    _git(["init"], str(root))
+    _git(["add", "a.py", "b.py"], str(root))
+    _git(["commit", "-m", "init"], str(root))
+    (root / "a.py").write_text("x = 100\nx = 101\n", encoding="utf-8")
+    ctx = ProjectContext(root=str(root), allow_write=False, allow_commands=True, allow_git_commit=True, deny_globs=[])
+    t = CodingToolset(ctx)
+    res = t.git_diff(path="a.py", staged=False)
+    assert res["ok"] is True
+    assert "x = 100" in res["output"]
+
+def test_find_references_returns_usage(tmp_path):
+    def write(p, text):
+        p.mkdir(parents=True, exist_ok=True)
+        (p / "a.py").write_text(text, encoding="utf-8")
+
+    write(tmp_path, "def alpha():\n    return 1\n\ndef caller():\n    return alpha()\n")
+    from ai_engine.coding_tools import ProjectContext, CodingToolset
+    t = CodingToolset(ProjectContext(root=str(tmp_path), allow_write=False, allow_commands=False))
+    res = t.find_references("alpha", path="a.py")
+    assert res["ok"] is True
+    refs = res["references"]
+    assert any(r["path"] == "a.py" and r["line"] == 1 for r in refs)
+    assert any(r["path"] == "a.py" and r["line"] == 5 for r in refs)
 
 def test_find_definitions_returns_symbols(tmp_path):
     from ai_engine.coding_tools import ProjectContext, CodingToolset

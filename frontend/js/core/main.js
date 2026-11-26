@@ -1070,7 +1070,8 @@ async function loadSettings() {
             system_prompt: server.systemPrompt || '',
             temperature: server.temperature ?? 0.7,
             maxTokens: server.maxTokens ?? 4096,
-            contextWindow: server.contextWindow ?? 128000
+            contextWindow: server.contextWindow ?? 128000,
+            maxIterations: server.maxIterations ?? 0
         };
     }
 
@@ -1099,6 +1100,8 @@ async function loadSettings() {
     setVal('mediaPathText', settings.mediaPathText); setVal('mediaPathImage', settings.mediaPathImage);
     setVal('mediaPathTextImage', settings.mediaPathTextImage); setVal('mediaPathVoice', settings.mediaPathVoice); setVal('mediaPathVideo', settings.mediaPathVideo);
     setVal('codingKey', settings.codingKey); setVal('codingBaseUrl', settings.codingBaseUrl); setVal('codingModel', settings.codingModel);
+    const miEl = document.getElementById('maxIterations');
+    if (miEl) miEl.value = String(settings.maxIterations || 5);
     setStatus('idle');
 }
 
@@ -1158,7 +1161,8 @@ function buildSettingsFromInputs() {
         voskModelPath: document.getElementById('localSttModelPath')?.value.trim() || '',
         wakeWordString: document.getElementById('wakeWordInput')?.value.trim() || 'Астра',
         vadSilenceMs: parseInt(document.getElementById('vadSilenceSlider')?.value) || 2000,
-        vadSensitivity: parseFloat(document.getElementById('vadSensitivitySlider')?.value) || 1.8
+        vadSensitivity: parseFloat(document.getElementById('vadSensitivitySlider')?.value) || 1.8,
+        maxIterations: parseInt(document.getElementById('maxIterations')?.value) || 0
     };
 }
 
@@ -1230,7 +1234,8 @@ function toBackendSettings(s) {
         vosk_model_path: s.voskModelPath || '',
         wake_word_string: s.wakeWordString || 'Астра',
         vad_silence_ms: s.vadSilenceMs || 2000,
-        vad_sensitivity: s.vadSensitivity || 1.8
+        vad_sensitivity: s.vadSensitivity || 1.8,
+        maxIterations: s.maxIterations || 0
     };
 }
 
@@ -3381,6 +3386,8 @@ async function saveMediaKeys() {
     settings = buildSettingsFromInputs();
     await SecureStore.set(STORAGE_SETTINGS, settings);
     await saveSettingsToServer();
+    // Refresh the media MCP server's credentials file so it picks up the new keys/paths
+    try { await fetch(`${API_BASE}/api/mcp/presets/media/creds`, { method: 'POST' }); } catch {}
     flashStatus('Медиа-ключи сохранены');
 }
 

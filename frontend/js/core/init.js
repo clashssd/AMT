@@ -269,7 +269,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Доп. параметры модели/сети/оркестратора (новый)
-    ['topP','frequencyPenalty','stopSequences','responseFormat','timeout','retries','memoryMaxFacts','orchRoleDrift','orchKeepContext','orchLogVerbosity'].forEach(id => {
+    ['topP','frequencyPenalty','stopSequences','responseFormat','timeout','retries','memoryMaxFacts','orchRoleDrift','orchKeepContext','orchLogVerbosity','maxIterations'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', saveSettings, { passive: true });
     });

@@ -460,6 +460,7 @@
                     <!-- Под-навигация по страницам настроек -->
                     <aside class="settings-subnav">
                         <h2 data-i18n="settings_title" data-i18n-ru="Настройки">Настройки</h2>
+                        <p class="subnav-hint" style="font-size:11px;opacity:.6;margin:4px 0 10px;line-height:1.4">Выберите раздел слева — каждый раздел сохраняет свои настройки</p>
                         <nav class="settings-subnav-links" id="settingsSubnav">
                             <a href="#" class="active" data-sec="sec-connect" data-i18n="s_connect" data-i18n-ru="Подключение">Подключение</a>
                             <a href="#" data-sec="sec-model" data-i18n="s_model" data-i18n-ru="Модель">Модель</a>
@@ -511,6 +512,7 @@
                                 <div id="testResult" class="test-result"></div>
                                 <div id="modelsList" class="models-list"></div>
                             </div>
+                            <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                         </div>
                     </div>
 
@@ -579,6 +581,7 @@
                                 <textarea id="systemPrompt" rows="3" placeholder="Ты — полезный ассистент..."></textarea>
                                 <small>Определяет роль и стиль ответов</small>
                             </div>
+                            <div class="btn-row"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                         </div>
                     </div>
 
@@ -625,6 +628,7 @@
                                     <small>Сколько повторять при сбое</small>
                                 </div>
                             </div>
+                            <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                         </div>
                     </div>
 
@@ -695,6 +699,7 @@
                         </div>
 
                         <div class="skill-list" id="skillList"></div>
+                        <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                     </div>
                     </div><!-- /settings-page agents -->
 
@@ -739,6 +744,7 @@
                         </div>
 
                         <div class="key-list" id="keyList"></div>
+                        <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                     </div>
                     </div><!-- /settings-page keys -->
 
@@ -858,9 +864,55 @@
                             <div id="mcp-server-list" class="mcp-list"><div class="mcp-empty">Загрузка…</div></div>
                             <div class="mcp-presets-row">
                                 <button class="test-btn" id="mcp-rag-preset-btn" onclick="mcpInstallRagPreset()" title="Подключить локальный RAG-сервер: индексация папок + поиск по документам"><span class="btn-ic"><svg class="ic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span> База знаний (RAG)</button>
+                                <button class="test-btn" id="mcp-media-preset-btn" onclick="mcpInstallMediaPreset()" title="Подключить медиа-сервер: генерация картинок, видео, аудио"><span class="btn-ic"><svg class="ic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 8h10M7 12h10M7 16h6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span> Медиа-генерация</button>
+                                <button class="test-btn" id="mcp-writer-preset-btn" onclick="mcpInstallWriterPreset()" title="Подключить генератор файлов: тексты, Office, код, архивы, данные"><span class="btn-ic"><svg class="ic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M14 2v6h6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 13h8M8 17h5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span> Генератор файлов</button>
                                 <button class="test-btn primary" id="mcp-add-btn" onclick="mcpShowAddForm()">＋ Добавить MCP-сервер</button>
                             </div>
                             <div id="mcp-add-form" class="mcp-form" style="display:none"></div>
+                            <div class="form-group" style="margin-top:14px">
+                                <label for="maxIterations">Лимит итераций tool-calling</label>
+                                <input type="number" id="maxIterations" min="0" max="50" value="5" step="1">
+                                <small>Макс. число циклов «модель → инструмент → модель» за запрос. 0 = дефолт (5). Значение выше 50 обрежется до 50.</small>
+                            </div>
+                            <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
+
+                            <!-- Writer generation form -->
+                            <div class="settings-block" style="margin-top:20px">
+                                <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M14 2v6h6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span> Генерация файла</h3>
+                                <p class="block-desc">Явная форма для генерации файла через Writer MCP. Укажите тип, содержимое и файл-основу (опционально).</p>
+                                <div class="form-group">
+                                    <label for="writerFamily">Тип файла</label>
+                                    <select id="writerFamily" class="opt-input">
+                                        <option value="docx">Word (.docx)</option>
+                                        <option value="xlsx">Excel (.xlsx)</option>
+                                        <option value="pptx">PowerPoint (.pptx)</option>
+                                        <option value="pdf">PDF (.pdf)</option>
+                                        <option value="json">JSON</option>
+                                        <option value="csv">CSV</option>
+                                        <option value="txt">Текст (.txt)</option>
+                                        <option value="py">Код (.py)</option>
+                                        <option value="zip">Архив (.zip)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="writerTitle">Название</label>
+                                    <input type="text" id="writerTitle" class="opt-input" placeholder="Мой документ">
+                                </div>
+                                <div class="form-group">
+                                    <label for="writerSpec">Спецификация / содержимое</label>
+                                    <textarea id="writerSpec" class="opt-input" rows="6" placeholder='JSON-spec для Office: {"title":"...","paragraphs":[...],"tables":[...]}. Для текста — просто текст. Для JSON/CSV — данные.'></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="writerSourceFile">Файл-основа (опционально)</label>
+                                    <input type="file" id="writerSourceFile" class="opt-input" accept=".docx,.xlsx,.pptx,.pdf,.csv,.json,.txt,.py">
+                                    <small>Если выбран, Writer прочитает структуру файла и объединит её с вашей спецификацией.</small>
+                                </div>
+                                <div class="btn-row">
+                                    <button class="test-btn primary" id="writerGenerateBtn" onclick="writerGenerate()">Сгенерировать</button>
+                                    <button class="test-btn" id="writerResultBtn" onclick="writerDownload()" style="display:none">Скачать результат</button>
+                                </div>
+                                <div id="writerResult" class="mcp-empty" style="margin-top:12px;display:none"></div>
+                            </div>
                         </div>
                     </div><!-- /settings-page mcp -->
 
@@ -1006,6 +1058,7 @@
                         </div>
                         <button class="test-btn danger" id="wipeMemoryBtn">Очистить память</button>
                         <div id="memoryResult" class="test-result"></div>
+                        <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                     </div>
                     </div><!-- /settings-page memory -->
 
@@ -1115,6 +1168,7 @@
                                 <button class="test-btn primary" id="startChatWithBtn">Создать чат</button>
                             </div>
                             <div id="chatModeResult" class="test-result"></div>
+                            <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                         </div>
                     </div>
 
@@ -1393,7 +1447,9 @@
                                                 <option value="georgia">Georgia</option>
                                                 <option value="mono">Моно</option>
                                                 <option value="rounded">Скруглённый</option>
+                                                <option value="custom">Свой…</option>
                                             </select>
+                                            <input type="text" id="teFontCustom" class="opt-input" placeholder="Напр. 'Fira Code', monospace" style="display:none;margin-top:4px">
                                         </div>
                                         <div class="te-cell"><label>Шрифт заголовков</label>
                                             <select id="teHeadingFont" class="opt-select">
@@ -1401,7 +1457,9 @@
                                                 <option value="inter">Inter</option>
                                                 <option value="georgia">Georgia</option>
                                                 <option value="mono">Моно</option>
+                                                <option value="custom">Свой…</option>
                                             </select>
+                                            <input type="text" id="teHeadingFontCustom" class="opt-input" placeholder="Напр. 'Georgia', serif" style="display:none;margin-top:4px">
                                         </div>
                                         <div class="te-cell"><label>Масштаб шрифта</label><input type="range" id="teScale" min="85" max="120" value="100"><small class="te-cell-val" id="teScaleVal">100%</small></div>
                                     </div>
@@ -1435,6 +1493,7 @@
                                 <div class="form-group">
                                     <label>Шрифт интерфейса</label>
                                     <select id="fontPick" class="opt-select"></select>
+                                    <input id="fontCustom" class="opt-input" type="text" placeholder="Напр. 'Fira Code', monospace" style="display:none;margin-top:6px;width:100%">
                                 </div>
                                 <div class="form-group">
                                     <label>Плотность интерфейса</label>
@@ -1472,6 +1531,7 @@
                                     <div id="cfgList" class="storage-items"></div>
                                 </div>
                             </div>
+                            <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                         </div>
                     </div><!-- /settings-page themes -->
 

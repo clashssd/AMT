@@ -281,7 +281,133 @@ async function mcpInstallRagPreset() {
     }
 }
 
-// ===== Хранилище: секция «MCP-серверы» =====
+// ===== Media preset: one-click media-generation MCP server =====
+async function mcpInstallMediaPreset() {
+    flashStatus('Подключение медиа-сервера (картинки, видео, аудио, файлы)…');
+    try {
+        const resp = await fetch(`${API_BASE}/api/mcp/presets/media`, { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok || data.error) {
+            flashStatus('Ошибка: ' + (data.error || resp.status));
+            return;
+        }
+        if (data.created) {
+            flashStatus('Медиа-сервер добавлен. Инструменты generate_image / generate_video / generate_audio / generate_file теперь доступны (при включённом tool-calling).');
+        } else {
+            flashStatus('Медиа-сервер уже подключён.');
+        }
+        renderMcpSettings();
+        setTimeout(() => { if (data.config) mcpTest('media'); }, 400);
+    } catch (e) {
+        flashStatus('Ошибка сети: ' + e);
+    }
+}
+
+// ===== Writer preset: one-click file-generation MCP server =====
+async function mcpInstallWriterPreset() {
+    flashStatus('Подключение генератора файлов (тексты, Office, код, архивы, данные)…');
+    try {
+        const resp = await fetch(`${API_BASE}/api/mcp/presets/writer`, { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok || data.error) {
+            flashStatus('Ошибка: ' + (data.error || resp.status));
+            return;
+        }
+        if (data.created) {
+            flashStatus('Генератор файлов добавлен. Инструменты create_text / create_office / create_code / create_archive теперь доступны (при включённом tool-calling).');
+        } else {
+            flashStatus('Генератор файлов уже подключён.');
+        }
+        renderMcpSettings();
+        setTimeout(() => { if (data.config) mcpTest('writer'); }, 400);
+    } catch (e) {
+        flashStatus('Ошибка сети: ' + e);
+    }
+}
+
+// ===== Хран��лище: секция «MCP-серверы» =====
+// ===== Writer generation form handlers =====
+let _writerLastResult = null;
+
+async function writerGenerate() {
+    const family = document.getElementById('writerFamily').value;
+    const title = document.getElementById('writerTitle').value.trim();
+    const spec = document.getElementById('writerSpec').value.trim();
+    const sourceFileInput = document.getElementById('writerSourceFile');
+    const btn = document.getElementById('writerGenerateBtn');
+    const resultDiv = document.getElementById('writerResult');
+    const dlBtn = document.getElementById('writerResultBtn');
+
+    if (!spec) {
+        flashStatus('Укажите спецификацию или содержимое');
+        return;
+    }
+
+    // Read source file if selected
+    let sourceB64 = '';
+    if (sourceFileInput.files && sourceFileInput.files[0]) {
+        try {
+            const buf = await sourceFileInput.files[0].arrayBuffer();
+            sourceB64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        } catch (e) {
+            flashStatus('Ошибка чтения файла: ' + e);
+            return;
+        }
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Генерация…';
+    resultDiv.style.display = 'block';
+    resultDiv.textContent = 'Генерация файла…';
+    dlBtn.style.display = 'none';
+
+    try {
+        const body = { family, title, spec };
+        if (sourceB64) body.source_b64 = sourceB64;
+
+        const resp = await fetch(`${API_BASE}/api/writer/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+
+        if (!resp.ok || data.error) {
+            resultDiv.textContent = 'Ошибка: ' + (data.error || JSON.stringify(data));
+            return;
+        }
+
+        _writerLastResult = data;
+        resultDiv.innerHTML = `
+            <div style="padding:8px 0">
+                <b>Готово:</b> ${data.stored_name || data.artifact_id || 'unknown'}<br>
+                <small>Family: ${data.family} · Size: ${data.bytes} bytes · Hash: ${(data.hash || '').substring(0, 16)}…</small>
+                ${data.validation?.notes?.length ? `<br><small>Validation: ${data.validation.notes.join(', ')}</small>` : ''}
+            </div>`;
+        dlBtn.style.display = 'inline-block';
+        flashStatus('Файл сгенерирован и готов к скачиванию');
+    } catch (e) {
+        resultDiv.textContent = 'Ошибка сети: ' + e;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Сгенерировать';
+    }
+}
+
+function writerDownload() {
+    if (!_writerLastResult || !_writerLastResult.stored_name) {
+        flashStatus('Нет результата для скачивания');
+        return;
+    }
+    const url = `${API_BASE}/api/filegen/download/${_writerLastResult.stored_name}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = _writerLastResult.stored_name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
 async function renderMcpStorage() {
     const list = document.getElementById('mcp-storage-list');
     if (!list) return;

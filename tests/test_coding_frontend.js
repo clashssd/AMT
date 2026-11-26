@@ -25,5 +25,9 @@ assert(fallback.includes('chat_mode'), 'fallbackRest should send chat_mode');
 assert(fallback.includes('project_root'), 'fallbackRest should send project_root');
 assert(fallback.includes('tool_policy'), 'fallbackRest should send tool_policy');
 assert(home.includes('mcpInstallAmtCodingPreset'), 'home.html should expose amt-coding MCP preset button');
+assert(home.includes('id="codingPanels"'), 'home.html should include IDE-level coding panels');
+assert(main.includes('refreshCodingPanels'), 'main.js should refresh coding IDE panels');
+assert(main.includes('codingPanelCall'), 'main.js should call safe coding tools for panels');
+assert(main.includes('list_symbols'), 'main.js should use list_symbols for symbol panel');
 
 console.log('test_coding_frontend.js: PASS');

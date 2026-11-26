@@ -243,6 +243,18 @@
                         <span>Кнопки инструментов, список агентов и скиллы недоступны. Запусти/перезапусти приложение или проверь, что Python-сидер запущен на <code>127.0.0.1:8000</code>. <a href="#" id="backendRetryLink">Повторить проверку</a></span>
                     </div>
                 </div>
+                <section id="codingPanels" class="coding-panels hidden" aria-label="Коддинг-панели">
+                    <div class="coding-tabs">
+                        <button class="coding-tab" data-coding-tab="files">Файлы</button>
+                        <button class="coding-tab" data-coding-tab="diff">Diff</button>
+                        <button class="coding-tab" data-coding-tab="terminal">Терминал</button>
+                        <button class="coding-tab" data-coding-tab="symbols">Символы</button>
+                    </div>
+                    <div id="codingPanelFiles" class="coding-panel"></div>
+                    <div id="codingPanelDiff" class="coding-panel hidden"><pre class="coding-terminal" id="codingDiffOutput"></pre></div>
+                    <div id="codingPanelTerminal" class="coding-panel hidden"><pre class="coding-terminal" id="codingTerminalOutput"></pre></div>
+                    <div id="codingPanelSymbols" class="coding-panel hidden"><pre class="coding-terminal" id="codingSymbolsOutput"></pre></div>
+                </section>
                 <div class="chat-header">
                     <!-- Слева: название чата -->
                     <div class="chat-header-left">

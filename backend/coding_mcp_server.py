@@ -118,5 +118,58 @@ def run_tests(extra_args: list[str] | None = None) -> str:
     return _json_result(_toolset().run_tests(extra_args=extra_args))
 
 
+@mcp.tool(description="Sequential reasoning helper: record and return a structured chain of thoughts.")
+def sequential_thinking(steps: list[str] | None = None, question: str = "") -> str:
+    payload = {"ok": True, "question": question, "steps": steps or []}
+    if steps:
+        payload["next_action"] = "Use the recorded steps to plan file reads, edits, or commands."
+    return _json_result(payload)
+
+
+@mcp.tool(description="Best-effort symbol extraction for supported source files inside the project root.")
+def list_symbols(path: str = ".", depth: int = 1) -> str:
+    context = _project_context()
+    result = {"ok": True, "symbols": []}
+    exts = {".py": ("def ", "class "), ".js": ("function ", "const ", "class "), ".ts": ("function ", "class "), ".go": ("func ", "type ")}
+    for root, _dirs, files in os.walk(context.root):
+        rel_root = os.path.relpath(root, context.root)
+        for fname in files:
+            ext = os.path.splitext(fname)[1]
+            markers = exts.get(ext)
+            if not markers:
+                continue
+            file_path = os.path.join(root, fname)
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    for line_no, line in enumerate(f, 1):
+                        for marker in markers:
+                            if line.startswith(marker):
+                                result["symbols"].append({
+                                    "path": os.path.join(rel_root, fname) if rel_root != "." else fname,
+                                    "line": line_no,
+                                    "text": line.strip(),
+                                })
+                                break
+            except Exception:
+                continue
+    return _json_result(result)
+
+
+@mcp.tool(description="Read local documentation and context files from the project root when present.")
+def read_context_docs(names: list[str] | None = None) -> str:
+    context = _project_context()
+    requested = names or ["README.md", "CONTRIBUTING.md", "AGENTS.md", "docs/ARCHITECTURE.md"]
+    out = {"ok": True, "docs": []}
+    for name in requested:
+        target = os.path.join(context.root, name)
+        if os.path.isfile(target):
+            try:
+                with open(target, "r", encoding="utf-8") as f:
+                    out["docs"].append({"path": name, "content": f.read()[:20000]})
+            except Exception as e:
+                out["docs"].append({"path": name, "error": str(e)})
+    return _json_result(out)
+
+
 if __name__ == "__main__":
     asyncio.run(mcp.run_stdio_async())

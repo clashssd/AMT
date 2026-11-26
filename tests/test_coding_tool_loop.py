@@ -187,3 +187,18 @@ def test_coding_tool_endpoint_run_tests_reports_missing_test_runner(tmp_backend,
     body = resp.json()
     assert body.get("ok") is False
     assert "test runner" in body.get("error", "").lower()
+
+
+def test_coding_tool_endpoint_allows_list_symbols(tmp_backend, tmp_path):
+    import main
+    from fastapi.testclient import TestClient
+    root = tmp_path / "sym_proj"
+    root.mkdir()
+    (root / "a.py").write_text("def alpha():\n    return 1\n")
+    client = TestClient(main.app)
+    resp = client.post("/api/coding/tool", json={"root": str(root), "tool": "list_symbols", "args": {}})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("ok") is True
+    symbols = body.get("symbols") or []
+    assert any("alpha" in (s.get("text") or "") for s in symbols)

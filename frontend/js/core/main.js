@@ -1307,6 +1307,7 @@ function showPage(page) {
     if (page === 'chat' || page === 'code') {
         toggleComposerVisibility();
         renderChatsList();
+        if (typeof refreshCodingPanels === 'function') refreshCodingPanels();
     }
     if (page === 'settings') showSettingsPage('sec-connect');
     if (page === 'docs') showDocsPage('docs-about');
@@ -3437,6 +3438,70 @@ function applyCodingPageVisibility(visible) {
 }
 if (document.getElementById('codingSettingsSaveBtn')) document.getElementById('codingSettingsSaveBtn').addEventListener('click', saveCodingSettingsUI);
 loadCodingSettingsUI();
+
+function currentCodingPanelChat() {
+    const c = getCurrentChat ? getCurrentChat() : null;
+    return (c && c.chat_mode === 'coding') ? c : null;
+}
+function codingPanelSetActiveTab(tab) {
+    ['files', 'diff', 'terminal', 'symbols'].forEach(t => {
+        const panel = document.getElementById('codingPanel' + t[0].toUpperCase() + t.slice(1));
+        if (panel) panel.classList.toggle('hidden', t !== tab);
+        const btn = document.querySelector('.coding-tab[data-coding-tab="' + t + '"]');
+        if (btn) btn.classList.toggle('active', t === tab);
+    });
+}
+async function codingPanelCall(tool, args = {}) {
+    const c = currentCodingPanelChat();
+    if (!c || !c.projectRoot) return { ok: false, error: 'Не выбран рабочий проект' };
+    const res = await fetch(API_BASE + '/api/coding/tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ root: c.projectRoot, tool, args, policy: c.toolPolicy || [] }),
+    });
+    return await res.json().catch(() => ({ ok: false, error: 'HTTP ' + res.status }));
+}
+async function refreshCodingPanels() {
+    const c = currentCodingPanelChat();
+    const panels = document.getElementById('codingPanels');
+    if (!panels) return;
+    if (!c || !c.projectRoot) { panels.classList.add('hidden'); return; }
+    panels.classList.remove('hidden');
+    const filesEl = document.getElementById('codingPanelFiles');
+    const diffEl = document.getElementById('codingDiffOutput');
+    const termEl = document.getElementById('codingTerminalOutput');
+    const symbolsEl = document.getElementById('codingSymbolsOutput');
+    if (filesEl) filesEl.innerHTML = 'Загрузка…';
+    const listRes = await codingPanelCall('fs_list', { path: '.', depth: 3 });
+    if (filesEl) {
+        filesEl.innerHTML = '';
+        const items = (listRes.ok ? (listRes.entries || listRes.files || []) : []) || [];
+        if (!items.length) filesEl.textContent = 'Файлов не найдено';
+        items.slice(0, 40).forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'coding-file-item';
+            row.textContent = item;
+            row.addEventListener('click', async () => {
+                const readRes = await codingPanelCall('fs_read', { path: item });
+                if (readRes.ok) { if (termEl) termEl.textContent = String(readRes.content || readRes.text || ''); codingPanelSetActiveTab('terminal'); }
+            });
+            filesEl.appendChild(row);
+        });
+    }
+    if (diffEl) {
+        const diffRes = await codingPanelCall('git_diff', {});
+        diffEl.textContent = diffRes.ok ? String(diffRes.output || diffRes.text || '') : String(diffRes.error || diffRes.message || diffRes.status || 'Diff недоступен');
+    }
+    if (symbolsEl) {
+        const symRes = await codingPanelCall('list_symbols', { path: '.', depth: 3 });
+        const symbols = (symRes.ok ? (symRes.symbols || []) : []) || [];
+        symbolsEl.textContent = symbols.length ? symbols.slice(0, 80).map(s => `${s.path}:${s.line} ${s.text}`).join('\n') : String(symRes.error || symRes.message || 'Символы не найдены');
+    }
+}
+document.addEventListener('click', (e) => {
+    const t = e.target.closest ? e.target.closest('[data-coding-tab]') : null;
+    if (t) { codingPanelSetActiveTab(t.dataset.codingTab); refreshCodingPanels(); }
+});
 
 // ===== Справка (Docs page): под-навигация + хаб расширений =====
 const docsSubnavLinks = () => document.querySelectorAll('#docsSubnav a');

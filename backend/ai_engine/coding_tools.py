@@ -482,3 +482,32 @@ class CodingToolset:
         if extra_args:
             cmd.extend(str(a) for a in extra_args)
         return self.run_command(cmd, timeout=300)
+
+    def list_symbols(self, path: str = ".", depth: int = 1) -> dict:
+        """Best-effort symbol extraction for supported source files."""
+        exts = {
+            ".py": ("def ", "class "),
+            ".js": ("function ", "const ", "class "),
+            ".ts": ("function ", "class "),
+            ".go": ("func ", "type "),
+        }
+        symbols = []
+        for root, _dirs, files in os.walk(self.ctx.root):
+            rel_root = os.path.relpath(root, self.ctx.root)
+            for fname in files:
+                ext = os.path.splitext(fname)[1]
+                markers = exts.get(ext)
+                if not markers:
+                    continue
+                file_path = os.path.join(root, fname)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        for line_no, line in enumerate(f, 1):
+                            for marker in markers:
+                                if line.startswith(marker):
+                                    rel = os.path.join(rel_root, fname) if rel_root != "." else fname
+                                    symbols.append({"path": rel, "line": line_no, "text": line.strip()})
+                                    break
+                except Exception:
+                    continue
+        return {"ok": True, "symbols": symbols}

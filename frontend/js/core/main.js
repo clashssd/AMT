@@ -3469,19 +3469,49 @@ let _codingTreeFiles = [];
 let _codingSymbols = [];
 let _codingActiveFilePath = '';
 
-function openCodingFile(path) {
+function openCodingFile(path, line = 0) {
     if (!path) return;
     _codingActiveFilePath = path;
     document.querySelectorAll('.coding-tree-row.active, .coding-symbol-row.active').forEach(el => el.classList.remove('active'));
     const diffInput = document.getElementById('codingDiffPath');
     if (diffInput) diffInput.value = path;
+    const lineInput = document.getElementById('codingTerminalLine');
+    if (lineInput && line) lineInput.value = String(line);
     codingPanelCall('fs_read', { path }).then(res => {
         const termEl = document.getElementById('codingTerminalOutput');
-        if (res.ok && termEl) termEl.textContent = res.content || '';
+        if (res.ok && termEl) {
+            termEl.textContent = res.content || '';
+            if (line) termEl.scrollTop = Math.max(0, (line - 1) * 16);
+        }
         codingPanelSetActiveTab('terminal');
     });
     document.querySelectorAll('.coding-tree-row').forEach(el => { if (el.title === path) el.classList.add('active'); });
     document.querySelectorAll('.coding-symbol-row').forEach(el => { if (el.dataset.path === path) el.classList.add('active'); });
+}
+
+function jumpCodingTerminalLine() {
+    const lineInput = document.getElementById('codingTerminalLine');
+    const termEl = document.getElementById('codingTerminalOutput');
+    if (!lineInput || !termEl || !_codingActiveFilePath) return;
+    const line = parseInt(lineInput.value, 10);
+    if (!line || line < 1) return;
+    termEl.scrollTop = Math.max(0, (line - 1) * 16);
+}
+
+function refreshCodingLineDiff() {
+    const lineInput = document.getElementById('codingTerminalLine');
+    const diffEl = document.getElementById('codingLineDiffOutput');
+    if (!lineInput || !diffEl || !_codingActiveFilePath) { if (diffEl) diffEl.textContent = 'Выберите файл и строку'; return; }
+    const line = parseInt(lineInput.value, 10);
+    if (!line || line < 1) { diffEl.textContent = 'Введите номер строки'; return; }
+    const res = codingPanelCall('git_diff', { path: _codingActiveFilePath });
+    diffEl.textContent = 'Загрузка line-diff…';
+    res.then(r => {
+        if (!r.ok) { diffEl.textContent = String(r.error || 'Line-diff недоступен'); return; }
+        const lines = String(r.output || r.text || r.content || '').split('\n');
+        const target = lines.slice(Math.max(0, line - 4), line + 4).join('\n');
+        diffEl.textContent = target || ('Строка ' + line + ' не найдена в diff');
+    });
 }
 
 function _renderCodingDiffFiles() {
@@ -3630,6 +3660,8 @@ document.addEventListener('click', (e) => {
     if (e.target.closest && e.target.closest('[data-coding-tree-refresh]')) { refreshCodingFileTree(); return; }
     if (e.target.closest && e.target.closest('[data-coding-symbols-refresh]')) { refreshCodingSymbols(); return; }
     if (e.target.closest && e.target.closest('[data-coding-find]')) { refreshCodingFindDefinitions(); return; }
+    if (e.target.closest && e.target.closest('[data-coding-jump-line]')) { jumpCodingTerminalLine(); return; }
+    if (e.target.closest && e.target.closest('[data-coding-line-diff]')) { refreshCodingLineDiff(); return; }
 });
 document.addEventListener('input', (e) => {
     if (e.target && e.target.id === 'codingTreeSearch') refreshCodingFileTree();

@@ -269,7 +269,15 @@
                         </div>
                         <div id="codingFileTree" class="coding-file-tree"></div>
                     </div>
-                    <div id="codingPanelTerminal" class="coding-panel hidden"><pre class="coding-terminal" id="codingTerminalOutput"></pre></div>
+                    <div id="codingPanelTerminal" class="coding-panel hidden">
+                        <div class="coding-diff-controls">
+                            <button class="coding-diff-btn" data-coding-jump-line="1">Go to line</button>
+                            <input id="codingTerminalLine" class="coding-diff-input" placeholder="line" />
+                            <button class="coding-diff-btn" data-coding-line-diff="1">Line diff</button>
+                        </div>
+                        <pre class="coding-terminal" id="codingTerminalOutput"></pre>
+                        <pre class="coding-terminal coding-line-diff-output" id="codingLineDiffOutput"></pre>
+                    </div>
                     <div id="codingPanelSymbols" class="coding-panel hidden">
                         <div class="coding-diff-controls">
                             <input id="codingSymbolSearch" class="coding-diff-input" placeholder="filter symbols" />

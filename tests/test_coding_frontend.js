@@ -53,6 +53,10 @@ assert(main.includes('openCodingFile'), 'main.js should open files from tree, sy
 assert(main.includes('openCodingFile'), 'main.js should expose an openCodingFile helper');
 assert(home.includes('id="codingSymbolSearch"'), 'home.html should expose a symbol search input');
 assert(main.includes('refreshCodingSymbols'), 'main.js should refresh the symbols panel with search');
+assert(home.includes('id="codingTerminalLine"'), 'home.html should expose a jump-to-line input');
+assert(main.includes('jumpCodingTerminalLine'), 'main.js should support jump-to-line in terminal');
+assert(home.includes('id="codingLineDiffOutput"'), 'home.html should expose a line-diff preview output');
+assert(main.includes('refreshCodingLineDiff'), 'main.js should refresh line-diff preview');
 assert(main.includes('find_definitions'), 'main.js should use find_definitions for go-to-definition search');
 assert(home.includes('id="codingFindQuery"'), 'home.html should expose a find-definitions input');
 

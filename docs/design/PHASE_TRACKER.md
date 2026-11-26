@@ -10,7 +10,7 @@ Branch: `design/system-v2` (created)
 | 3 | Fields + white plaques (critical) | ✅ | `37894f2` |
 | 4 | Unified button system | ✅ | `92ba36d` |
 | 5 | Cards, modals, nav, feedback | ✅ | `feat(design): refresh cards, forms, modals and feedback` |
-| 6 | Tokenization + guard script | ⬜ | `refactor(design): tokenize colors and add design guard` |
+| 6 | Tokenization + guard script | ✅ | `afb5ee2` |
 | 7 | Motion + bento home | ⬜ | `feat(design): add motion system and bento home` |
 | 8 | A11y + responsive | ⬜ | `fix(a11y): improve focus, contrast and responsive behavior` |
 | 9 | Final QA | ⬜ | `chore(design): final QA and polish` |
@@ -20,4 +20,5 @@ Branch: `design/system-v2` (created)
 - Фаза 3: глобальный field-base в components-v2.css (input/textarea/select/checkbox/range/file/color, autofill-fix, select option dark bg, accent-color). Точечные white-plaque-фиксы: .send-btn/.web-open-btn/.player-tab; style.css tokenized .modal-glass select/input, .test-btn.primary, .opt-select, .search-input-wrap, .form-group, .chat-input, .web-open-btn.
 - Фаза 4: unified `.btn` system (base + variants + sizes + states + loading spinner + button-in-button trailing icon). Composer ➤/⏹ → SVG. .stop-btn → danger-soft. Старые классы = алиасы над базовым слоем (без ручной переработки 131 кнопок).
 - Фаза 5: карточки (`.home-card`/`.settings-glass`/`.storage-glass`/`.stat-card`) → `--card-bg`/`--card-bg-2`/`--border`. Модальные: `--modal-bg`/`--overlay-bg`/`--theme-radius` + max-height 86dvh/760px + overflow auto + blur-lg. main.js: `initModalA11y` (role=dialog/aria-modal/focus trap/Escape/focus return, MutationObserver на .hidden) + toast aria-live. components-v2: скроллбары, aria-invalid, чипы/бейджи/тумблеры, empty/error/skeleton, double-bezel inset-highlight.
+- Фаза 6: bulk-tokenize style.css via `scripts/phase6-tokenize.mjs` (hex map + rgba channel-signature rules + catch-all for white/black). 146 changes, 218→135 literals. Guard `scripts/check-design-tokens.mjs` skips `:root`/`[data-theme]` token-definition blocks when counting, flags undefined var() refs, >120 literals, white bg outside accent-contrast. components-v2.css: 3 residual literals fixed (glass-border/glass-bg). package.json: `check:design` script.
 - style.css brace diff -2 = pre-existing (проверено git stash в фазе 3), не из наших правок.

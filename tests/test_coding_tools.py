@@ -155,3 +155,42 @@ def test_git_commit_requires_permission(tmp_path):
     result = toolset.git_commit(paths=["new.txt"], message="add new file")
     assert result["ok"] is False
     assert "commit" in result["error"].lower() or "permission" in result["error"].lower()
+
+
+def test_git_diff_supports_name_status_and_path(tmp_path):
+    from ai_engine.coding_tools import ProjectContext, CodingToolset
+
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, text=True)
+    (tmp_path / "a.txt").write_text("old\n", encoding="utf-8")
+    subprocess.run(["git", "add", "a.txt"], cwd=tmp_path, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "commit", "-m", "initial"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@test.com",
+             "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@test.com"},
+    )
+    (tmp_path / "a.txt").write_text("new\n", encoding="utf-8")
+
+    ctx = ProjectContext(root=str(tmp_path), allow_write=False, allow_commands=True, allow_git_commit=False, deny_globs=[])
+    toolset = CodingToolset(ctx)
+
+    name_status = toolset.git_diff(staged=False, name_status=True, path="")
+    assert name_status["ok"] is True
+    assert "M" in name_status["output"] and "a.txt" in name_status["output"]
+
+    single = toolset.git_diff(staged=False, name_status=False, path="a.txt")
+    assert single["ok"] is True
+    assert "a.txt" in single["output"]
+
+
+def test_git_diff_rejects_path_outside_root(tmp_path):
+    from ai_engine.coding_tools import ProjectContext, CodingToolset
+
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, text=True)
+    ctx = ProjectContext(root=str(tmp_path), allow_write=False, allow_commands=True, allow_git_commit=False, deny_globs=[])
+    toolset = CodingToolset(ctx)
+
+    result = toolset.git_diff(path="..")
+    assert result["ok"] is False

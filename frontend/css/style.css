@@ -4877,5 +4877,14 @@ code {
 .coding-file-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px; border-radius: 7px; cursor: pointer; }
 .coding-file-item:hover { background: rgba(255,255,255,.06); }
 .coding-file-actions { color: rgba(255,255,255,.45); font-size: 11px; }
+.coding-diff-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.coding-diff-btn { border: 0; border-radius: 8px; padding: 5px 8px; background: rgba(255,255,255,.08); color: rgba(255,255,255,.82); cursor: pointer; font-size: 12px; }
+.coding-diff-btn:hover { background: rgba(255,255,255,.14); }
+.coding-diff-input { flex: 1; min-width: 160px; border: 0; border-radius: 8px; padding: 5px 8px; background: rgba(255,255,255,.06); color: rgba(255,255,255,.9); font-size: 12px; }
+.coding-diff-output { min-height: 120px; }
+.coding-file-tree { max-height: 180px; overflow: auto; padding-right: 2px; }
+.coding-tree-row { padding: 3px 6px; border-radius: 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.coding-tree-row:hover { background: rgba(255,255,255,.07); }
+.coding-tree-dir { font-weight: 600; color: rgba(255,255,255,.9); }
 @media (max-width: 640px) { .coding-panel { max-height: 160px; } }
 

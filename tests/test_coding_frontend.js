@@ -29,5 +29,10 @@ assert(home.includes('id="codingPanels"'), 'home.html should include IDE-level c
 assert(main.includes('refreshCodingPanels'), 'main.js should refresh coding IDE panels');
 assert(main.includes('codingPanelCall'), 'main.js should call safe coding tools for panels');
 assert(main.includes('list_symbols'), 'main.js should use list_symbols for symbol panel');
+assert(home.includes('data-coding-tab="diff"'), 'home.html should expose a primary diff tab');
+assert(home.includes('id="codingDiffPath"'), 'home.html should expose a diff path input');
+assert(home.includes('id="codingFileTree"'), 'home.html should expose a file tree container');
+assert(main.includes('refreshCodingDiff'), 'main.js should refresh the coding diff panel');
+assert(main.includes('refreshCodingFileTree'), 'main.js should render the coding file tree');
 
 console.log('test_coding_frontend.js: PASS');

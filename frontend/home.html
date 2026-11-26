@@ -245,13 +245,29 @@
                 </div>
                 <section id="codingPanels" class="coding-panels hidden" aria-label="Коддинг-панели">
                     <div class="coding-tabs">
+                        <button class="coding-tab active" data-coding-tab="diff">Diff</button>
                         <button class="coding-tab" data-coding-tab="files">Файлы</button>
-                        <button class="coding-tab" data-coding-tab="diff">Diff</button>
                         <button class="coding-tab" data-coding-tab="terminal">Терминал</button>
                         <button class="coding-tab" data-coding-tab="symbols">Символы</button>
                     </div>
-                    <div id="codingPanelFiles" class="coding-panel"></div>
-                    <div id="codingPanelDiff" class="coding-panel hidden"><pre class="coding-terminal" id="codingDiffOutput"></pre></div>
+                    <div id="codingPanelDiff" class="coding-panel">
+                        <div class="coding-diff-controls">
+                            <button class="coding-diff-btn" data-coding-diff="unstaged">Unstaged</button>
+                            <button class="coding-diff-btn" data-coding-diff="staged">Staged</button>
+                            <button class="coding-diff-btn" data-coding-diff="name-status">Changed files</button>
+                            <button class="coding-diff-btn" data-coding-diff="file">File diff</button>
+                            <input id="codingDiffPath" class="coding-diff-input" placeholder="path/to/file" />
+                            <button class="coding-diff-btn" data-coding-diff="refresh">Refresh</button>
+                        </div>
+                        <pre class="coding-terminal coding-diff-output" id="codingDiffOutput"></pre>
+                    </div>
+                    <div id="codingPanelFiles" class="coding-panel hidden">
+                        <div class="coding-diff-controls">
+                            <input id="codingTreeSearch" class="coding-diff-input" placeholder="filter files" />
+                            <button class="coding-diff-btn" data-coding-tree-refresh="1">Refresh</button>
+                        </div>
+                        <div id="codingFileTree" class="coding-file-tree"></div>
+                    </div>
                     <div id="codingPanelTerminal" class="coding-panel hidden"><pre class="coding-terminal" id="codingTerminalOutput"></pre></div>
                     <div id="codingPanelSymbols" class="coding-panel hidden"><pre class="coding-terminal" id="codingSymbolsOutput"></pre></div>
                 </section>

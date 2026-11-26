@@ -3890,7 +3890,7 @@ def _build_coding_request_registry(project_root: str, tool_policy: list[dict]) -
         ("fs_apply_patch", "edit", "fs_apply_patch", {"type": "object", "properties": {"patch_content": {"type": "string"}}, "required": ["patch_content"]}, toolset.fs_apply_patch),
         ("run_command", "shell", "run_command", {"type": "object", "properties": {"argv": {"type": "array", "items": {"type": "string"}}, "timeout": {"type": "integer"}}, "required": ["argv"]}, toolset.run_command),
         ("git_status", "git", "git_status", {"type": "object", "properties": {}}, toolset.git_status),
-        ("git_diff", "git", "git_diff", {"type": "object", "properties": {"staged": {"type": "boolean"}}}, toolset.git_diff),
+        ("git_diff", "git", "git_diff", {"type": "object", "properties": {"staged": {"type": "boolean"}, "name_status": {"type": "boolean"}, "path": {"type": "string"}}}, toolset.git_diff),
         ("git_log", "git", "git_log", {"type": "object", "properties": {"n": {"type": "integer"}}}, toolset.git_log),
         ("git_add", "git", "git_add", {"type": "object", "properties": {"paths": {"type": "array", "items": {"type": "string"}}}, "required": ["paths"]}, toolset.git_add),
         ("git_commit", "git", "git_commit", {"type": "object", "properties": {"paths": {"type": "array", "items": {"type": "string"}}, "message": {"type": "string"}}, "required": ["message"]}, toolset.git_commit),

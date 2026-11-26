@@ -3461,46 +3461,107 @@ async function codingPanelCall(tool, args = {}) {
     });
     return await res.json().catch(() => ({ ok: false, error: 'HTTP ' + res.status }));
 }
+let _codingDiffMode = 'unstaged';
+let _codingTreeFiles = [];
+function _codingTreeFromEntries(entries) {
+    const root = { name: '', children: new Map() };
+    for (const entry of entries || []) {
+        const path = String(entry).replace(/\\/g, '/').replace(/\/+$/, '');
+        if (!path) continue;
+        const parts = path.split('/');
+        let node = root;
+        parts.forEach((part, idx) => {
+            if (!node.children.has(part)) node.children.set(part, { name: part, path: parts.slice(0, idx + 1).join('/'), isDir: idx < parts.length - 1, children: new Map() });
+            node = node.children.get(part);
+        });
+    }
+    return root;
+}
+function _codingTreeToDom(node, depth = 0, filter = '') {
+    const wrap = document.createElement('div');
+    wrap.className = 'coding-tree-node';
+    for (const child of [...node.children.values()].sort((a, b) => (b.isDir - a.isDir) || a.name.localeCompare(b.name))) {
+        if (filter && !child.path.toLowerCase().includes(filter.toLowerCase())) continue;
+        const row = document.createElement('div');
+        row.className = 'coding-tree-row' + (child.isDir ? ' coding-tree-dir' : ' coding-tree-file');
+        row.style.paddingLeft = (10 + depth * 14) + 'px';
+        row.textContent = (child.isDir ? '📁 ' : '• ') + child.name;
+        row.title = child.path;
+        row.addEventListener('click', () => {
+            const diffInput = document.getElementById('codingDiffPath');
+            const termEl = document.getElementById('codingTerminalOutput');
+            if (!child.isDir && diffInput) diffInput.value = child.path;
+            codingPanelCall('fs_read', { path: child.path }).then(res => {
+                if (res.ok && termEl) {
+                    termEl.textContent = res.content || '';
+                    codingPanelSetActiveTab('terminal');
+                }
+            });
+        });
+        wrap.appendChild(row);
+        if (child.isDir) wrap.appendChild(_codingTreeToDom(child, depth + 1, filter));
+    }
+    return wrap;
+}
+async function refreshCodingFileTree() {
+    const filesEl = document.getElementById('codingFileTree');
+    if (!filesEl) return;
+    filesEl.innerHTML = 'Загрузка…';
+    const listRes = await codingPanelCall('fs_list', { path: '.', depth: 4 });
+    if (!listRes.ok) { filesEl.textContent = String(listRes.error || 'Не удалось загрузить файлы'); return; }
+    _codingTreeFiles = listRes.entries || [];
+    const filter = (document.getElementById('codingTreeSearch') || {}).value || '';
+    filesEl.innerHTML = '';
+    const tree = _codingTreeFromEntries(_codingTreeFiles);
+    filesEl.appendChild(_codingTreeToDom(tree, 0, filter));
+    if (!filesEl.children.length) filesEl.textContent = 'Файлов не найдено';
+}
+async function refreshCodingDiff() {
+    const diffEl = document.getElementById('codingDiffOutput');
+    if (!diffEl) return;
+    diffEl.textContent = 'Загрузка…';
+    const diffPath = ((document.getElementById('codingDiffPath') || {}).value || '').trim();
+    let tool = 'git_diff';
+    const args = {};
+    if (_codingDiffMode === 'staged') args.staged = true;
+    if (_codingDiffMode === 'name-status') { args.staged = false; args.name_status = true; }
+    if (_codingDiffMode === 'file' && diffPath) { args.path = diffPath; }
+    const res = await codingPanelCall(tool, args);
+    diffEl.textContent = res.ok ? String(res.output || res.text || res.content || '') : String(res.error || res.message || res.status || 'Diff недоступен');
+}
 async function refreshCodingPanels() {
     const c = currentCodingPanelChat();
     const panels = document.getElementById('codingPanels');
     if (!panels) return;
     if (!c || !c.projectRoot) { panels.classList.add('hidden'); return; }
     panels.classList.remove('hidden');
-    const filesEl = document.getElementById('codingPanelFiles');
-    const diffEl = document.getElementById('codingDiffOutput');
-    const termEl = document.getElementById('codingTerminalOutput');
-    const symbolsEl = document.getElementById('codingSymbolsOutput');
-    if (filesEl) filesEl.innerHTML = 'Загрузка…';
-    const listRes = await codingPanelCall('fs_list', { path: '.', depth: 3 });
-    if (filesEl) {
-        filesEl.innerHTML = '';
-        const items = (listRes.ok ? (listRes.entries || listRes.files || []) : []) || [];
-        if (!items.length) filesEl.textContent = 'Файлов не найдено';
-        items.slice(0, 40).forEach(item => {
-            const row = document.createElement('div');
-            row.className = 'coding-file-item';
-            row.textContent = item;
-            row.addEventListener('click', async () => {
-                const readRes = await codingPanelCall('fs_read', { path: item });
-                if (readRes.ok) { if (termEl) termEl.textContent = String(readRes.content || readRes.text || ''); codingPanelSetActiveTab('terminal'); }
-            });
-            filesEl.appendChild(row);
-        });
-    }
-    if (diffEl) {
-        const diffRes = await codingPanelCall('git_diff', {});
-        diffEl.textContent = diffRes.ok ? String(diffRes.output || diffRes.text || '') : String(diffRes.error || diffRes.message || diffRes.status || 'Diff недоступен');
-    }
-    if (symbolsEl) {
-        const symRes = await codingPanelCall('list_symbols', { path: '.', depth: 3 });
-        const symbols = (symRes.ok ? (symRes.symbols || []) : []) || [];
-        symbolsEl.textContent = symbols.length ? symbols.slice(0, 80).map(s => `${s.path}:${s.line} ${s.text}`).join('\n') : String(symRes.error || symRes.message || 'Символы не найдены');
+    const activeTab = document.querySelector('.coding-tab.active')?.dataset.codingTab || 'diff';
+    if (activeTab === 'diff') await refreshCodingDiff();
+    if (activeTab === 'files') await refreshCodingFileTree();
+    if (activeTab === 'symbols') {
+        const symbolsEl = document.getElementById('codingSymbolsOutput');
+        if (symbolsEl) {
+            const symRes = await codingPanelCall('list_symbols', { path: '.', depth: 3 });
+            const symbols = (symRes.ok ? (symRes.symbols || []) : []) || [];
+            symbolsEl.textContent = symbols.length ? symbols.slice(0, 120).map(s => `${s.path}:${s.line} ${s.text}`).join('\n') : String(symRes.error || symRes.message || 'Символы не найдены');
+        }
     }
 }
 document.addEventListener('click', (e) => {
-    const t = e.target.closest ? e.target.closest('[data-coding-tab]') : null;
-    if (t) { codingPanelSetActiveTab(t.dataset.codingTab); refreshCodingPanels(); }
+    const tab = e.target.closest ? e.target.closest('[data-coding-tab]') : null;
+    if (tab) { codingPanelSetActiveTab(tab.dataset.codingTab); refreshCodingPanels(); return; }
+    const diffBtn = e.target.closest ? e.target.closest('[data-coding-diff]') : null;
+    if (diffBtn) {
+        _codingDiffMode = diffBtn.dataset.codingDiff;
+        if (_codingDiffMode === 'unstaged' || _codingDiffMode === 'staged') _codingDiffMode = 'diff';
+        codingPanelSetActiveTab('diff');
+        refreshCodingDiff();
+        return;
+    }
+    if (e.target.closest && e.target.closest('[data-coding-tree-refresh]')) { refreshCodingFileTree(); return; }
+});
+document.addEventListener('input', (e) => {
+    if (e.target && e.target.id === 'codingTreeSearch') refreshCodingFileTree();
 });
 
 // ===== Справка (Docs page): под-навигация + хаб расширений =====

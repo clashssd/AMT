@@ -356,11 +356,22 @@ class CodingToolset:
             return {"ok": False, "error": "Command execution is not enabled for this project context"}
         return self.run_command(["git", "status"], timeout=30)
 
-    def git_diff(self, staged: bool = False) -> dict:
-        """Run ``git diff`` (working tree or staged)."""
+    def git_diff(self, staged: bool = False, name_status: bool = False, path: str = "") -> dict:
+        """Run ``git diff`` (working tree, staged, changed files, or one file)."""
         if not self.ctx.allow_commands:
             return {"ok": False, "error": "Command execution is not enabled for this project context"}
-        cmd = ["git", "diff", "--staged"] if staged else ["git", "diff"]
+        cmd = ["git", "diff"]
+        if staged:
+            cmd.append("--staged")
+        if name_status:
+            cmd.append("--name-status")
+        if path:
+            real, err = self._resolve_path(path)
+            if err:
+                return {"ok": False, "error": err}
+            rel = os.path.relpath(real, self.ctx.root).replace(os.sep, "/")
+            cmd.append("--")
+            cmd.append(rel)
         return self.run_command(cmd, timeout=30)
 
     def git_log(self, n: int = 20) -> dict:

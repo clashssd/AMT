@@ -86,8 +86,21 @@ AMT — это desktop-чат-клиент, который **вы** контро
   «бинарный файл».
 - **Безопасные инструменты (tool-calling)** — чтение/запись файлов, создание
   папок, листинг каталогов, запуск команд — только в выбранной «рабочей папке»
-  (проект). Запись/команды требуют подтверждения (auto-approve выкл по
+  (проект). Запись/команды требуют подтверждения (auto-approve вык�� по
   умолчанию), команды — только из белого списка. Всё логируется.
+- **Нативный tool-calling** — при включённом `toolCalling` (вкл. по умолчанию)
+  модель получает JSON-схемы инструментов и сама выпускает `tool_calls`; бэкенд
+  исполняет их через `ToolRegistry` и возвращает результат модели (до 5
+  итераций). Встроенные инструменты: генерация картинок/видео/голоса/файлов
+  (`generate_image`, `generate_video`, `generate_audio`, `generate_file`).
+  `[[GEN]]`-токены сохраняются как страховка, если провайдер не поддерживает
+  tool-calling.
+- **MCP-серверы** — подключение внешних MCP-серверов (STDIO-процессы или
+  HTTP-эндпоинты). Их инструменты (префикс `mcp__<server>__<tool>`)
+  автоматически появляются в доступных инструментах модели. Переменные
+  окружения сервера шифруются Fernet (`mcp_key.key`); инструменты MCP по
+  умолчанию требуют подтверждения (`auto_approve=False`). Управление:
+  «Настройки → MCP-серверы» + «Хранилище».
 - **Медиа-плеер** — YouTube/Twitch embeds, прямые `.mp4`/`.m3u8`, фото, аудио —
   воспроизводятся в чате/плеере, fullscreen, фильтры (яркость/контраст/
   детализация/шум/улучшение). Сайты, блокирующие iframe (X-Frame-Options),
@@ -105,24 +118,24 @@ AMT — это desktop-чат-клиент, который **вы** контро
 
 ##  Быстрая установка (без сборки)
 
-**Один файл — и всё готово.** Запустите `AMT Chat Setup 1.0.6.exe` из папки
+**Один файл — и всё готово.** Запустите `AMT Chat Setup 1.0.8.exe` из папки
 `release/` и следуйте мастеру установки. Не нужно устанавливать Python,
 Node.js или другие зависимости — всё уже включено в инсталлятор.
 
 ```
-release/AMT Chat Setup 1.0.6.exe
+release/AMT Chat Setup 1.0.8.exe
 ```
 
 После установки: **Настройки → Подключение** — введите API-ключ, начните чат.
 
-> Готовый ZIP-архив: `release/AMT-Chat-Setup-1.0.6.zip` (~175 МБ). Распакуйте и
-> запустите `AMT Chat Setup 1.0.6.exe` — установка завершится за 2 минуты.
+> Готовый ZIP-архив: `release/AMT-Chat-Setup-1.0.8.zip` (~175 МБ). Распакуйте и
+> запустите `AMT Chat Setup 1.0.8.exe` — установка завершится за 2 минуты.
 
 ### Скачать из GitHub Release
 
 Готовый ZIP-архив с установщиком лежит в релизе
-[`v1.0.7`](https://github.com/clashssd/AMT/releases/tag/v1.0.7) как attachment
-`AMT-Chat-Setup-1.0.7.zip` (~175 МБ).
+[`v1.0.8`](https://github.com/clashssd/AMT/releases/tag/v1.0.8) как attachment
+`AMT-Chat-Setup-1.0.8.zip` (~175 МБ).
 
 > **С 1.0.7 встроена система автообновлений** — приложение само проверяет
 > обновления на GitHub Releases при старте (через 5 сек) и раз в сутки.
@@ -133,22 +146,22 @@ release/AMT Chat Setup 1.0.6.exe
 
 Каждый релиз — несколько шагов:
 
-1. **Обновить версию** в `package.json` → `version: "1.0.8"`.
+1. **Обновить версию** в `package.json` → `version: "1.0.9"`.
 2. **Добавить запись** в `backend/changelog.json` (новая версия в начале массива
    `releases`, обновить топ-уровневый `version` и `latest_at`).
 3. **Собрать установщик**:
    ```bash
    npm run build:win
    ```
-   Это создаст `release/AMT-Chat-Setup-1.0.8.exe` и `release/latest.yml`.
+   Это создаст `release/AMT-Chat-Setup-1.0.9.exe` и `release/latest.yml`.
 4. **Создать GitHub-тэг и тег-релиз**:
    ```bash
-   git tag v1.0.8
+   git tag v1.0.9
    git push --tags
    ```
 5. **Публикация на GitHub** (один из вариантов):
    - **Вручную**: зайти на `https://github.com/clashssd/AMT/releases/new`,
-     выбрать тег `v1.0.8`, загрузить `AMT-Chat-Setup-1.0.8.exe` и
+     выбрать тег `v1.0.9`, загрузить `AMT-Chat-Setup-1.0.9.exe` и
      `latest.yml` из `release/` в качестве Assets.
    - **Автоматически**:
      ```bash
@@ -243,10 +256,13 @@ backend/              FastAPI-бэкенд
                        авто-загрузка модели
   ai_engine/          agents.py, orchestrator.py, memory.py, media.py,
                       tools.py, web_scraper.py, keymanager.py,
-                      extensions.py, filegen.py, sysinteraction.py
+                      extensions.py, filegen.py, sysinteraction.py,
+                      tool_registry.py, mcp_manager.py,
+                      desktop_tools.py, browser_cdp.py, async_utils.py
   agents.json         seed-ядро агентов/скиллов (создаётся при старте)
   keys.json           ваши API-ключи (пустой шаблон, не коммитится)
   settings.json       конфиг оркестратора
+  mcp_servers.json  внешние MCP-серверы (создаётся при добавлении)
   changelog.json      история версий (показывается в «Справке → Апдейты»)
 frontend/             HTML/JS/CSS (vanilla, без фреймворков)
   home.html           основной UI (SPA)

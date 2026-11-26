@@ -99,18 +99,18 @@ assert.strictEqual(pkg.build.publish.provider, 'github', 'publish provider must 
 assert.strictEqual(pkg.build.publish.owner, 'clashssd', 'publish owner must be clashssd');
 assert.strictEqual(pkg.build.publish.repo, 'AMT', 'publish repo must be AMT');
 
-// --- 9. changelog.json has the 1.0.7 entry ---
+// --- 9. changelog.json has the 1.0.8 entry ---
 const changelog = JSON.parse(read('backend/changelog.json'));
-assert.strictEqual(changelog.version, '1.0.7', 'changelog top-level version must be 1.0.7');
-const rel107 = changelog.releases.find(r => r.version === '1.0.7');
-assert.ok(rel107, 'changelog.json must contain a 1.0.7 release entry');
-assert.ok(Array.isArray(rel107.changes) && rel107.changes.length > 0, '1.0.7 entry must have changes');
+assert.strictEqual(changelog.version, '1.0.8', 'changelog top-level version must be 1.0.8');
+const rel108 = changelog.releases.find(r => r.version === '1.0.8');
+assert.ok(rel108, 'changelog.json must contain a 1.0.8 release entry');
+assert.ok(Array.isArray(rel108.changes) && rel108.changes.length > 0, '1.0.8 entry must have changes');
 
 // --- 10. release instructions exist somewhere in docs ---
 const readmePath = path.join(root, 'README.md');
 const hasReadme = fs.existsSync(readmePath);
 assert.ok(hasReadme, 'README.md must exist (release instructions)');
 const readme = read('README.md');
-assert.ok(readme.includes('v1.0.7') || readme.includes('release'), 'README.md must document the release process');
+assert.ok(readme.includes('v1.0.8') || readme.includes('release'), 'README.md must document the release process');
 
 console.log('PASS test_update: all interface checks passed');

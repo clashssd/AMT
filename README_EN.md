@@ -86,6 +86,19 @@ them in your own repository.
   "working folder" (project). Write/commands require confirmation
   (auto-approve off by default); commands only from a whitelist.
   Everything is logged.
+- **Native tool-calling** — when `toolCalling` is enabled (on by
+   default), the model receives JSON tool schemas and emits `tool_calls`
+   itself; the backend executes them via the `ToolRegistry` and returns
+   results to the model (up to 5 iterations). Built-in tools: image /
+   video / audio / file generation (`generate_image`, `generate_video`,
+   `generate_audio`, `generate_file`). `[[GEN]]` tags are kept as a
+   fallback for providers that don't support tool-calling.
+- **MCP servers** — connect external MCP servers (STDIO processes or
+   HTTP endpoints). Their tools (prefix `mcp__<server>__<tool>`) are
+   automatically available to the model. Server env vars are encrypted
+   with Fernet (`mcp_key.key`); MCP tools require confirmation by
+   default (`auto_approve=False`). Manage: "Settings → MCP servers" +
+   "Storage".
 - **Media player** — YouTube/Twitch embeds, direct `.mp4`/`.m3u8`,
   photos, audio — plays in chat/player, fullscreen, filters
   (brightness/contrast/detail/noise/enhance). Sites that block iframes
@@ -105,20 +118,20 @@ them in your own repository.
 
 ##  Quick install (no build required)
 
-**One file — and you're done.** Run `AMT Chat Setup 1.0.6.exe` from the
+**One file — and you're done.** Run `AMT Chat Setup 1.0.8.exe` from the
 `release/` folder and follow the installer wizard. No need to install
 Python, Node.js, or any other dependencies — everything is bundled in the
 installer.
 
 ```
-release/AMT Chat Setup 1.0.6.exe
+release/AMT Chat Setup 1.0.8.exe
 ```
 
 After installation: **Settings → Connection** — enter your API key, start
 chatting.
 
-> Pre-built ZIP: `release/AMT-Chat-Setup-1.0.6.zip` (~175 MB). Extract and
-> run `AMT Chat Setup 1.0.6.exe` — installation completes in ~2 minutes.
+> Pre-built ZIP: `release/AMT-Chat-Setup-1.0.8.zip` (~175 MB). Extract and
+> run `AMT Chat Setup 1.0.8.exe` — installation completes in ~2 minutes.
 
 ## How to install (for end users, no manual dependencies)
 
@@ -182,10 +195,13 @@ backend/              FastAPI backend
   main.py             API entry points + StaticFiles frontend serving
   ai_engine/          agents.py, orchestrator.py, memory.py, media.py,
                       tools.py, web_scraper.py, keymanager.py,
-                      extensions.py, filegen.py, sysinteraction.py
+                       extensions.py, filegen.py, sysinteraction.py,
+                       tool_registry.py, mcp_manager.py,
+                       desktop_tools.py, browser_cdp.py, async_utils.py
   agents.json         seed agents/skills core (created on startup)
   keys.json           your API keys (empty template, not committed)
   settings.json       orchestrator config
+  mcp_servers.json  external MCP servers (created on add)
   changelog.json      version history (shown in "Help → Updates")
 frontend/             HTML/JS/CSS (vanilla, no frameworks)
   home.html           main UI (SPA)

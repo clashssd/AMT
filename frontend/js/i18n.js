@@ -18,7 +18,7 @@ const I18N = {
         "s_agents": "Agents/Skills", "s_keys": "Keys", "s_tools": "Tools",
         "s_media": "Media keys", "s_projects": "Projects", "s_orch": "Orchestrator", "s_memory": "Memory",
         "s_personality": "Personality", "s_docs": "Docs", "s_themes": "Themes & configs",
-        "s_voice": "Voice", "s_providers": "Providers",
+        "s_voice": "Voice", "s_providers": "Providers", "s_mcp": "MCP servers",
         "docs_title": "Docs", "docs_about": "About app", "docs_ext": "Extensions", "docs_author": "How to build", "docs_updates": "Updates",
         // Settings block titles
         "b_connect": "Connection", "b_connect_desc": "API address and key. Check available models.",

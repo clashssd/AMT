@@ -1,8 +1,23 @@
 {
-  "version": "1.0.7",
+  "version": "1.0.8",
   "name": "AMT Chat",
   "latest_at": "2026-11-26",
   "releases": [
+    {
+      "version": "1.0.8",
+      "date": "2026-11-26",
+      "title": "Нативный tool-calling + MCP-серверы",
+      "changes": [
+        "Нативный LLM tool-calling: при включённом toolCalling (вкл. по умолчанию) модель получает JSON-схемы инструментов и сама выпускает tool_calls; бэкенд исполняет их через ToolRegistry и возвращает результат модели (до 5 итераций), [[GEN]]-токены сохраняются как страховка.",
+        "ToolRegistry (ai_engine/tool_registry.py): единая точка регистрации/выполнения инструментов — нативные (generate_image, generate_video, generate_audio, generate_file) + внешние MCP; результаты обрезаются до 4 КБ; ошибки возвращаются модели как JSON.",
+        "MCP-менеджер (ai_engine/mcp_manager.py): подключение внешних MCP-серверов (STDIO-процессы или HTTP-эндпоинты), инструменты с префиксом mcp__<server>__<tool>; таймаут инструмента 30 с.",
+        "Безопасность MCP: переменные окружения сервера шифруются Fernet (ключ mcp_key.key, 0600); инструменты MCP по умолчанию требуют подтверждения (auto_approve=False), нативные media/file-инструменты — авто.",
+        "REST /api/mcp/servers: CRUD + test/enable/list-tools + shutdown; MCP-менеджер — ленивая инициализация + atexit-очистка.",
+        "UI: новая страница «Настройки → MCP-серверы» (frontend/js/mcp.js) — добавление/изменение/удаление/тест, список в «Хранилище»; карточки tool-call'ов в чате (WS-события + CSS .tool-call-card).",
+        "PyInstaller-спец обновлён (--collect-all mcp и др.), requirements.txt: mcp>=1.0.0, cryptography>=42.0.0.",
+        "Документация: README (RU/EN), docs/SECURITY.md, в-приложении «Справка → Об app» и настройки синхронизированы с новой функциональностью."
+      ]
+    },
     {
       "version": "1.0.7",
       "date": "2026-11-26",

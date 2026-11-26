@@ -6189,6 +6189,90 @@ async def mcp_install_amt_coding_preset():
     return {"ok": True, "created": True, "config": {k: v for k, v in cfg.items() if k != "env"}}
 
 
+def _coding_mcp_recommendations() -> list[dict]:
+    return [
+        {
+            "id": "github-mcp",
+            "name": "GitHub MCP",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-github"],
+            "env": {"GITHUB_TOKEN": ""},
+            "enabled": False,
+            "auto_approve": False,
+            "note": "PRs, issues, repo operations. Add your GITHUB_TOKEN in env.",
+        },
+        {
+            "id": "sentry-mcp",
+            "name": "Sentry MCP",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@sentry/mcp"],
+            "env": {"SENTRY_AUTH_TOKEN": ""},
+            "enabled": False,
+            "auto_approve": False,
+            "note": "Issues, release traces, error context.",
+        },
+        {
+            "id": "playwright-mcp",
+            "name": "Playwright MCP",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@playwright/mcp"],
+            "env": {},
+            "enabled": False,
+            "auto_approve": False,
+            "note": "Browser testing and UI debugging.",
+        },
+        {
+            "id": "context7-mcp",
+            "name": "Context7 / Docs MCP",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@upstash/context7-mcp"],
+            "env": {},
+            "enabled": False,
+            "auto_approve": False,
+            "note": "Documentation retrieval for external libraries.",
+        },
+        {
+            "id": "sequential-thinking-mcp",
+            "name": "Sequential Thinking MCP",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+            "env": {},
+            "enabled": False,
+            "auto_approve": False,
+            "note": "Structured reasoning and planning tool.",
+        },
+    ]
+
+
+@app.get("/api/mcp/coding/recommended")
+async def mcp_coding_recommended():
+    items = _coding_mcp_recommendations()
+    existing = [server.id for server in mcp_manager.list_servers() if server.id in {i["id"] for i in items}] if mcp_manager else []
+    return {"status": "ok", "items": items, "existing": existing}
+
+
+@app.post("/api/mcp/coding/recommended/{server_id}/install")
+async def mcp_install_coding_recommended(server_id: str):
+    if mcp_manager is None:
+        return {"error": "MCP manager not initialized"}
+    match = next((item for item in _coding_mcp_recommendations() if item["id"] == server_id), None)
+    if not match:
+        return {"error": f"Unknown recommended MCP server: {server_id}"}
+    if mcp_manager.get_server(server_id) is not None:
+        return {"ok": True, "created": False, "config": {k: v for k, v in match.items() if k != "env"}}
+    mcp_manager.add_server(MCPServerConfig(
+        id=match["id"], name=match["name"], transport=match["transport"],
+        command=match["command"], args=match["args"], env=match["env"],
+        enabled=match["enabled"], auto_approve=match["auto_approve"],
+    ))
+    return {"ok": True, "created": True, "config": {k: v for k, v in match.items() if k != "env"}}
+
+
 @app.post("/api/mcp/servers/{server_id}/test")
 async def mcp_test_server(server_id: str):
     if mcp_manager is None:
@@ -6497,6 +6581,14 @@ async def clear_project():
 async def extensions_list():
     """Список расширений с флагом enabled + корневой каталог (для UI-хаба)."""
     return ext_loader.list_with_root_for_api()
+
+
+@app.get("/api/extensions/coding")
+async def extensions_coding_list():
+    """Coding-specific extensions (manifest.coding == true)."""
+    data = ext_loader.list_with_root_for_api()
+    items = [ext for ext in data.get("extensions", []) if ext.get("coding")]
+    return {"status": "ok", "extensions": items, "dir": data.get("dir", "")}
 
 
 class ExtAddIn(BaseModel):

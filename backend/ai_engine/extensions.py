@@ -191,6 +191,7 @@ def list_for_api() -> list:
             "backend": m.get("backend", False),
             "ok": info.get("ok", False),
             "enabled": is_enabled(name),
+            "coding": m.get("coding", False),
         })
     return out
 

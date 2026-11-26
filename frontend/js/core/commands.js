@@ -315,9 +315,16 @@
         await runCodingTool('run_tests', { extra_args: extraArgs });
         break;
       }
-      case 'code_mcp':
-        if (window.amtPrompt) await window.amtPrompt('MCP-серверы для кодинг-чата (через запятую)', 'amt-coding');
+      case 'code_mcp': {
+        const res = await fetch('/api/mcp/coding/recommended').then(r => r.json()).catch(() => ({ items: [] }));
+        const lines = (res.items || []).map(item => `• ${item.id}: ${item.name} — ${item.note || ''}`);
+        appendSystemMessage(`Рекомендуемые coding MCP-серверы:\n${lines.join('\n')}\nУстановить: /code_mcp install <id>`);
+        if (sub === 'install' && restStr) {
+          const installRes = await fetch(`/api/mcp/coding/recommended/${encodeURIComponent(restStr)}/install`, { method: 'POST' }).then(r => r.json()).catch(() => ({ ok: false }));
+          appendSystemMessage(`MCP install ${restStr}: ${installRes.ok ? (installRes.created ? 'created' : 'already exists') : 'error'}`);
+        }
         break;
+      }
       case 'code_permissions':
         if (window.amtPrompt) await window.amtPrompt('Разрешения: allow|ask|deny', 'ask');
         break;

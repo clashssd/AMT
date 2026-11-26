@@ -221,3 +221,55 @@ def test_coding_tool_endpoint_logs_coding_event(tmp_backend, tmp_path, monkeypat
     resp = client.post("/api/coding/tool", json={"root": str(root), "tool": "git_status", "args": {}})
     assert resp.status_code == 200
     assert "coding" in calls
+
+
+def test_coding_mcp_recommendations_endpoint(tmp_backend, monkeypatch):
+    import main
+    from fastapi.testclient import TestClient
+    from ai_engine.mcp_manager import MCPManager
+
+    if main.mcp_manager is None:
+        main.mcp_manager = MCPManager(str(tmp_backend["tmp"]))
+    client = TestClient(main.app)
+    resp = client.get("/api/mcp/coding/recommended")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert {i["id"] for i in body["items"]} >= {"github-mcp", "sentry-mcp", "playwright-mcp"}
+
+
+def test_coding_mcp_recommended_install(tmp_backend, monkeypatch):
+    import main
+    from fastapi.testclient import TestClient
+    from ai_engine.mcp_manager import MCPManager
+
+    if main.mcp_manager is None:
+        main.mcp_manager = MCPManager(str(tmp_backend["tmp"]))
+    client = TestClient(main.app)
+    resp = client.post("/api/mcp/coding/recommended/github-mcp/install")
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    assert main.mcp_manager.get_server("github-mcp") is not None
+
+
+def test_coding_extensions_endpoint_returns_coding_flag(tmp_backend, monkeypatch):
+    import main
+    from fastapi.testclient import TestClient
+
+    class FakeLoader:
+        def list_with_root_for_api(self):
+            return {
+                "dir": "",
+                "extensions": [
+                    {"name": "coding-ext", "version": "1", "description": "", "frontend": True, "backend": True, "ok": True, "enabled": True, "coding": True},
+                    {"name": "general-ext", "version": "1", "description": "", "frontend": True, "backend": True, "ok": True, "enabled": True, "coding": False},
+                ],
+            }
+
+    monkeypatch.setattr(main, "ext_loader", FakeLoader())
+    client = TestClient(main.app)
+    resp = client.get("/api/extensions/coding")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert [e["name"] for e in body["extensions"]] == ["coding-ext"]

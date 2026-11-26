@@ -18,18 +18,145 @@ from typing import Optional
 # ===== Генерация бинарных/документных файлов =====
 
 def gen_docx(content: str, title: str = "Документ") -> bytes:
+    """content: plain text with Markdown-ish markers (# for headings, - for bullets),
+    or JSON {"title":..,"paragraphs":[..],"tables":[{"headers":[..],"rows":[[..]}],
+    "styles":{"font":"Arial","size":12,"color":"#333333"},
+    "header":"..","footer":"..","image_b64":"..."}"""
     from docx import Document
-    from docx.shared import Pt
+    from docx.shared import Pt, RGBColor, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    data = None
+    if content.strip().startswith("{"):
+        try:
+            data = json.loads(content)
+        except Exception:
+            data = None
+
     doc = Document()
+
+    # Global style
+    style_cfg = {}
+    if isinstance(data, dict):
+        style_cfg = data.get("styles", {})
+        title = data.get("title", title)
+        paragraphs = data.get("paragraphs", [])
+        tables = data.get("tables", [])
+        header_text = data.get("header", "")
+        footer_text = data.get("footer", "")
+        img_b64 = data.get("image_b64", "")
+    else:
+        paragraphs = []
+        tables = []
+        header_text = ""
+        footer_text = ""
+        img_b64 = ""
+
+    # Apply global font to Normal style
+    if style_cfg:
+        try:
+            style = doc.styles["Normal"]
+            font = style.font
+            if style_cfg.get("font"):
+                font.name = style_cfg["font"]
+            if style_cfg.get("size"):
+                font.size = Pt(int(style_cfg["size"]))
+            if style_cfg.get("color"):
+                hex_c = style_cfg["color"].lstrip("#")
+                font.color.rgb = RGBColor.from_string(hex_c)
+        except Exception:
+            pass
+
+    # Title
     if title:
         doc.add_heading(title, level=0)
-    for para in (content or "").split("\n"):
-        if para.strip().startswith("#"):
-            doc.add_heading(para.lstrip("# ").strip(), level=1)
-        elif para.strip().startswith("- "):
-            doc.add_paragraph(para[2:], style="List Bullet")
-        else:
-            doc.add_paragraph(para)
+
+    # Header / Footer
+    if header_text:
+        try:
+            doc.sections[0].header.paragraphs[0].text = header_text
+        except Exception:
+            pass
+    if footer_text:
+        try:
+            doc.sections[0].footer.paragraphs[0].text = footer_text
+        except Exception:
+            pass
+
+    # Image
+    if img_b64:
+        try:
+            raw_img = base64.b64decode(img_b64)
+            img_file = io.BytesIO(raw_img)
+            doc.add_picture(img_file, width=Inches(5))
+        except Exception:
+            pass
+
+    # Tables
+    for tbl in tables:
+        if not isinstance(tbl, dict):
+            continue
+        headers = tbl.get("headers", [])
+        rows = tbl.get("rows", [])
+        if headers or rows:
+            try:
+                cols = max(len(headers), len(rows[0]) if rows else 0)
+                if cols > 0:
+                    table = doc.add_table(rows=1, cols=cols)
+                    table.style = "Table Grid"
+                    for j, h in enumerate(headers):
+                        table.cell(0, j).text = str(h)
+                        for para in table.cell(0, j).paragraphs:
+                            for run in para.runs:
+                                run.bold = True
+                    for row in rows:
+                        if isinstance(row, dict):
+                            row = list(row.values())
+                        row_cells = table.add_row().cells
+                        for j, val in enumerate(row):
+                            if j < cols:
+                                row_cells[j].text = str(val)
+            except Exception:
+                pass
+
+    # Paragraphs
+    if paragraphs:
+        for para_text in paragraphs:
+            if isinstance(para_text, dict):
+                text = para_text.get("text", "")
+                p = doc.add_paragraph(text)
+                if para_text.get("bold"):
+                    for run in p.runs:
+                        run.bold = True
+                if para_text.get("italic"):
+                    for run in p.runs:
+                        run.italic = True
+                if para_text.get("underline"):
+                    for run in p.runs:
+                        run.underline = True
+                if para_text.get("align"):
+                    p.alignment = {"left": WD_ALIGN_PARAGRAPH.LEFT, "center": WD_ALIGN_PARAGRAPH.CENTER,
+                                   "right": WD_ALIGN_PARAGRAPH.RIGHT, "justify": WD_ALIGN_PARAGRAPH.JUSTIFY}.get(para_text["align"], WD_ALIGN_PARAGRAPH.LEFT)
+            else:
+                text = str(para_text)
+                if text.strip().startswith("#"):
+                    doc.add_heading(text.lstrip("# ").strip(), level=1)
+                elif text.strip().startswith("## "):
+                    doc.add_heading(text.lstrip("# ").strip(), level=2)
+                elif text.strip().startswith("- "):
+                    doc.add_paragraph(text[2:], style="List Bullet")
+                else:
+                    doc.add_paragraph(text)
+    else:
+        # Fallback: parse plain text line-by-line
+        for para in (content or "").split("\n"):
+            if para.strip().startswith("#"):
+                doc.add_heading(para.lstrip("# ").strip(), level=1)
+            elif para.strip().startswith("- "):
+                doc.add_paragraph(para[2:], style="List Bullet")
+            else:
+                doc.add_paragraph(para)
+
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
@@ -44,12 +171,18 @@ def _safe_sheet_name(name, default="Лист"):
 
 
 def gen_xlsx(content: str, title: str = "Лист") -> bytes:
-    """content: JSON {"sheets":[{"name":..,"rows":[[..],..]},..]} или CSV.
+    """content: JSON {"sheets":[{"name":..,"rows":[[..],..],
+    "autofilter":true,"merge":"A1:C1","validation":{"col":1,"options":["a","b"]},
+    "styles":{"A1":{"bold":true,"color":"#ff0000","font":"Arial"}}},..]} или CSV.
     Optional "chart" key: {"type":"line","title":..,
     "series":[{"name":..,"values":"=Sheet1!B2:B11","color":"#4472C4"}],
-    "width":600,"height":400,"position":"D8"}."""
+    "width":600,"height":400,"position":"D8"}.
+    Cell values starting with '=' are treated as formulas."""
     from openpyxl import Workbook
-    from openpyxl.utils import column_index_from_string
+    from openpyxl.utils import column_index_from_string, get_column_letter
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.formatting.rule import ColorScaleRule
 
     data = None
     if content.strip().startswith("[") or content.strip().startswith("{"):
@@ -86,7 +219,89 @@ def gen_xlsx(content: str, title: str = "Лист") -> bytes:
             for row in rows:
                 if isinstance(row, dict):
                     row = list(row.values())
-                ws.append(row)
+                # Convert numeric strings to actual numbers so formulas work
+                cleaned = []
+                for val in row:
+                    if isinstance(val, str):
+                        v = val.strip()
+                        # Try int first, then float — but only if it looks like a number
+                        if v and not v.startswith("="):
+                            try:
+                                if "." in v or "e" in v.lower():
+                                    cleaned.append(float(v))
+                                else:
+                                    cleaned.append(int(v))
+                            except (ValueError, TypeError):
+                                cleaned.append(val)  # keep as string
+                        else:
+                            cleaned.append(val)
+                    else:
+                        cleaned.append(val)
+                ws.append(cleaned)
+
+            # === Autofilter ===
+            af = s.get("autofilter", False)
+            if af and rows:
+                max_col = max((len(r) for r in rows), default=1)
+                ws.auto_filter.ref = f"A1:{get_column_letter(max_col)}{len(rows)}"
+
+            # === Merge cells ===
+            merge = s.get("merge", "")
+            if merge:
+                try:
+                    ws.merge_cells(merge)
+                except Exception:
+                    pass
+
+            # === Data validation (dropdowns) ===
+            dv = s.get("validation")
+            if dv and isinstance(dv, dict):
+                col_letter = get_column_letter(int(dv.get("col", 1)))
+                options = dv.get("options", [])
+                if options:
+                    dv_obj = DataValidation(type="list", formula1=f'"{",".join(str(o) for o in options)}"', allow_blank=True)
+                    dv_obj.error = "Выберите значение из списка"
+                    dv_obj.errorTitle = "Недопустимое значение"
+                    ws.add_data_validation(dv_obj)
+                    for r in range(1, len(rows) + 2):
+                        dv_obj.add(f"{col_letter}{r}")
+
+            # === Conditional formatting (color scale) ===
+            cf = s.get("conditional")
+            if cf and isinstance(cf, dict):
+                rng = cf.get("range", "A1:B10")
+                try:
+                    ws.conditional_formatting.add(
+                        rng,
+                        ColorScaleRule(start_type="min", start_color="FF0000",
+                                       mid_type="percentile", mid_value=50, mid_color="FFFF00",
+                                       end_type="max", end_color="00FF00"))
+                except Exception:
+                    pass
+
+            # === Cell styles ===
+            styles = s.get("styles", {})
+            for cell_ref, style in styles.items():
+                try:
+                    cell = ws[cell_ref]
+                    if style.get("bold"):
+                        cell.font = Font(bold=True)
+                    if style.get("italic"):
+                        cell.font = Font(italic=True)
+                    if style.get("underline"):
+                        cell.font = Font(underline="single")
+                    if style.get("color"):
+                        cell.font = Font(color=style["color"].lstrip("#"))
+                    if style.get("font"):
+                        cell.font = Font(name=style["font"])
+                    if style.get("size"):
+                        cell.font = Font(size=style["size"])
+                    if style.get("fill"):
+                        cell.fill = PatternFill(start_color=style["fill"].lstrip("#"), end_color=style["fill"].lstrip("#"), fill_type="solid")
+                    if style.get("align"):
+                        cell.alignment = Alignment(horizontal=style["align"])
+                except Exception:
+                    pass
 
         # === Chart support ===
         chart_spec = data.get("chart")
@@ -199,55 +414,264 @@ def _add_chart(wb, spec: dict):
     target_ws.add_chart(chart, position)
 
 
+def _is_dark_color(hex_color: str) -> bool:
+    """Check if a hex color is dark (for choosing text color)."""
+    c = (hex_color or "").lstrip("#")
+    if len(c) < 6:
+        return False
+    r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+    # Perceived luminance
+    lum = 0.299 * r + 0.587 * g + 0.114 * b
+    return lum < 128
+
+
 def gen_pptx(content: str, title: str = "Презентация") -> bytes:
-    """content: JSON {"slides":[{"title":..,"body":..}]} или строки (по слайду)."""
+    """content: JSON {"slides":[{"title":..,"body":..,
+    "bg_color":"#1a1a2e","table":{"headers":[..],"rows":[[..]}},
+    "image_b64":"...","notes":"...","font":"Arial","font_size":24}]} или строки (по слайду)."""
     from pptx import Presentation
-    from pptx.util import Inches
+    from pptx.util import Inches, Pt
+    from pptx.dml.color import RGBColor
+    from pptx.enum.text import PP_ALIGN
+    import re as _re
+
     prs = Presentation()
     slides = None
+    raw_data = None
     if content.strip().startswith("[") or content.strip().startswith("{"):
         try:
-            j = json.loads(content)
-            slides = j if isinstance(j, list) else j.get("slides")
+            raw_data = json.loads(content)
+            slides = raw_data if isinstance(raw_data, list) else raw_data.get("slides")
         except Exception:
             slides = None
     if not slides:
         slides = [{"title": s.split("\n")[0].strip(), "body": "\n".join(s.split("\n")[1:])}
                   for s in (content or "").split("\f")]
+
+    # Global theme from top-level dict
+    theme = {}
+    if isinstance(raw_data, dict):
+        theme = raw_data.get("theme", {})
+    default_font = theme.get("font", "Arial")
+    default_bg = theme.get("bg_color", "")
+
     for i, s in enumerate(slides):
-        if i == 0:
-            slide = prs.slides.add_slide(prs.slide_layouts[0])  # title
-            slide.shapes.title.text = s.get("title", title)
-            if s.get("body"):
-                slide.placeholders[1].text = s["body"]
-        else:
-            slide = prs.slides.add_slide(prs.slide_layouts[1])  # title+body
-            slide.shapes.title.text = s.get("title", f"Слайд {i+1}")
-            slide.placeholders[1].text = s.get("body", "")
+        if not isinstance(s, dict):
+            s = {"title": str(s)}
+        # Choose layout: 0=title, 1=title+content, 5=title only, 6=blank
+        layout_idx = 0 if i == 0 else 1
+        if s.get("blank"):
+            layout_idx = 6
+        elif s.get("body") is None and s.get("title"):
+            layout_idx = 5  # title-only for section headers
+        try:
+            slide = prs.slides.add_slide(prs.slide_layouts[layout_idx])
+        except IndexError:
+            slide = prs.slides.add_slide(prs.slide_layouts[0])
+
+        # Background color
+        bg_color = s.get("bg_color", default_bg)
+        if bg_color:
+            try:
+                bg = slide.background.fill
+                bg.solid()
+                hex_c = bg_color.lstrip("#")
+                bg.fore_color.rgb = RGBColor.from_string(hex_c)
+            except Exception:
+                pass
+
+        # Title
+        ttl = s.get("title", "")
+        if ttl:
+            if slide.shapes.title is not None:
+                slide.shapes.title.text = ttl
+                try:
+                    for para in slide.shapes.title.text_frame.paragraphs:
+                        for run in para.runs:
+                            run.font.name = s.get("font", default_font)
+                            run.font.size = Pt(int(s.get("font_size", 28)))
+                            run.font.bold = True
+                            # Dark background → light text; light background → dark text
+                            is_dark = _is_dark_color(bg_color)
+                            run.font.color.rgb = RGBColor.from_string(
+                                "FFFFFF" if is_dark else "1a1a2e"
+                            )
+                except Exception:
+                    pass
+
+        # Body
+        body = s.get("body", "")
+        if body:
+            if len(slide.placeholders) > 1:
+                slide.placeholders[1].text = body
+                try:
+                    for para in slide.placeholders[1].text_frame.paragraphs:
+                        for run in para.runs:
+                            run.font.name = s.get("font", default_font)
+                            run.font.size = Pt(int(s.get("body_font_size", 18)))
+                            is_dark = _is_dark_color(bg_color)
+                            run.font.color.rgb = RGBColor.from_string(
+                                "E8E8F4" if is_dark else "333333"
+                            )
+                except Exception:
+                    pass
+
+        # Table
+        tbl = s.get("table")
+        if tbl and isinstance(tbl, dict):
+            headers = tbl.get("headers", [])
+            rows = tbl.get("rows", [])
+            if headers or rows:
+                try:
+                    rows_count = len(rows) + 1
+                    cols_count = max(len(headers), len(rows[0]) if rows else 0)
+                    if cols_count > 0:
+                        left = Inches(0.5)
+                        top = Inches(2.0)
+                        width = Inches(9.0)
+                        height = Inches(4.0)
+                        table_shape = slide.shapes.add_table(rows_count, cols_count, left, top, width, height)
+                        table = table_shape.table
+                        # Headers
+                        for j, h in enumerate(headers):
+                            cell = table.cell(0, j)
+                            cell.text = str(h)
+                            cell.fill.solid()
+                            cell.fill.fore_color.rgb = RGBColor.from_string("4472C4")
+                            for para in cell.text_frame.paragraphs:
+                                for run in para.runs:
+                                    run.font.color.rgb = RGBColor.from_string("FFFFFF")
+                                    run.font.bold = True
+                        # Data rows
+                        for r_idx, row in enumerate(rows, 1):
+                            if isinstance(row, dict):
+                                row = list(row.values())
+                            for j, val in enumerate(row):
+                                if j < cols_count:
+                                    table.cell(r_idx, j).text = str(val)
+                except Exception:
+                    pass
+
+        # Image
+        img_b64 = s.get("image_b64", "")
+        if img_b64:
+            try:
+                raw_img = base64.b64decode(img_b64)
+                img_file = io.BytesIO(raw_img)
+                pic = slide.shapes.add_picture(img_file, Inches(2), Inches(3), width=Inches(5))
+            except Exception:
+                pass
+
+        # Notes
+        notes = s.get("notes", "")
+        if notes:
+            try:
+                notes_slide = slide.notes_slide
+                notes_slide.notes_text_frame.text = notes
+            except Exception:
+                pass
+
     buf = io.BytesIO()
     prs.save(buf)
     return buf.getvalue()
 
 
 def gen_pdf(content: str, title: str = "Документ") -> bytes:
+    """content: plain text, or JSON {"title":..,"paragraphs":[..],
+    "tables":[{"headers":[..],"rows":[[..]}],"styles":{"font":"Helvetica","size":12,"color":"#333333"}}"""
     from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
     from reportlab.pdfgen import canvas
+
+    data = None
+    if content.strip().startswith("{"):
+        try:
+            data = json.loads(content)
+        except Exception:
+            data = None
+
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     w, h = A4
-    MARGIN = 56  # ~2cm
+    MARGIN = 56
+
+    # Global style
+    style_cfg = {}
+    if isinstance(data, dict):
+        style_cfg = data.get("styles", {})
+        title = data.get("title", title)
+        paragraphs = data.get("paragraphs", [])
+        tables = data.get("tables", [])
+    else:
+        paragraphs = (content or "").split("\n")
+        tables = []
+
+    font_family = style_cfg.get("font", "Helvetica")
+    font_size = int(style_cfg.get("size", 11))
+    color_str = style_cfg.get("color", "#000000")
+    try:
+        hex_c = color_str.lstrip("#")
+        text_color = colors.HexColor(hex_c)
+    except Exception:
+        text_color = colors.black
+
     y = h - MARGIN
-    c.setFont("Helvetica-Bold", 18)
+
+    # Title
+    c.setFont(f"{font_family}-Bold" if font_family == "Helvetica" else font_family, 18)
+    c.setFillColor(text_color)
     c.drawString(MARGIN, y, (title or "Документ")[:80])
     y -= 24
-    c.setFont("Helvetica", 11)
-    for line in (content or "").split("\n"):
-        if y < MARGIN:
+
+    # Tables
+    for tbl in tables:
+        if not isinstance(tbl, dict):
+            continue
+        headers = tbl.get("headers", [])
+        rows = tbl.get("rows", [])
+        if not (headers or rows):
+            continue
+        cols = max(len(headers), len(rows[0]) if rows else 0)
+        if cols == 0:
+            continue
+        col_width = (w - 2 * MARGIN) / cols
+        c.setFont(f"{font_family}-Bold" if font_family == "Helvetica" else font_family, font_size)
+        # Header row
+        x = MARGIN
+        for j, h_txt in enumerate(headers):
+            c.drawString(x, y, str(h_txt)[:40])
+            x += col_width
+        y -= font_size + 4
+        c.setFont(font_family, font_size)
+        for row in rows:
+            if isinstance(row, dict):
+                row = list(row.values())
+            x = MARGIN
+            for j, val in enumerate(row):
+                if j < cols:
+                    c.drawString(x, y, str(val)[:40])
+                    x += col_width
+            y -= font_size + 4
+            if y < MARGIN + font_size:
+                c.showPage()
+                c.setFont(font_family, font_size)
+                y = h - MARGIN
+        y -= 8
+
+    # Paragraphs
+    c.setFont(font_family, font_size)
+    c.setFillColor(text_color)
+    for para in paragraphs:
+        text = para.get("text", "") if isinstance(para, dict) else str(para)
+        if not text.strip():
+            continue
+        if y < MARGIN + font_size:
             c.showPage()
-            c.setFont("Helvetica", 11)
+            c.setFont(font_family, font_size)
             y = h - MARGIN
-        c.drawString(MARGIN, y, line[:110])
-        y -= 16
+        c.drawString(MARGIN, y, text[:100])
+        y -= font_size + 4
+
     c.save()
     return buf.getvalue()
 

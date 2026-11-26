@@ -310,6 +310,9 @@ class Settings(BaseModel):
     # parsed on the final text as a safety net. When False, the MEDIA_CAPABILITY
     # block is included and the LLM uses [[GEN]] tags instead.
     toolCalling: bool = True
+    # Max tool-calling iterations per request. 0 = use default (5).
+    # Cap at 50 to prevent runaway loops.
+    maxIterations: int = 0
 
     @property
     def effective_base_url(self) -> str:
@@ -326,6 +329,13 @@ class Settings(BaseModel):
     @property
     def effective_system_prompt(self) -> str:
         return self.systemPrompt
+
+    @property
+    def effective_max_iterations(self) -> int:
+        """Resolve the max tool-calling iterations. 0 means 'use default'."""
+        if self.maxIterations > 0:
+            return min(self.maxIterations, 50)  # hard cap
+        return 5  # default MAX_TOOL_ITERATIONS
 
     @property
     def http_proxy(self) -> str:
@@ -1397,10 +1407,11 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                 # --- Native tool-calling loop (only when toolCalling enabled) ---
                 # If the LLM returned tool_calls, execute them via the registry,
                 # append the results as `tool` messages, and re-call the LLM — up
-                # to MAX_TOOL_ITERATIONS times. Uses the open `client`/`url`/
+                # to max_iter times. Uses the open `client`/`url`/
                 # headers so 429 key-rotation and proxy config stay consistent.
+                max_iter = settings.effective_max_iterations
                 if settings.toolCalling and msg.get("tool_calls"):
-                    for _iteration in range(MAX_TOOL_ITERATIONS):
+                    for _iteration in range(max_iter):
                         # Append the assistant message (with its tool_calls) to context
                         assistant_msg = {"role": "assistant", "content": msg.get("content")}
                         if msg.get("tool_calls"):
@@ -4523,6 +4534,101 @@ async def filegen_download(stored_name: str):
     return FileResponse(p, media_type="application/octet-stream", filename=safe)
 
 
+# ===== Writer generation (explicit API for the front-end form) =====
+class WriterGenerateIn(BaseModel):
+    family: str = "txt"       # docx/xlsx/pptx/pdf/json/csv/txt/py/zip
+    title: str = ""
+    spec: str = ""           # JSON spec or plain text
+    source_b64: str = ""     # base64 of a user-uploaded file to base on
+
+@app.post("/api/writer/generate")
+async def writer_generate(req: WriterGenerateIn):
+    """Generate a file via the Writer MCP server (or direct filegen fallback).
+
+    If the writer MCP server is connected and enabled, delegate to it.
+    Otherwise fall back to ai_engine.filegen directly.
+    """
+    # Try the MCP writer tool first
+    if mcp_manager is not None:
+        try:
+            # Check if writer server is registered
+            wcfg = mcp_manager.get_server("writer")
+            if wcfg and wcfg.enabled:
+                # Pick the right tool based on family
+                tool_name = {
+                    "docx": "create_office", "xlsx": "create_office", "pptx": "create_office",
+                    "pdf": "create_pdf",
+                    "json": "create_data", "yaml": "create_data", "csv": "create_data",
+                    "txt": "create_text", "md": "create_text",
+                    "py": "create_code",
+                    "zip": "create_archive", "tar": "create_archive",
+                }.get(req.family, "create_text")
+
+                # Build the tool args
+                args = {}
+                if tool_name == "create_office":
+                    args = {"family": req.family, "spec": req.spec, "title": req.title}
+                elif tool_name == "create_pdf":
+                    args = {"spec": req.spec, "title": req.title}
+                elif tool_name == "create_data":
+                    fmt = "csv" if req.family == "csv" else ("yaml" if req.family == "yaml" else "json")
+                    args = {"spec": req.spec, "title": req.title, "fmt": fmt}
+                elif tool_name == "create_text":
+                    args = {"content": req.spec, "title": req.title}
+                elif tool_name == "create_code":
+                    args = {"spec": req.spec, "lang": req.family, "title": req.title}
+                elif tool_name == "create_archive":
+                    # spec should be {"files": {...}} — parse if string
+                    import json as _json
+                    try:
+                        parsed = _json.loads(req.spec) if isinstance(req.spec, str) else req.spec
+                    except Exception:
+                        parsed = {"files": {}, "format": "zip"}
+                    args = {"spec": parsed, "title": req.title}
+                else:
+                    args = {"content": req.spec, "title": req.title}
+                if req.source_b64:
+                    args["source_b64"] = req.source_b64
+
+                result = await mcp_manager.call_tool("writer", tool_name, args)
+                if result and isinstance(result, dict):
+                    if not result.get("ok"):
+                        return {"status": "error", "message": result.get("error", "Writer tool failed"),
+                                "code": result.get("code", "")}
+                    # Store the file for download
+                    stored_name = result.get("stored_name", "")
+                    if stored_name:
+                        os.makedirs(FILES_DIR, exist_ok=True)
+                        dest = os.path.join(FILES_DIR, stored_name)
+                        if not os.path.exists(dest):
+                            b64_data = result.get("b64", "")
+                            if b64_data:
+                                import base64 as _b64
+                                with open(dest, "wb") as f:
+                                    f.write(_b64.b64decode(b64_data))
+                        return {"status": "ok", "stored_name": stored_name,
+                                "family": req.family, "artifact_id": result.get("artifact_id", ""),
+                                "bytes": result.get("bytes", 0), "hash": result.get("hash", ""),
+                                "validation": result.get("validation", {})}
+                    return {"status": "ok", "family": req.family, "note": "Artifact created (no local copy)"}
+        except Exception as e:
+            log.warning("writer_generate MCP fallback: %s", e)
+
+    # Fallback: direct filegen (no MCP)
+    try:
+        data, fname = filegen.generate_file(req.family, req.spec, req.title, req.family)
+    except NotImplementedError as e:
+        return {"status": "not_implemented", "message": str(e)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    os.makedirs(FILES_DIR, exist_ok=True)
+    stored_name = f"{int(time.time()*1000)}_{fname}"
+    with open(os.path.join(FILES_DIR, stored_name), "wb") as f:
+        f.write(data)
+    return {"status": "ok", "stored_name": stored_name, "family": req.family,
+            "bytes": len(data), "validation": {"valid": True, "notes": ["generated via filegen fallback"]}}
+
+
 # ===== ФОН ПРИЛОЖЕНИЯ (картинка/видео) — загрузка + отдача =====
 class BgIn(BaseModel):
     name: str = "bg"
@@ -5168,10 +5274,246 @@ async def mcp_install_rag_preset():
     return {"ok": True, "created": True, "config": {k: v for k, v in cfg.items() if k != "env"}}
 
 
+# ===== PRESET: media generation MCP server =====
+
+def _media_preset_config() -> dict:
+    """Build a ready-to-add MCP server config for the bundled media generation server.
+
+    The media server exposes image/video/audio/file generation as MCP tools.
+    Credentials are passed via environment variables that AMT populates from
+    the active key settings (imageKey, videoKey, audioKey, etc.) when the
+    server is connected.
+
+    Dev mode: python -m media_server with PYTHONPATH on the backend dir.
+    Frozen mode: reuses the sidecar bootloader with AMT_BACKEND_MODE=media.
+    """
+    import sys
+    frozen = bool(getattr(sys, "frozen", False))
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+
+    if frozen:
+        appdata = os.environ.get("APPDATA", os.path.expanduser("~"))
+        files_dir = os.environ.get("AMT_FILES_DIR") or os.path.join(
+            appdata, "AMT Chat", "FILES"
+        )
+        return {
+            "id": "media",
+            "name": "Медиа-генерация",
+            "transport": "stdio",
+            "command": sys.executable,
+            "args": [],
+            "env": {
+                "AMT_BACKEND_MODE": "media",
+                "AMT_FILES_DIR": files_dir,
+            },
+            "enabled": True,
+            "auto_approve": False,  # media calls cost money — user should approve
+        }
+
+    # Dev: venv interpreter + PYTHONPATH on the backend (media_server loose source).
+    files_dir = os.environ.get("AMT_FILES_DIR") or os.path.join(backend_dir, "FILES_DIR")
+    creds_file = os.path.join(backend_dir, "media_creds.json")
+    return {
+        "id": "media",
+        "name": "Медиа-генерация",
+        "transport": "stdio",
+        "command": sys.executable,
+        "args": ["-m", "media_server"],
+        "env": {
+            "PYTHONPATH": backend_dir,
+            "AMT_FILES_DIR": files_dir,
+            "AMT_MEDIA_CREDS_FILE": creds_file,
+        },
+        "enabled": True,
+        "auto_approve": False,
+    }
+
+
+@app.get("/api/mcp/presets/media")
+async def mcp_preset_media():
+    """Return the media preset config so the UI can pre-fill the add form."""
+    cfg = _media_preset_config()
+    exists = mcp_manager is not None and mcp_manager.get_server(cfg["id"]) is not None
+    return {**cfg, "exists": exists}
+
+
+@app.post("/api/mcp/presets/media")
+async def mcp_install_media_preset():
+    """Add the media MCP server to the registry (idempotent)."""
+    if mcp_manager is None:
+        return {"error": "MCP manager not initialized"}
+    cfg = _media_preset_config()
+    existing = mcp_manager.get_server(cfg["id"])
+    if existing is not None:
+        return {"ok": True, "created": False}
+    mcp_manager.add_server(MCPServerConfig(
+        id=cfg["id"], name=cfg["name"], transport=cfg["transport"],
+        command=cfg["command"], args=cfg["args"], env=cfg["env"],
+        enabled=cfg["enabled"], auto_approve=cfg["auto_approve"],
+    ))
+    # Write current credentials so the media server has them on first connect
+    _write_media_creds()
+    return {"ok": True, "created": True, "config": {k: v for k, v in cfg.items() if k != "env"}}
+
+
+def _write_media_creds() -> None:
+    """Write the current media credentials to media_creds.json for the media MCP server.
+
+    Reads from settings.json and writes a JSON file that the media
+    server reads at startup. This ensures the server always has fresh credentials.
+    """
+    creds = {
+        "base_url": "", "api_key": "", "model": "",
+        "image_base_url": "", "image_api_key": "", "image_model": "",
+        "video_base_url": "", "video_api_key": "", "video_model": "",
+        "audio_base_url": "", "audio_api_key": "", "audio_model": "",
+        "audio_voice_id": "",
+        "proxy": "",
+        # Media path overrides (user-configured API paths)
+        "media_path_text": "", "media_path_image": "", "media_path_text_image": "",
+        "media_path_video": "", "media_path_voice": "",
+        # Coding keys (separate from general)
+        "coding_base_url": "", "coding_api_key": "", "coding_model": "",
+    }
+    try:
+        settings_file = os.environ.get("AMT_SETTINGS_FILE") or os.path.join(os.path.dirname(__file__), "settings.json")
+        if os.path.exists(settings_file):
+            with open(settings_file) as f:
+                s = json.load(f)
+            creds["base_url"] = s.get("baseUrl", "")
+            creds["api_key"] = s.get("apiKey", "")
+            creds["model"] = s.get("model", "")
+            creds["image_base_url"] = s.get("imageBaseUrl", "")
+            creds["image_api_key"] = s.get("imageKey", "")
+            creds["image_model"] = s.get("imageModel", "")
+            creds["video_base_url"] = s.get("videoBaseUrl", "")
+            creds["video_api_key"] = s.get("videoKey", "")
+            creds["video_model"] = s.get("videoModel", "")
+            creds["audio_base_url"] = s.get("audioBaseUrl", "")
+            creds["audio_api_key"] = s.get("audioKey", "")
+            creds["audio_model"] = s.get("audioModel", "")
+            creds["audio_voice_id"] = s.get("audioVoiceId", "")
+            creds["proxy"] = s.get("proxyUrl", "") or s.get("httpsProxy", "")
+            # Media path overrides
+            creds["media_path_text"] = s.get("mediaPathText", "")
+            creds["media_path_image"] = s.get("mediaPathImage", "")
+            creds["media_path_text_image"] = s.get("mediaPathTextImage", "")
+            creds["media_path_video"] = s.get("mediaPathVideo", "")
+            creds["media_path_voice"] = s.get("mediaPathVoice", "")
+            # Coding keys
+            creds["coding_base_url"] = s.get("codingBaseUrl", "")
+            creds["coding_api_key"] = s.get("codingKey", "")
+            creds["coding_model"] = s.get("codingModel", "")
+    except Exception:
+        pass
+    creds_file = os.environ.get("AMT_MEDIA_CREDS_FILE") or os.path.join(os.path.dirname(__file__), "media_creds.json")
+    with open(creds_file, "w") as f:
+        json.dump(creds, f, indent=2, ensure_ascii=False)
+    log.info("Media creds written to %s", creds_file)
+
+
+@app.post("/api/mcp/presets/media/creds")
+async def mcp_update_media_creds():
+    """Refresh the media credentials file from the current settings."""
+    _write_media_creds()
+    return {"ok": True}
+
+
+# ===== PRESET: writer (file generation) MCP server =====
+
+def _writer_preset_config() -> dict:
+    """Build a ready-to-add MCP server config for the bundled writer server.
+
+    The writer server exposes file-creation tools (text, data, Office, code,
+    archives, media-delegation) with a typed contract: preview → approve →
+    commit → validate. Roots are sandboxed; commits auto-land in the temp
+    root and return a stored_name for download.
+
+    Dev mode: python -m writer_server with PYTHONPATH on the backend dir.
+    Frozen mode: reuses the sidecar bootloader with AMT_BACKEND_MODE=writer.
+    """
+    import sys
+    frozen = bool(getattr(sys, "frozen", False))
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+
+    if frozen:
+        appdata = os.environ.get("APPDATA", os.path.expanduser("~"))
+        data_dir = os.environ.get("AMT_WRITER_DATA_DIR") or os.path.join(
+            appdata, "AMT Chat", ".amt_writer"
+        )
+        files_dir = os.environ.get("AMT_FILES_DIR") or os.path.join(
+            appdata, "AMT Chat", "FILES"
+        )
+        return {
+            "id": "writer",
+            "name": "Генератор файлов (Writer)",
+            "transport": "stdio",
+            "command": sys.executable,
+            "args": [],
+            "env": {
+                "AMT_BACKEND_MODE": "writer",
+                "AMT_WRITER_DATA_DIR": data_dir,
+                "AMT_FILES_DIR": files_dir,
+            },
+            "enabled": True,
+            "auto_approve": False,
+        }
+
+    # Dev: venv interpreter + PYTHONPATH on the backend.
+    default_data_dir = os.path.join(backend_dir, ".amt_writer")
+    files_dir = os.environ.get("AMT_FILES_DIR") or os.path.join(backend_dir, "FILES_DIR")
+    creds_file = os.path.join(backend_dir, "media_creds.json")
+    return {
+        "id": "writer",
+        "name": "Генератор файлов (Writer)",
+        "transport": "stdio",
+        "command": sys.executable,
+        "args": ["-m", "writer_server"],
+        "env": {
+            "PYTHONPATH": backend_dir,
+            "AMT_WRITER_DATA_DIR": os.environ.get("AMT_WRITER_DATA_DIR", default_data_dir),
+            "AMT_FILES_DIR": files_dir,
+            "AMT_MEDIA_CREDS_FILE": creds_file,
+        },
+        "enabled": True,
+        "auto_approve": False,
+    }
+
+
+@app.get("/api/mcp/presets/writer")
+async def mcp_preset_writer():
+    """Return the writer preset config so the UI can pre-fill the add form."""
+    cfg = _writer_preset_config()
+    exists = mcp_manager is not None and mcp_manager.get_server(cfg["id"]) is not None
+    return {**cfg, "exists": exists}
+
+
+@app.post("/api/mcp/presets/writer")
+async def mcp_install_writer_preset():
+    """Add the writer MCP server to the registry (idempotent)."""
+    if mcp_manager is None:
+        return {"error": "MCP manager not initialized"}
+    cfg = _writer_preset_config()
+    existing = mcp_manager.get_server(cfg["id"])
+    if existing is not None:
+        return {"ok": True, "created": False}
+    mcp_manager.add_server(MCPServerConfig(
+        id=cfg["id"], name=cfg["name"], transport=cfg["transport"],
+        command=cfg["command"], args=cfg["args"], env=cfg["env"],
+        enabled=cfg["enabled"], auto_approve=cfg["auto_approve"],
+    ))
+    # Writer delegates media to the same creds file — refresh it
+    _write_media_creds()
+    return {"ok": True, "created": True, "config": {k: v for k, v in cfg.items() if k != "env"}}
+
+
 @app.post("/api/mcp/servers/{server_id}/test")
 async def mcp_test_server(server_id: str):
     if mcp_manager is None:
         return {"error": "MCP manager not initialized"}
+    # For the media/writer servers, refresh creds before connecting so they have fresh keys
+    if server_id in ("media", "writer"):
+        _write_media_creds()
 
     async def _attempt() -> tuple[bool, list[dict], str]:
         await mcp_manager.connect(server_id)
@@ -5635,9 +5977,16 @@ if __name__ == "__main__":
     # HTTP API. The Electron shell's RAG preset sets this env when it spawns
     # `amt-backend.exe` (packaged) so the frozen bootloader — which otherwise
     # always runs main.py's uvicorn entrypoint — instead serves RAG.
-    if os.environ.get("AMT_BACKEND_MODE", "").strip() == "rag":
+    _mode = os.environ.get("AMT_BACKEND_MODE", "").strip()
+    if _mode == "rag":
         from rag_server.server import main as _rag_main
         _sys.exit(_rag_main())
+    elif _mode == "media":
+        from media_server.server import main as _media_main
+        _sys.exit(_media_main())
+    elif _mode == "writer":
+        from writer_server.server import main as _writer_main
+        _sys.exit(_writer_main())
     import uvicorn
     _port = int(os.environ.get("PORT", "8000"))
     uvicorn.run(app, host="127.0.0.1", port=_port, log_level="warning")

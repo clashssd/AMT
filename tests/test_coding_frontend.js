@@ -42,5 +42,8 @@ assert(logsDashboard.includes('coding_tool_calls'), 'logsDashboard.js should sho
 assert(main.includes('codingExtensions = []'), 'main.js should accept coding extensions in storage');
 assert(main.includes("/api/extensions/coding"), 'main.js should fetch coding extensions');
 assert(fs.existsSync(path.join(__dirname, '..', 'extensions', 'amt-coding-example', 'manifest.json')), 'sample coding extension manifest should exist');
+assert(home.includes('codingMaxIterations'), 'home.html should include coding max iterations input');
+assert(main.includes('codingMaxIterations'), 'main.js should persist coding max iterations');
+assert(main.includes('effective_max_iterations') || main.includes('maxIterations') || main.includes('codingMaxIterations'), 'main.js should expose or use coding iteration value');
 
 console.log('test_coding_frontend.js: PASS');

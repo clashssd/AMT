@@ -9,6 +9,7 @@ class ChatProfile:
     base_url: str
     model: str
     system_prompt_suffix: str = ""
+    max_iterations: int = 0
 
 
 def key_role(key_id: str) -> str:
@@ -55,9 +56,19 @@ def resolve_chat_profile(request, keys_mgr=None, server_settings=None):
     coding_settings_key = str(getattr(server_settings, "codingKey", "") or "").strip()
     coding_settings_base = str(getattr(server_settings, "codingBaseUrl", "") or "").strip()
     coding_settings_model = str(getattr(server_settings, "codingModel", "") or "").strip()
+    coding_settings_iterations = int(getattr(server_settings, "codingMaxIterations", 0) or 0)
+    settings_max = int(getattr(settings, "maxIterations", 0) or 0)
+    if settings_max > 0:
+        max_iterations = min(settings_max, 50)
+    elif coding_settings_iterations > 0:
+        max_iterations = min(coding_settings_iterations, 50)
+    else:
+        max_iterations = int(getattr(settings, "effective_max_iterations", 0) or 0)
 
     if chat_mode == "coding":
         suffix = "\n\n[CODING PROFILE] Stay inside the requested project root, inspect files before editing, show diffs before writes, and run commands/tests only when needed."
+        if max_iterations <= 0:
+            max_iterations = 20
 
         if key_id:
             key = keys_mgr.get_key(key_id) if keys_mgr else None
@@ -96,4 +107,5 @@ def resolve_chat_profile(request, keys_mgr=None, server_settings=None):
         base_url=base_url,
         model=model,
         system_prompt_suffix=suffix,
+        max_iterations=max_iterations,
     )

@@ -286,6 +286,7 @@ class Settings(BaseModel):
     codingKey: str = ""
     codingBaseUrl: str = ""
     codingModel: str = ""
+    codingMaxIterations: int = 20  # базовое количество итераций для кодинг-чата (0 = default)
     # Ключ для агента безопасности (monitor). Если пусто — используется общий apiKey.
     securityAgentKey: str = ""
     securityAgentBaseUrl: str = ""
@@ -1531,7 +1532,7 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                 # append the results as `tool` messages, and re-call the LLM — up
                 # to max_iter times. Uses the open `client`/`url`/
                 # headers so 429 key-rotation and proxy config stay consistent.
-                max_iter = settings.effective_max_iterations
+                max_iter = profile.max_iterations or settings.effective_max_iterations
                 if settings.toolCalling and msg.get("tool_calls"):
                     for _iteration in range(max_iter):
                         # Append the assistant message (with its tool_calls) to context

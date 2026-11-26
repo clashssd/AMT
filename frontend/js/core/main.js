@@ -3412,9 +3412,11 @@ function loadCodingSettingsUI() {
     const vis = document.getElementById('codingPageVisibility');
     const root = document.getElementById('codingProjectRoot');
     const preset = document.getElementById('codingPolicyPreset');
+    const iters = document.getElementById('codingMaxIterations');
     if (vis) vis.checked = s.visibility !== false;
     if (root) root.value = s.projectRoot || '';
     if (preset) preset.value = s.policy || 'balanced';
+    if (iters) iters.value = s.maxIterations != null ? s.maxIterations : 20;
     applyCodingPageVisibility(vis ? vis.checked : true);
 }
 function saveCodingSettingsUI() {
@@ -3422,6 +3424,7 @@ function saveCodingSettingsUI() {
         visibility: document.getElementById('codingPageVisibility')?.checked ?? true,
         projectRoot: document.getElementById('codingProjectRoot')?.value || '',
         policy: document.getElementById('codingPolicyPreset')?.value || 'balanced',
+        maxIterations: parseInt(document.getElementById('codingMaxIterations')?.value || '20', 10) || 0,
     };
     localStorage.setItem('amt_coding_settings', JSON.stringify(s));
     applyCodingPageVisibility(s.visibility);

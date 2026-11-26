@@ -889,7 +889,8 @@
                                 <input type="text" id="codingKey" class="opt-input" placeholder="API-ключ для кода (пусто = общий ключ)">
                                 <input type="text" id="codingBaseUrl" class="opt-input" style="margin-top:8px" placeholder="Base URL (пусто = общий)">
                                 <input type="text" id="codingModel" class="opt-input" style="margin-top:8px" placeholder="Модель для кода (например, claude-sonnet, gpt-4o)">
-                                <small>Если указан — используется при запросах на кодинг. Иначе — базовый ключ из «Подключение».</small>
+                                <input type="number" id="codingMaxIterations" class="opt-input" style="margin-top:8px" min="0" max="50" value="20" placeholder="Итерации для кодинга (базово 20, 0 = общий default)">
+                                <small>Если указан — используется при запросах на кодинг. Иначе — базовый ключ из «Подключение». Итерации задают максимум tool-calling циклов для кодинг-чата.</small>
                             </div>
                             <button class="test-btn primary" id="mediaKeysSaveBtn">Сохранить медиа-ключи</button>
                         </div>

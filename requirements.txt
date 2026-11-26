@@ -21,6 +21,9 @@ playwright>=1.40.0
 pyinstaller>=6.0
 # Voice control — local STT + wake-word detection (Vosk model auto-downloaded on first run)
 vosk>=0.3.45
+# MCP (Model Context Protocol) — external tool servers (STDIO + HTTP)
+mcp>=1.0.0
+cryptography>=42.0.0
 # dev / testing (нужны для запуска тест-сьюта backend/tests/, не для runtime)
 pytest>=8.0
 pytest-asyncio>=0.23

@@ -1,7 +1,7 @@
 {
   "name": "amt-chat",
   "productName": "AMT Chat",
-  "version": "1.1.1",
+  "version": "1.0.8",
   "description": "Local AI assistant with desktop shell and extension system",
   "main": "main.js",
   "scripts": {
@@ -13,15 +13,14 @@
     "build:py": "python -m PyInstaller backend/amt-backend.spec --noconfirm",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
-    "build:all": "node scripts/build.js all",
-    "check:design": "node scripts/check-design-tokens.mjs"
+    "build:all": "node scripts/build.js all"
   },
   "dependencies": {
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {
-    "electron": "^45.5.0",
-    "electron-builder": "^26.18.0"
+    "electron": "^45.4.1",
+    "electron-builder": "^25.1.8"
   },
   "build": {
     "appId": "com.amt.chat",
@@ -49,9 +48,7 @@
       {
         "from": "dist/amt-backend",
         "to": "amt-backend",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       }
     ],
     "directories": {

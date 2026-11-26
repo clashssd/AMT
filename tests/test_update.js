@@ -101,7 +101,8 @@ assert.strictEqual(pkg.build.publish.repo, 'AMT', 'publish repo must be AMT');
 
 // --- 9. changelog.json has the 1.0.8 entry (top-level version tracks the newest release) ---
 const changelog = JSON.parse(read('backend/changelog.json'));
-assert.strictEqual(changelog.version, '1.0.9', 'changelog top-level version must be 1.0.9');
+assert.strictEqual(changelog.version, '1.1.0', 'changelog top-level version must be 1.1.0');
+assert.ok(changelog.releases.some(r => r.version === '1.1.0'), 'changelog.json must contain a 1.1.0 release entry');
 assert.ok(changelog.releases.some(r => r.version === '1.0.9'), 'changelog.json must contain a 1.0.9 release entry');
 const rel108 = changelog.releases.find(r => r.version === '1.0.8');
 assert.ok(rel108, 'changelog.json must contain a 1.0.8 release entry');

@@ -1,8 +1,19 @@
 {
-  "version": "1.0.9",
+  "version": "1.1.0",
   "name": "AMT Chat",
   "latest_at": "2026-11-26",
   "releases": [
+    {
+      "version": "1.1.0",
+      "date": "2026-11-26",
+      "title": "Переструктура фронтенда + фиксы RAG-сервера",
+      "changes": [
+        "Фронтенд: разбит огромный main.js (6387 строк) на логические файлы по функциям — core/main.js (ядро), media/media-overlay.js (медиа-оверлей), core/bootstrap.js (a11y-модалки + scroll-reveal), core/init.js (DOMContentLoaded-бутстрап); остальные скрипты сгруппированы по папкам core/ · media/ · mcp/. Порядок загрузки в home.html сохранён.",
+        "RAG: иконка-эмодзи 📚 заменена на SVG в стиле приложения (knowledge-иконка); нативные белые alert()/confirm() окна в MCP-потоке заменены темизированными — темизированное модальное окно списка инструментов + amtConfirm для удаления.",
+        "RAG: исправлен «Ошибка: Connection closed» при тесте — STDIO-серверу передаётся корректный cwd (для frozen PyInstaller-oneydir `_internal/` ищется относительно cwd) + повторная попытка /test (disconnect + reconnect) при обрыве соединения.",
+        "Тесты: пути в node-тестах обновлены под новую структуру js/; changelog-тест принят за 1.0.9; полная node-сборка (run_js_tests.js) — все проходят."
+      ]
+    },
     {
       "version": "1.0.9",
       "date": "2026-11-26",

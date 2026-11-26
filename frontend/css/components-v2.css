@@ -382,3 +382,127 @@ button:focus-visible,
     background: rgba(255, 255, 255, 0.15);
     margin-left: 4px;
 }
+
+/* ============ FAZA 5: cards, forms, modals, feedback ============ */
+
+/* ---- Global themed scrollbars (all surfaces) ---- */
+html { scrollbar-width: thin; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: var(--radius-pill);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); background-clip: padding-box; }
+* { scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
+
+/* ---- Forms: invalid state ---- */
+input[aria-invalid= true],
+select[aria-invalid=true],
+textarea[aria-invalid=true] {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px var(--danger-soft);
+}
+:is(input, select, textarea)[aria-invalid=true]::placeholder { color: var(--danger); }
+
+/* ---- Chips / toggles / badges on tokens ---- */
+.chip,
+.action-chip,
+.filter-btn {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    color: var(--text);
+    transition: background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+.chip.is-active, .action-chip.is-active, .filter-btn.is-active,
+.chip[aria-pressed=true], .action-chip[aria-pressed=true], .filter-btn[aria-pressed=true] {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--text-strong);
+}
+.badge, .badge-status {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-dim);
+}
+.badge-success { background: var(--success-soft); color: var(--success); border-color: transparent; }
+.badge-warning { background: var(--warning-soft); color: var(--warning); border-color: transparent; }
+.badge-danger  { background: var(--danger-soft);  color: var(--danger);  border-color: transparent; }
+.badge-info    { background: var(--info-soft);    color: var(--info);    border-color: transparent; }
+
+/* ---- Toggle switch (checkbox-based) ---- */
+.amt-toggle { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.amt-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.amt-toggle .amt-toggle-track {
+    width: 38px; height: 22px; border-radius: var(--radius-pill);
+    background: var(--surface-2); border: 1px solid var(--border);
+    position: relative; transition: background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out);
+}
+.amt-toggle .amt-toggle-thumb {
+    position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--text-dim);
+    transition: transform var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out);
+}
+.amt-toggle input:checked + .amt-toggle-track { background: var(--accent-soft); border-color: var(--accent); }
+.amt-toggle input:checked + .amt-toggle-track .amt-toggle-thumb { transform: translateX(16px); background: var(--accent-contrast); }
+.amt-toggle input:focus-visible + .amt-toggle-track { box-shadow: 0 0 0 3px var(--focus-ring); }
+
+/* ---- Toasts: темизация существующей .toast/.toast-container + aria-live ---- */
+.toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+.toast {
+    background: var(--tooltip-bg);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    backdrop-filter: blur(var(--blur-md));
+    box-shadow: var(--shadow-md);
+    color: var(--text);
+    animation: toastIn var(--motion-base) var(--ease-out);
+}
+.toast .toast-title { color: var(--text-strong); }
+.toast .toast-body { color: var(--text-dim); }
+.toast.is-success { border-color: var(--success); }
+.toast.is-danger { border-color: var(--danger); }
+.toast.is-warning { border-color: var(--warning); }
+
+/* ---- Empty states + error/retry + skeleton ---- */
+.amt-empty { padding: 32px 20px; text-align: center; color: var(--text-dim); font-size: 13px; }
+.amt-empty .amt-empty-ic { color: var(--text-faint); margin-bottom: 8px; }
+.amt-empty a, .amt-empty button { color: var(--accent); }
+.amt-error { padding: 20px; text-align: center; }
+.amt-error .amt-error-msg { color: var(--danger); font-size: 13px; margin-bottom: 12px; }
+.amt-skeleton {
+    background: linear-gradient(90deg, var(--surface-1), var(--surface-2), var(--surface-1));
+    background-size: 200% 100%;
+    border-radius: var(--radius-sm);
+    animation: skeletonShimmer 1.2s linear infinite;
+    color: transparent !important;
+    user-select: none;
+}
+@keyframes skeletonShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* ---- Double-bezel card upgrade for .home-card / .settings-glass (inner core) ---- */
+.home-card, .settings-glass {
+    position: relative;
+}
+.home-card::before, .settings-glass::before {
+    content: ;
+ position: absolute; inset: 0;
+ border-radius: inherit;
+ box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+ pointer-events: none;
+ z-index: 0;
+}

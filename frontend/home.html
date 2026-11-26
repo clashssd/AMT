@@ -929,7 +929,50 @@
                             <div class="mcp-presets">
                                 <button class="test-btn mcp-preset-btn" onclick="mcpInstallRagPreset()">📚 База знаний (RAG)</button>
                                 <button class="test-btn mcp-preset-btn" onclick="mcpInstallMediaPreset()">🎨 Медиа-генерация</button>
-                                <button class="test-btn mcp-preset-btn" onclick="mcpInstallAmtCodingPreset()">📁 Генератор файлов</button>
+                                <button class="test-btn mcp-preset-btn" onclick="mcpInstallWriterPreset()">📁 Генератор файлов</button>
+                                <button class="test-btn mcp-preset-btn" onclick="mcpInstallAmtCodingPreset()">⚡ AMT Coding</button>
+                            </div>
+
+                            <!-- Плашка генерации файлов (writer MCP) -->
+                            <div class="writer-plaque" id="writerPlaque">
+                                <div class="writer-plaque-header">
+                                    <span class="writer-plaque-title">📄 Генерация файлов</span>
+                                    <small class="writer-plaque-hint">Через MCP-сервер writer или fallback ai_engine</small>
+                                </div>
+                                <div class="writer-plaque-form">
+                                    <div class="writer-plaque-row">
+                                        <label>Формат</label>
+                                        <select id="writerFamily" class="opt-select">
+                                            <option value="docx">DOCX</option>
+                                            <option value="xlsx">XLSX</option>
+                                            <option value="pptx">PPTX</option>
+                                            <option value="pdf">PDF</option>
+                                            <option value="json">JSON</option>
+                                            <option value="csv">CSV</option>
+                                            <option value="txt">TXT</option>
+                                            <option value="py">PY</option>
+                                            <option value="zip">ZIP</option>
+                                        </select>
+                                    </div>
+                                    <div class="writer-plaque-row">
+                                        <label>Название</label>
+                                        <input type="text" id="writerTitle" class="opt-input" placeholder="Мой отчёт">
+                                    </div>
+                                    <div class="writer-plaque-row">
+                                        <label>Описание / спецификация</label>
+                                        <textarea id="writerSpec" class="opt-input" rows="3" placeholder="Что нужно сгенерировать..."></textarea>
+                                    </div>
+                                    <div class="writer-plaque-row">
+                                        <label>Исходный файл (опц.)</label>
+                                        <input type="file" id="writerSourceFile" class="opt-input">
+                                    </div>
+                                    <div class="writer-plaque-actions">
+                                        <button class="test-btn primary" id="writerGenerateBtn" onclick="writerGenerate()">Сгенерировать</button>
+                                    </div>
+                                    <div id="writerResult" class="writer-result">
+                                    <button id="writerResultBtn" class="test-btn hidden" onclick="writerDownload()">⬇ Скачать</button>
+                                </div>
+                                </div>
                             </div>
 
                             <!-- Лимит итераций tool-calling -->
@@ -941,7 +984,6 @@
                             <button class="test-btn primary" id="toolIterSaveBtn" onclick="saveToolIterLimit()">Сохранить лимит</button>
 
                             <div id="mcp-server-list" class="mcp-list"><div class="mcp-empty">Загрузка…</div></div>
-                            <button class="test-btn" onclick="mcpInstallAmtCodingPreset()">＋ AMT Coding (advanced)</button>
                             <button class="test-btn primary" id="mcp-add-btn" onclick="mcpShowAddForm()">＋ Добавить MCP-сервер</button>
                             <div id="mcp-add-form" class="mcp-form" style="display:none"></div>
                         </div>

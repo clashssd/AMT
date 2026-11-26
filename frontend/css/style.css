@@ -5037,3 +5037,51 @@ code {
 .coding-orch-child-trace { margin: 4px 0 0; padding: 4px; border-radius: 6px; background: rgba(0,0,0,.18); font-size: 9px; color: rgba(255,255,255,.65); max-height: 70px; overflow: auto; }
 @media (max-width: 640px) { .coding-panel { max-height: 160px; } .coding-dash-stats { grid-template-columns: repeat(2, 1fr); } .coding-orch-children { grid-template-columns: 1fr; } }
 
+
+
+/* ===== WRITER PLAQUE (MCP file generation) ===== */
+.writer-plaque {
+    margin: var(--sp-4) 0;
+    padding: var(--sp-4);
+    background: var(--card-bg, rgba(255,255,255,0.03));
+    border: 1px solid var(--border, rgba(255,255,255,0.08));
+    border-radius: var(--radius-lg, 12px);
+    backdrop-filter: blur(8px);
+}
+.writer-plaque-header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-3);
+}
+.writer-plaque-title {
+    font-size: var(--fs-md, 15px);
+    font-weight: 600;
+    color: var(--text, #e0e0e0);
+}
+.writer-plaque-hint {
+    font-size: var(--fs-xs, 11px);
+    color: var(--text-dim, #888);
+}
+.writer-plaque-form {
+    display: grid;
+    gap: var(--sp-2);
+}
+.writer-plaque-row {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: var(--sp-2);
+    align-items: center;
+}
+.writer-plaque-row label {
+    font-size: var(--fs-sm, 13px);
+    color: var(--text-dim, #999);
+}
+.writer-plaque-actions {
+    margin-top: var(--sp-2);
+}
+.writer-result {
+    margin-top: var(--sp-2);
+    font-size: var(--fs-sm, 13px);
+}
+.writer-result:empty { display: none; }

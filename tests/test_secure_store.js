@@ -33,7 +33,7 @@ globalThis.TextDecoder = globalThis.TextDecoder || require('node:util').TextDeco
 // Load the module source and eval it so its top-level const/functions exist here.
 // indirect eval runs in global scope; the source declares `const SecureStore`,
 // which stays in the eval scope — so we append a line exposing it on globalThis.
-const src = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'secure-store.js'), 'utf8');
+const src = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'core', 'secure-store.js'), 'utf8');
 (0, eval)(src + '\n;globalThis.SecureStore = SecureStore; globalThis.encryptData = encryptData; globalThis.decryptData = decryptData;');
 
 // secure-store.js declares `const SecureStore` at top-level; indirect eval runs in

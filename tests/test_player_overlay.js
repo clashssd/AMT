@@ -12,8 +12,12 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
-const mainSrc = read('frontend/js/main.js');
-const playerSrc = read('frontend/js/player-browser.js');
+// main.js was split: core definitions in core/main.js, the media IIFE in
+// media/media-overlay.js, bootstrap IIFEs in core/bootstrap.js, and the
+// DOMContentLoaded handler in core/init.js. Combine the pieces that carry
+// the assertions below (core defs + media overlay) so source checks keep working.
+const mainSrc = read('frontend/js/core/main.js') + '\n' + read('frontend/js/media/media-overlay.js');
+const playerSrc = read('frontend/js/media/player-browser.js');
 const ipcSrc = read('electron/ipc.js');
 const preloadSrc = read('electron/preload.js');
 const homeSrc = read('frontend/home.html');

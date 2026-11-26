@@ -17,7 +17,9 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
-const mainJs = read('frontend/js/main.js');
+// main.js was split into core/main.js + media/media-overlay.js (+ bootstrap.js
+// + init.js). Combine the two that carry the assertions below.
+const mainJs = read('frontend/js/core/main.js') + '\n' + read('frontend/js/media/media-overlay.js');
 const mainPy = read('backend/main.py');
 const mediaPy = read('backend/ai_engine/media.py');
 const ipcJs = read('electron/ipc.js');

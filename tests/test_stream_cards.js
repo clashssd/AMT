@@ -7,7 +7,10 @@ const assert = require('assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'main.js'), 'utf8');
+// main.js was split into core/main.js + media/media-overlay.js; read both so
+// stream-card source (media) and helpers (core) are findable.
+const src = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'core', 'main.js'), 'utf8') + '\n' +
+            fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'media', 'media-overlay.js'), 'utf8');
 
 // ---- Minimal DOM mock ----
 function makeTextNode(value) {

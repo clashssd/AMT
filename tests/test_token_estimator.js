@@ -4,7 +4,7 @@ const assert = require('assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'token-estimator.js'), 'utf8');
+const src = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'core', 'token-estimator.js'), 'utf8');
 // The file defines plain functions; eval to expose them
 (0, eval)(src);
 const { estimateTokens, estimateTokensForMessages } = globalThis;

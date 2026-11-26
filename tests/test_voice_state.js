@@ -6,7 +6,7 @@ const assert = require('assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'voice.js'), 'utf8');
+const src = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'media', 'voice.js'), 'utf8');
 
 // ── Build a sandbox with all the browser globals voice.js needs ─────────────
 function makeSandbox() {

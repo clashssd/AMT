@@ -13,12 +13,31 @@ MCP_TOOL_TIMEOUT = 30.0
 
 
 def _stdio_client(cfg: MCPServerConfig):
-    """Return an async context manager that yields (read, write, session) for a STDIO MCP server."""
+    """Return an async context manager that yields (read, write, session) for a STDIO MCP server.
+
+    Sets `cwd` to the command's directory when the command is a path to an
+    executable. This is required for frozen PyInstaller onedir apps (e.g. the
+    AMT sidecar `amt-backend.exe` launched in RAG mode): the bootloader
+    resolves its `_internal/` resources relative to the process working
+    directory, so a wrong cwd makes the child fail to find its bundled
+    modules and exit immediately — which surfaces on the client side as
+    "Connection closed".
+    """
     from mcp.client.stdio import stdio_client, StdioServerParameters
+    cwd = None
+    if cfg.command:
+        # Only treat as a path when it looks like an absolute file path (not a
+        # bare interpreter like "python" / "npx" / "uv").
+        candidate = os.path.expandvars(cfg.command)
+        if os.path.isabs(candidate) or os.path.sep in candidate:
+            d = os.path.dirname(candidate)
+            if d and os.path.isdir(d):
+                cwd = d
     params = StdioServerParameters(
         command=cfg.command,
         args=cfg.args,
         env={**os.environ, **cfg.env},
+        cwd=cwd,
     )
     return stdio_client(params)
 

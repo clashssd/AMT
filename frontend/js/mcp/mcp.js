@@ -13,6 +13,9 @@ async function renderMcpSettings() {
         servers = await resp.json();
         if (!Array.isArray(servers)) servers = [];
     } catch { servers = []; }
+    // Кэшируем имена для тематических модалок (мcpTest/mcpDelete).
+    window.__mcpServersCache = {};
+    for (const s of servers) window.__mcpServersCache[s.id] = s;
     if (!servers.length) {
         list.innerHTML = '<div class="mcp-empty">Нет подключённых MCP-серверов. Нажмите «＋ Добавить MCP-сервер» ниже.</div>';
         return;
@@ -55,30 +58,78 @@ async function mcpToggle(id, enabled) {
     renderMcpSettings();
 }
 
+// Показать результат теста MCP-сервера в тематической модалке (вместо нативного alert).
+function showMcpToolsModal(name, tools, error) {
+    const modal = document.getElementById('mcpToolsModal');
+    if (!modal) return;
+    const title = document.getElementById('mcpToolsTitle');
+    const summary = document.getElementById('mcpToolsSummary');
+    const list = document.getElementById('mcpToolsList');
+    const close = document.getElementById('mcpToolsClose');
+    if (title) title.textContent = 'MCP-сервер «' + name + '»';
+    if (summary) {
+        if (error) {
+            summary.textContent = error;
+            summary.style.color = 'var(--danger, #e06)';
+        } else {
+            summary.textContent = 'Подключено. Доступно инструментов: ' + (tools || []).length;
+            summary.style.color = '';
+        }
+    }
+    if (list) {
+        list.innerHTML = '';
+        if (!error && tools && tools.length) {
+            for (const t of tools) {
+                const item = document.createElement('div');
+                item.className = 'mtl-item';
+                item.innerHTML = '<b>' + escapeHtml(t.name || '') + '</b>' + (t.description ? '<span>' + escapeHtml(t.description) + '</span>' : '');
+                list.appendChild(item);
+            }
+        } else if (!error) {
+            list.innerHTML = '<div class="mtl-empty">Сервер не предоставляет инструментов</div>';
+        }
+    }
+    if (close) close.onclick = () => modal.classList.add('hidden');
+    modal.onclick = (e) => { if (e.target === modal) modal.classList.add('hidden'); };
+    modal.classList.remove('hidden');
+}
+
 async function mcpTest(id) {
     flashStatus('Проверка подключения к «' + id + '»…');
+    const cfg = mcpServerName(id);
     try {
         const resp = await fetch(`${API_BASE}/api/mcp/servers/${encodeURIComponent(id)}/test`, { method: 'POST' });
         const data = await resp.json();
         if (data.status === 'connected') {
-            const names = (data.tools || []).map(t => '• ' + t.name + (t.description ? ': ' + t.description : '')).join('\n');
-            alert('Подключено! Доступно инструментов: ' + (data.tools || []).length + (names ? '\n\n' + names : ''));
+            showMcpToolsModal(cfg || id, data.tools || [], null);
         } else {
-            alert('Ошибка: ' + (data.message || data.status || 'неизвестно'));
+            showMcpToolsModal(cfg || id, [], 'Ошибка: ' + (data.message || data.status || 'неизвестно'));
         }
     } catch (e) {
-        alert('Ошибка сети: ' + e);
+        showMcpToolsModal(cfg || id, [], 'Ошибка сети: ' + e);
     }
 }
 
 async function mcpDelete(id) {
-    if (!confirm('Удалить MCP-сервер «' + id + '»?')) return;
+    const ok = await amtConfirm({
+        title: 'Удалить MCP-сервер?',
+        text: '«' + id + '» будет удалён из реестра.',
+        yesLabel: 'Удалить',
+    });
+    if (!ok) return;
     try {
         await fetch(`${API_BASE}/api/mcp/servers/${encodeURIComponent(id)}`, { method: 'DELETE' });
     } catch { /* ignore */ }
     flashStatus('MCP-сервер «' + id + '» удалён');
     renderMcpSettings();
     if (typeof renderMcpStorage === 'function' && document.getElementById('mcp-storage-list')) renderMcpStorage();
+}
+
+// Подсказка для заголовков модалок: имя сервера по id (если известно).
+function mcpServerName(id) {
+    const s = window.__mcpServersCache || null;
+    if (s && s[id]) return s[id].name || id;
+    return null;
 }
 
 function mcpEdit(id) {
@@ -155,7 +206,7 @@ async function mcpSubmit(existingId) {
     const transport = form.querySelector('input[name="mcp-transport"]:checked').value;
     const id = document.getElementById('mcp-id').value.trim();
     const name = document.getElementById('mcp-name').value.trim();
-    if (!id || !name) { alert('Заполните имя и ID сервера.'); return; }
+    if (!id || !name) { flashStatus('Заполните имя и ID сервера.'); return; }
     const body = {
         id,
         name,
@@ -166,10 +217,10 @@ async function mcpSubmit(existingId) {
     if (transport === 'stdio') {
         body.command = document.getElementById('mcp-command').value.trim();
         body.args = document.getElementById('mcp-args').value.split(' ').filter(Boolean);
-        if (!body.command) { alert('Укажите команду STDIO-сервера.'); return; }
+        if (!body.command) { flashStatus('Укажите команду STDIO-сервера.'); return; }
     } else {
         body.url = document.getElementById('mcp-url').value.trim();
-        if (!body.url) { alert('Укажите URL HTTP-сервера.'); return; }
+        if (!body.url) { flashStatus('Укажите URL HTTP-сервера.'); return; }
         let headers = {};
         try { headers = JSON.parse(document.getElementById('mcp-headers').value || '{}'); } catch { /* ignore */ }
         body.headers = headers;
@@ -188,7 +239,7 @@ async function mcpSubmit(existingId) {
         });
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
-            alert('Ошибка: ' + (err.error || resp.status));
+            flashStatus('Ошибка: ' + (err.error || resp.status));
             return;
         }
         if (existingId) {
@@ -203,7 +254,7 @@ async function mcpSubmit(existingId) {
         flashStatus(existingId ? 'MCP-сервер обновлён' : 'MCP-сервер добавлен');
         renderMcpSettings();
     } catch (e) {
-        alert('Ошибка сети: ' + e);
+        flashStatus('Ошибка сети: ' + e);
     }
 }
 
@@ -214,7 +265,7 @@ async function mcpInstallRagPreset() {
         const resp = await fetch(`${API_BASE}/api/mcp/presets/rag`, { method: 'POST' });
         const data = await resp.json();
         if (!resp.ok || data.error) {
-            alert('Ошибка: ' + (data.error || resp.status));
+            flashStatus('Ошибка: ' + (data.error || resp.status));
             return;
         }
         if (data.created) {
@@ -226,7 +277,7 @@ async function mcpInstallRagPreset() {
         // Auto-open the RAG card so the user can hit «Тест» and see its tools.
         setTimeout(() => { if (data.config) mcpTest('rag'); }, 400);
     } catch (e) {
-        alert('Ошибка сети: ' + e);
+        flashStatus('Ошибка сети: ' + e);
     }
 }
 

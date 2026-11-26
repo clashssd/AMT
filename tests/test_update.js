@@ -66,9 +66,9 @@ assert.ok(preloadSrc.includes("'updates:install'"), 'preload.js must wire update
 assert.ok(preloadSrc.includes("'updates:openReleases'"), 'preload.js must wire updates:openReleases');
 assert.ok(preloadSrc.includes("'updates:status-changed'"), 'preload.js must subscribe to updates:status-changed');
 
-// --- 5. frontend/js/update-ui.js exists and defines the API ---
-assert.ok(fs.existsSync(path.join(root, 'frontend', 'js', 'update-ui.js')), 'frontend/js/update-ui.js must exist');
-const updateUi = read('frontend/js/update-ui.js');
+// --- 5. frontend/js/core/update-ui.js exists and defines the API ---
+assert.ok(fs.existsSync(path.join(root, 'frontend', 'js', 'core', 'update-ui.js')), 'frontend/js/core/update-ui.js must exist');
+const updateUi = read('frontend/js/core/update-ui.js');
 assert.ok(updateUi.includes('window.AMTUpdates'), 'update-ui.js must define window.AMTUpdates');
 assert.ok(updateUi.includes('init'), 'window.AMTUpdates must have init');
 assert.ok(updateUi.includes('check'), 'window.AMTUpdates must have check');
@@ -82,9 +82,9 @@ assert.ok(updateUi.includes('updateDialog'), 'update-ui.js must reference the up
 const html = read('frontend/home.html');
 assert.ok(html.includes('id="updateBanner"'), 'home.html must have the updateBanner element');
 assert.ok(html.includes('id="updateDialog"'), 'home.html must have the updateDialog element');
-assert.ok(html.includes('./js/update-ui.js'), 'home.html must load update-ui.js');
+assert.ok(html.includes('./js/core/update-ui.js'), 'home.html must load update-ui.js');
 // update-ui.js must be loaded before main.js
-assert.ok(html.indexOf('update-ui.js') < html.indexOf('./js/main.js'), 'update-ui.js must load before main.js');
+assert.ok(html.indexOf('./js/core/update-ui.js') < html.indexOf('./js/core/main.js'), 'update-ui.js must load before main.js');
 
 // --- 7. style.css has the update styles ---
 const css = read('frontend/css/style.css');
@@ -99,9 +99,10 @@ assert.strictEqual(pkg.build.publish.provider, 'github', 'publish provider must 
 assert.strictEqual(pkg.build.publish.owner, 'clashssd', 'publish owner must be clashssd');
 assert.strictEqual(pkg.build.publish.repo, 'AMT', 'publish repo must be AMT');
 
-// --- 9. changelog.json has the 1.0.8 entry ---
+// --- 9. changelog.json has the 1.0.8 entry (top-level version tracks the newest release) ---
 const changelog = JSON.parse(read('backend/changelog.json'));
-assert.strictEqual(changelog.version, '1.0.8', 'changelog top-level version must be 1.0.8');
+assert.strictEqual(changelog.version, '1.0.9', 'changelog top-level version must be 1.0.9');
+assert.ok(changelog.releases.some(r => r.version === '1.0.9'), 'changelog.json must contain a 1.0.9 release entry');
 const rel108 = changelog.releases.find(r => r.version === '1.0.8');
 assert.ok(rel108, 'changelog.json must contain a 1.0.8 release entry');
 assert.ok(Array.isArray(rel108.changes) && rel108.changes.length > 0, '1.0.8 entry must have changes');

@@ -5172,12 +5172,33 @@ async def mcp_install_rag_preset():
 async def mcp_test_server(server_id: str):
     if mcp_manager is None:
         return {"error": "MCP manager not initialized"}
-    try:
+
+    async def _attempt() -> tuple[bool, list[dict], str]:
         await mcp_manager.connect(server_id)
         tools = await mcp_manager.list_tools(server_id)
-        return {"status": "connected", "tools": tools}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return True, tools, ""
+
+    # A frozen onedir sidecar launched in RAG mode can briefly fail to spawn
+    # (bootloader resource discovery / stale child), surfacing as "Connection
+    # closed". Retry once on a fresh connection before reporting failure.
+    last_err = ""
+    for _ in range(2):
+        try:
+            ok, tools, _ = await _attempt()
+            return {"status": "connected", "tools": tools}
+        except Exception as e:
+            msg = str(e)
+            if "closed" not in msg.lower() and "Connection" not in msg:
+                last_err = msg
+                break
+            last_err = msg
+            # Drop the broken session so the next attempt spawns a fresh child.
+            try:
+                await mcp_manager.disconnect(server_id)
+            except Exception:
+                pass
+            await asyncio.sleep(0.4)
+    return {"status": "error", "message": last_err or "unknown error"}
 
 
 @app.get("/api/mcp/servers/{server_id}/tools")

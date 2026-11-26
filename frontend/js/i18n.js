@@ -7,12 +7,21 @@ const I18N = {
         "ui_lang_label": "Lang",
         "nav_home": "Home", "nav_chat": "Chat", "nav_settings": "Settings", "nav_docs": "Docs", "nav_storage": "Storage", "nav_logs": "Logs",
         "new_chat": "+ New chat", "add_group": "Group", "status_ready": "Ready",
+        "nav_online": "AMT Online",
         // Home
         "home_start": "Where to begin?",
         "home_sub": "Create a chat — plain, or with a personality: agent, orchestrator, skills, system prompt. All details can be set right here.",
         "chat_config": "Chat setup", "reset": "Reset", "chat_type": "Chat type",
         "plain": "No persona", "personality": "With persona", "custom": "Custom prompt",
         "settings_title": "Settings", "save_all": "Save all settings",
+        // Context menu
+        "ctx_rename": "Rename",
+        "ctx_delete": "Delete",
+        "ctx_move_to_folder": "Move to Folder",
+        "ctx_export": "Export",
+        // Folder
+        "folder_new": "New Folder",
+        "folder_delete": "Delete Folder",
         // Settings subnav
         "s_connect": "Connection", "s_model": "Model", "s_net": "Network",
         "s_agents": "Agents/Skills", "s_keys": "Keys", "s_tools": "Tools",

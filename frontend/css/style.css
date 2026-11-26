@@ -1,8 +1,7 @@
-/* ===== ДИЗАЙН-ТОКЕНЫ: единая шкала отступов/скруглений/сетки =====
-   Все отступы в UI обязаны браться из этих переменных, чтобы сетка
-   оставалась ровной и предсказуемой (не захардкоженной). */
+/* ===== DESIGN TOKENS: Unified spacing/radius/shadow/motion scales =====
+   All visual values MUST reference these variables — no hardcoded numbers. */
 :root {
-    /* Шкала отступов (4px-база) */
+    /* Spacing scale (4px base, 10-step) */
     --sp-1: 4px;
     --sp-2: 8px;
     --sp-3: 12px;
@@ -12,52 +11,121 @@
     --sp-7: 32px;
     --sp-8: 40px;
     --sp-9: 48px;
-    /* Скругления */
-    --radius-sm: 10px;
-    --radius-md: 14px;
-    --radius-lg: 20px;
-    --radius-xl: 28px;
-    /* Границы контента (макс. ширина + вертикальный воздух) */
+    --sp-10: 64px;
+    --sp-12: 80px;
+
+    /* Radius scale (squircle-inspired) */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    --radius-2xl: 32px;
+    --radius-full: 9999px;
+
+    /* Content boundaries */
     --content-max: 1180px;
-    --page-px: var(--sp-7);   /* горизонтальные поля страницы */
-    --page-pty: var(--sp-7);  /* вертикальные поля */
-    /* Габариты «стеклянных» карточек */
+    --page-px: var(--sp-7);
+    --page-pty: var(--sp-7);
+
+    /* Glass card geometry */
     --glass-pad: var(--sp-7);
     --glass-radius: var(--radius-lg);
     --glass-gap: var(--sp-6);
+
+    /* Typography scale (desktop app: 14px base) */
+    --fs-xs: 11px;
+    --fs-sm: 13px;
+    --fs-base: 14px;
+    --fs-md: 15px;
+    --fs-lg: 17px;
+    --fs-xl: 20px;
+    --fs-2xl: 28px;
+    --fs-3xl: 36px;
+
+    --leading-tight: 1.2;
+    --leading-base: 1.6;
+
+    /* Font stack: premium sans → system fallback */
+    --font-sans: 'Geist', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+    /* Shadow system (diffused, layered — replacing harsh 0 4px 12px rgba(0,0,0,0.25)) */
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.10);
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.10);
+    --shadow-md: 0 4px 8px rgba(0,0,0,0.10), 0 12px 32px rgba(0,0,0,0.14);
+    --shadow-lg: 0 8px 16px rgba(0,0,0,0.12), 0 24px 64px rgba(0,0,0,0.18);
+
+    /* Inset highlight for Double-Bezel cards */
+    --inset-highlight: inset 0 1px 1px rgba(255,255,255,0.08);
+
+    /* Transition curves (cubic-bezier only — no linear/ease-in-out) */
+    --ease-smooth: cubic-bezier(0.32, 0.72, 0, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+    --duration-fast: 150ms;
+    --duration-base: 300ms;
+    --duration-slow: 500ms;
+    --duration-reveal: 800ms;
+
+    /* Z-index discipline */
+    --z-bg: -3;
+    --z-content: 1;
+    --z-sidebar: 10;
+    --z-titlebar: 100;
+    --z-modal: 500;
+    --z-tooltip: 600;
+    --z-context: 700;
 }
 
-/* ===== ТЕМА: CSS-переменные (управляются через [data-theme] на <html>) =====
-   Каждый темиз — набор этих переменных. Дефолт = стальной-фиолетовый (основной стиль сайта). */
+/* ===== THEME: CSS variables (controlled via [data-theme] on <html>) =====
+   Each theme = a set of these variables. Default = Ethereal Glass (OLED black). */
 :root, [data-theme="ocean"] {
-    --bg-grad-1: var(--bg-grad-1);
-    --bg-grad-2: var(--bg-grad-2);
-    --bg-grad-3: var(--bg-grad-1);
-    --glass-bg: var(--glass-bg);
-    --glass-bg-2: var(--glass-bg);
-    --glass-border: var(--glass-bg);
-    --accent: var(--accent);
-    --accent-2: var(--accent-2);
-    --text: var(--text);
-    --text-dim: var(--text-dim);
-    --shadow: 0 8px 32px var(--shadow-md);
-    --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --bg-grad-1: #050508;
+    --bg-grad-2: #0a0a1a;
+    --bg-grad-3: #1a0a2a;
+    --glass-bg: rgba(5, 5, 10, 0.72);
+    --glass-bg-2: rgba(10, 10, 20, 0.80);
+    --glass-border: rgba(255, 255, 255, 0.06);
+    --accent: #8B5CF6;
+    --accent-2: #06B6D4;
+    --text: #F8FAFC;
+    --text-dim: #94A3B8;
+    --text-faint: #4B5563;
+    --accent-soft: rgba(139, 92, 246, 0.15);
+    --accent-contrast: #F8FAFC;
+    --shadow-md: rgba(0, 0, 0, 0.5);
+    --danger: #EF4444;
+    --danger-soft: rgba(239, 68, 68, 0.15);
+    --success: #10B981;
+    --success-soft: rgba(16, 185, 129, 0.15);
+    --warning: #F59E0B;
+    --warning-soft: rgba(245, 158, 11, 0.15);
+    --info: #3B82F6;
+    --info-soft: rgba(59, 130, 246, 0.15);
+    --field-bg: rgba(255, 255, 255, 0.04);
+    --field-bg-hover: rgba(255, 255, 255, 0.08);
+    --field-border: rgba(255, 255, 255, 0.08);
+    --field-text: #F8FAFC;
+    --dropdown-bg: rgba(10, 10, 20, 0.95);
+    --font-family: var(--font-sans);
 }
-/* Градиентные темы (по палитрам из examples): переопределяют фон + акцент + стекло */
-[data-theme="kettle"]   { --bg-grad-1:var(--bg-grad-2); --bg-grad-2:var(--text-faint); --bg-grad-3:var(--text-faint); --glass-bg:rgba(48,47,51,0.20); --glass-border:rgba(127,183,153,0.10); --accent:var(--success); --accent-2:#9ea7b3; --text:var(--text-dim); --text-dim:var(--text-faint); }
-[data-theme="sea"]      { --bg-grad-1:var(--bg-grad-1); --bg-grad-2:var(--info); --bg-grad-3:#2f4a52; --glass-bg:rgba(31,58,68,0.22); --glass-border:rgba(140,200,210,0.10); --accent:var(--info); --accent-2:var(--warning); --text:#d5e2e5; --text-dim:var(--info); }
-[data-theme="emerald"]  { --bg-grad-1:var(--bg-grad-1); --bg-grad-2:var(--bg-grad-2); --bg-grad-3:#16241b; --glass-bg:rgba(30,58,45,0.22); --glass-border:rgba(120,200,150,0.10); --accent:var(--success); --accent-2:#d9b877; --text:var(--success); --text-dim:var(--success); }
-[data-theme="crimson"]  { --bg-grad-1:var(--bg-grad-1); --bg-grad-2:#3a0a14; --bg-grad-3:var(--bg-grad-2); --glass-bg:rgba(58,10,20,0.24); --glass-border:rgba(232,142,188,0.12); --accent:var(--danger); --accent-2:var(--bg-grad-1); --text:var(--accent-2); --text-dim:var(--danger); }
-[data-theme="gold"]     { --bg-grad-1:var(--bg-grad-1); --bg-grad-2:var(--warning); --bg-grad-3:var(--bg-grad-3); --glass-bg:rgba(216,177,146,0.14); --glass-border:rgba(221,208,192,0.14); --accent:var(--warning); --accent-2:var(--bg-grad-3); --text:var(--warning); --text-dim:#8a7f6e; }
-[data-theme="rust"]     { --bg-grad-1:var(--bg-grad-1); --bg-grad-2:var(--bg-grad-2); --bg-grad-3:var(--danger); --glass-bg:rgba(47,18,17,0.22); --glass-border:rgba(216,54,39,0.14); --accent:var(--danger); --accent-2:var(--warning); --text:var(--danger); --text-dim:var(--danger); }
-[data-theme="teal"]     { --bg-grad-1:var(--bg-grad-1); --bg-grad-2:var(--bg-grad-2); --bg-grad-3:var(--info); --glass-bg:rgba(18,35,45,0.22); --glass-border:rgba(115,203,245,0.12); --accent:var(--info); --accent-2:var(--success); --text:var(--info); --text-dim:var(--info); }
-[data-theme="violet"]   { --bg-grad-1:var(--bg-grad-1); --bg-grad-2:var(--bg-grad-3); --bg-grad-3:var(--bg-grad-1); --glass-bg:rgba(49,11,61,0.24); --glass-border:rgba(102,0,124,0.16); --accent:var(--danger); --accent-2:var(--danger); --text:var(--accent-2); --text-dim:var(--accent); }
+/* Gradient themes: override bg + accent + glass */
+[data-theme="kettle"]   { --bg-grad-1: #0f0f12; --bg-grad-2: #1a1a1e; --bg-grad-3: #242428; --glass-bg: rgba(48, 47, 51, 0.30); --glass-bg-2: rgba(58, 57, 61, 0.40); --glass-border: rgba(127, 183, 153, 0.08); --accent: #34D399; --accent-2: #9EA7B3; --text: #E2E8F0; --text-dim: #94A3B8; --text-faint: #4B5563; --accent-soft: rgba(52, 211, 153, 0.15); --accent-contrast: #F8FAFC; --shadow-md: rgba(0, 0, 0, 0.6); --danger: #EF4444; --danger-soft: rgba(239, 68, 68, 0.15); --success: #34D399; --success-soft: rgba(52, 211, 153, 0.15); --warning: #F59E0B; --warning-soft: rgba(245, 158, 11, 0.15); --info: #3B82F6; --info-soft: rgba(59, 130, 246, 0.15); --field-bg: rgba(255, 255, 255, 0.04); --field-bg-hover: rgba(255, 255, 255, 0.08); --field-border: rgba(255, 255, 255, 0.08); --field-text: #E2E8F0; --dropdown-bg: rgba(20, 20, 24, 0.95); }
+[data-theme="sea"]      { --bg-grad-1: #0a1618; --bg-grad-2: #0f2a30; --bg-grad-3: #1a3a42; --glass-bg: rgba(31, 58, 68, 0.30); --glass-bg-2: rgba(41, 68, 78, 0.40); --glass-border: rgba(140, 200, 210, 0.08); --accent: #3B82F6; --accent-2: #F59E0B; --text: #D5E2E5; --text-dim: #94A3B8; --text-faint: #4B5563; --accent-soft: rgba(59, 130, 246, 0.15); --accent-contrast: #F8FAFC; --shadow-md: rgba(0, 0, 0, 0.55); --danger: #EF4444; --danger-soft: rgba(239, 68, 68, 0.15); --success: #10B981; --success-soft: rgba(16, 185, 129, 0.15); --warning: #F59E0B; --warning-soft: rgba(245, 158, 11, 0.15); --info: #3B82F6; --info-soft: rgba(59, 130, 246, 0.15); --field-bg: rgba(255, 255, 255, 0.04); --field-bg-hover: rgba(255, 255, 255, 0.08); --field-border: rgba(255, 255, 255, 0.08); --field-text: #D5E2E5; --dropdown-bg: rgba(10, 22, 24, 0.95); }
+[data-theme="emerald"]  { --bg-grad-1: #0a140d; --bg-grad-2: #102015; --bg-grad-3: #16241b; --glass-bg: rgba(30, 58, 45, 0.30); --glass-bg-2: rgba(40, 68, 55, 0.40); --glass-border: rgba(120, 200, 150, 0.08); --accent: #10B981; --accent-2: #D9B877; --text: #A7F3D0; --text-dim: #6EE7B7; --text-faint: #4B5563; --accent-soft: rgba(16, 185, 129, 0.15); --accent-contrast: #F8FAFC; --shadow-md: rgba(0, 0, 0, 0.55); --danger: #EF4444; --danger-soft: rgba(239, 68, 68, 0.15); --success: #10B981; --success-soft: rgba(16, 185, 129, 0.15); --warning: #F59E0B; --warning-soft: rgba(245, 158, 11, 0.15); --info: #3B82F6; --info-soft: rgba(59, 130, 246, 0.15); --field-bg: rgba(255, 255, 255, 0.04); --field-bg-hover: rgba(255, 255, 255, 0.08); --field-border: rgba(255, 255, 255, 0.08); --field-text: #A7F3D0; --dropdown-bg: rgba(10, 20, 13, 0.95); }
+[data-theme="crimson"]  { --bg-grad-1: #1a0508; --bg-grad-2: #3a0a14; --bg-grad-3: #240a10; --glass-bg: rgba(58, 10, 20, 0.32); --glass-bg-2: rgba(68, 20, 30, 0.42); --glass-border: rgba(232, 142, 188, 0.10); --accent: #EF4444; --accent-2: #F8FAFC; --text: #F8FAFC; --text-dim: #EF4444; --text-faint: #4B5563; --accent-soft: rgba(239, 68, 68, 0.15); --accent-contrast: #F8FAFC; --shadow-md: rgba(0, 0, 0, 0.55); --danger: #EF4444; --danger-soft: rgba(239, 68, 68, 0.15); --success: #10B981; --success-soft: rgba(16, 185, 129, 0.15); --warning: #F59E0B; --warning-soft: rgba(245, 158, 11, 0.15); --info: #3B82F6; --info-soft: rgba(59, 130, 246, 0.15); --field-bg: rgba(255, 255, 255, 0.04); --field-bg-hover: rgba(255, 255, 255, 0.08); --field-border: rgba(255, 255, 255, 0.08); --field-text: #F8FAFC; --dropdown-bg: rgba(26, 5, 8, 0.95); }
+[data-theme="gold"]     { --bg-grad-1: #1a1508; --bg-grad-2: #2a2510; --bg-grad-3: #1a1508; --glass-bg: rgba(216, 177, 146, 0.12); --glass-bg-2: rgba(226, 187, 156, 0.18); --glass-border: rgba(221, 208, 192, 0.12); --accent: #F59E0B; --accent-2: #F8FAFC; --text: #F59E0B; --text-dim: #8A7F6E; --text-faint: #4B5563; --accent-soft: rgba(245, 158, 11, 0.15); --accent-contrast: #F8FAFC; --shadow-md: rgba(0, 0, 0, 0.6); --danger: #EF4444; --danger-soft: rgba(239, 68, 68, 0.15); --success: #10B981; --success-soft: rgba(16, 185, 129, 0.15); --warning: #F59E0B; --warning-soft: rgba(245, 158, 11, 0.15); --info: #3B82F6; --info-soft: rgba(59, 130, 246, 0.15); --field-bg: rgba(255, 255, 255, 0.04); --field-bg-hover: rgba(255, 255, 255, 0.08); --field-border: rgba(255, 255, 255, 0.08); --field-text: #F59E0B; --dropdown-bg: rgba(26, 21, 8, 0.95); }
+[data-theme="rust"]     { --bg-grad-1: #1a0a09; --bg-grad-2: #2a1a19; --bg-grad-3: #1a0a09; --glass-bg: rgba(47, 18, 17, 0.30); --glass-bg-2: rgba(57, 28, 27, 0.40); --glass-border: rgba(216, 54, 39, 0.12); --accent: #EF4444; --accent-2: #F59E0B; --text: #EF4444; --text-dim: #EF4444; --text-faint: #4B5563; --accent-soft: rgba(239, 68, 68, 0.15); --accent-contrast: #F8FAFC; --shadow-md: rgba(0, 0, 0, 0.6); --danger: #EF4444; --danger-soft: rgba(239, 68, 68, 0.15); --success: #10B981; --success-soft: rgba(16, 185, 129, 0.15); --warning: #F59E0B; --warning-soft: rgba(245, 158, 11, 0.15); --info: #3B82F6; --info-soft: rgba(59, 130, 246, 0.15); --field-bg: rgba(255, 255, 255, 0.04); --field-bg-hover: rgba(255, 255, 255, 0.08); --field-border: rgba(255, 255, 255, 0.08); --field-text: #EF4444; --dropdown-bg: rgba(26, 10, 9, 0.95); }
+[data-theme="teal"]     { --bg-grad-1: #0a1418; --bg-grad-2: #0f2030; --bg-grad-3: #1a3040; --glass-bg: rgba(18, 35, 45, 0.30); --glass-bg-2: rgba(28, 45, 55, 0.40); --glass-border: rgba(115, 203, 245, 0.10); --accent: #3B82F6; --accent-2: #10B981; --text: #3B82F6; --text-dim: #3B82F6; --text-faint: #4B5563; --accent-soft: rgba(59, 130, 246, 0.15); --accent-contrast: #F8FAFC; --shadow-md: rgba(0, 0, 0, 0.55); --danger: #EF4444; --danger-soft: rgba(239, 68, 68, 0.15); --success: #10B981; --success-soft: rgba(16, 185, 129, 0.15); --warning: #F59E0B; --warning-soft: rgba(245, 158, 11, 0.15); --info: #3B82F6; --info-soft: rgba(59, 130, 246, 0.15); --field-bg: rgba(255, 255, 255, 0.04); --field-bg-hover: rgba(255, 255, 255, 0.08); --field-border: rgba(255, 255, 255, 0.08); --field-text: #3B82F6; --dropdown-bg: rgba(10, 20, 24, 0.95); }
+[data-theme="violet"]   { --bg-grad-1: #0a0514; --bg-grad-2: #1a0a3a; --bg-grad-3: #0a0514; --glass-bg: rgba(49, 11, 61, 0.32); --glass-bg-2: rgba(59, 21, 71, 0.42); --glass-border: rgba(102, 0, 124, 0.14); --accent: #EF4444; --accent-2: #EF4444; --text: #EF4444; --text-dim: #EF4444; --text-faint: #4B5563; --accent-soft: rgba(239, 68, 68, 0.15); --accent-contrast: #F8FAFC; --shadow-md: rgba(0, 0, 0, 0.55); --danger: #EF4444; --danger-soft: rgba(239, 68, 68, 0.15); --success: #10B981; --success-soft: rgba(16, 185, 129, 0.15); --warning: #F59E0B; --warning-soft: rgba(245, 158, 11, 0.15); --info: #3B82F6; --info-soft: rgba(59, 130, 246, 0.15); --field-bg: rgba(255, 255, 255, 0.04); --field-bg-hover: rgba(255, 255, 255, 0.08); --field-border: rgba(255, 255, 255, 0.08); --field-text: #EF4444; --dropdown-bg: rgba(10, 5, 20, 0.95); }
 
 /* ===== ФОН (использует переменные темы; фон-медиа — отдельный слой .bg-media) ===== */
 .bg-media {
     position: fixed; inset: 0; z-index: -3;
     background: linear-gradient(135deg, var(--bg-grad-1) 0%, var(--bg-grad-2) 50%, var(--bg-grad-3) 100%);
-    transition: background 0.6s ease;
+    transition: background var(--duration-base) var(--ease-smooth);
 }
 .bg-media img, .bg-media video {
     position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
@@ -106,7 +174,7 @@ textarea:focus, input:focus, select:focus {
     position: fixed;
     top: 0; left: 0; right: 0;
     height: 36px;
-    z-index: 999;
+    z-index: var(--z-titlebar);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -172,7 +240,7 @@ header{
     background-color: var(--glass-bg);
     backdrop-filter: blur(30px);
     border-right: 1px solid var(--glass-bg);
-    z-index: 100;
+    z-index: var(--z-sidebar);
     overflow: hidden;
 }
 
@@ -207,7 +275,7 @@ nav a{
     color: var(--text-dim);
     text-decoration: none;
     font-size: 15px;
-    transition: color 0.3s ease, background 0.3s ease;
+    transition: color var(--duration-base) var(--ease-smooth), background var(--duration-base) var(--ease-smooth);
     padding: 10px 14px;
     border-radius: 8px;
     border: 1px solid transparent;
@@ -228,23 +296,26 @@ nav a.active {
 }
 
 
-/* Кнопка нового чата — стеклянная 3D-плашка */
+/* Кнопка нового чата — стеклянная 3D-плашка (Button-in-Button pattern) */
 .new-chat-btn {
     margin-top: 12px;
-    padding: 11px 14px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     background:
         linear-gradient(180deg, var(--glass-bg), var(--glass-bg) 60%, var(--shadow-md));
-    border: 1px solid var(--accent-soft);
-    border-radius: 12px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
     color: var(--text);
-    font-size: 14px;
+    font-size: var(--fs-base);
     font-weight: 500;
     cursor: pointer;
     width: 100%;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    box-shadow: 0 2px 0 var(--shadow-md), 0 6px 14px var(--shadow-md), inset 0 1px 0 var(--glass-bg);
-    transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+    box-shadow: var(--shadow-sm), var(--inset-highlight);
+    transition: background var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-spring), box-shadow var(--duration-base) var(--ease-smooth);
 }
 .new-chat-btn:hover {
     background:
@@ -252,11 +323,24 @@ nav a.active {
     color: var(--accent-contrast);
     border-color: var(--accent-soft);
     transform: translateY(-1px);
-    box-shadow: 0 3px 0 var(--shadow-md), 0 10px 22px var(--shadow-md), inset 0 1px 0 var(--glass-bg);
+    box-shadow: var(--shadow-md);
 }
 .new-chat-btn:active {
-    transform: translateY(1px);
-    box-shadow: 0 1px 0 var(--shadow-md), 0 3px 8px var(--shadow-md);
+    transform: scale(0.98);
+    box-shadow: var(--shadow-xs);
+}
+.new-chat-btn .btn-icon-wrap {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform var(--duration-base) var(--ease-smooth);
+}
+.new-chat-btn:hover .btn-icon-wrap {
+    transform: scale(1.05);
 }
 
 /* Список чатов */
@@ -284,7 +368,7 @@ nav a.active {
     cursor: pointer;
     color: var(--text-dim);
     font-size: 13px;
-    transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s, box-shadow 0.18s;
+    transition: background var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-spring), box-shadow var(--duration-base) var(--ease-smooth);
     border: 1px solid var(--glass-bg);
     background:
         linear-gradient(180deg, var(--glass-bg), var(--glass-bg) 60%, var(--shadow-md));
@@ -404,14 +488,54 @@ main.page.active { display: block; }
 
 /* Плавное появление страниц */
 main.page.active {
-    animation: pageFadeIn 0.4s ease;
+    animation: pageFadeIn 0.4s var(--ease-out);
 }
 main.page {
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: opacity var(--duration-base) var(--ease-smooth);
 }
 main.page.active {
     opacity: 1;
+}
+
+/* ===== SCROLL REVEAL (IntersectionObserver-driven) ===== */
+.reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    filter: blur(4px);
+    transition: opacity var(--duration-reveal) var(--ease-out),
+                transform var(--duration-reveal) var(--ease-out),
+                filter var(--duration-reveal) var(--ease-out);
+}
+.reveal.reveal-visible {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+}
+
+/* Staggered nav reveal */
+.nav-item {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: navStagger var(--duration-base) var(--ease-out) forwards;
+}
+.nav-item:nth-child(1) { animation-delay: 50ms; }
+.nav-item:nth-child(2) { animation-delay: 100ms; }
+.nav-item:nth-child(3) { animation-delay: 150ms; }
+.nav-item:nth-child(4) { animation-delay: 200ms; }
+.nav-item:nth-child(5) { animation-delay: 250ms; }
+@keyframes navStagger {
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Chat message entry */
+.msg {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: msgEnter var(--duration-base) var(--ease-spring) forwards;
+}
+@keyframes msgEnter {
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* Единая «основа» страницы: контент центрируется и не растягивается вширь
@@ -430,7 +554,7 @@ main.page.active {
 /* Контекстное меню чатов */
 .ctx-menu {
     position: fixed;
-    z-index: 2000;
+    z-index: var(--z-context);
     min-width: 200px;
     background: rgba(17,17,24,0.98);
     backdrop-filter: blur(12px);
@@ -880,7 +1004,7 @@ main.page.active {
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     box-shadow: 0 2px 0 var(--shadow-md), 0 5px 12px var(--shadow-md), inset 0 1px 0 var(--glass-bg);
-    transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+    transition: background var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-spring), box-shadow var(--duration-base) var(--ease-smooth);
 }
 .group-add-btn:hover {
     background:
@@ -2522,7 +2646,7 @@ nav a.active::before {
     border-radius: 8px; color: var(--text-dim); font-size: 11px; padding: 4px 9px; cursor: pointer;
     backdrop-filter: blur(6px);
     box-shadow: 0 1px 0 var(--shadow-md), inset 0 1px 0 var(--glass-bg);
-    transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+    transition: background var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-spring), box-shadow var(--duration-base) var(--ease-smooth);
 }
 .storage-item .si-actions button:hover, .ss-add:hover {
     background: linear-gradient(180deg, var(--glass-bg), var(--glass-bg) 60%, var(--shadow-md));
@@ -3026,7 +3150,7 @@ input[type="number"] {
     color: var(--text-dim);
     font-size: 14px;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+    transition: background var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-spring), box-shadow var(--duration-base) var(--ease-smooth);
 }
 .test-btn:hover {
     background: var(--glass-bg);

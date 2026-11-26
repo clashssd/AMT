@@ -30,9 +30,28 @@ from ai_engine import filegen
 from ai_engine import media as media_gen
 from ai_engine import extensions as ext_loader
 from ai_engine.async_utils import run_com_sync
-from ai_engine.tool_registry import tool_registry, MAX_TOOL_ITERATIONS
+from ai_engine.tool_registry import tool_registry, MAX_TOOL_ITERATIONS, ToolDef
+from ai_engine.mcp_manager import MCPManager, mcp_manager as _mcp_mgr_singleton, MCPServerConfig
 
 app = FastAPI()
+
+# MCP manager singleton (initialized lazily at startup).
+# `None` until the startup hook runs; all call sites guard with `if mcp_manager:`.
+mcp_manager: "MCPManager | None" = None
+
+
+@app.on_event("startup")
+async def _startup_init_mcp():
+    """Initialize the MCP manager and register atexit cleanup."""
+    global mcp_manager
+    import atexit
+    if mcp_manager is None:
+        data_dir = os.environ.get(
+            "AMT_DATA_DIR",
+            os.path.join(os.path.dirname(__file__), ".."),
+        )
+        mcp_manager = MCPManager(data_dir)
+        atexit.register(mcp_manager.shutdown)
 
 
 @app.on_event("startup")
@@ -1269,6 +1288,40 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     # Native tool-calling: when enabled, send the unified tool schemas (native
     # media/file tools + any connected MCP tools) so the LLM can emit tool_calls.
     if settings.toolCalling:
+        # First, lazily register MCP tools from enabled servers (cached in the registry).
+        if mcp_manager:
+            for cfg in mcp_manager.list_servers():
+                if not cfg.enabled:
+                    continue
+                prefix = f"mcp__{cfg.id}"
+                # Skip if any tool from this server is already registered
+                if any(k.startswith(prefix) for k in tool_registry._tools):
+                    continue
+                try:
+                    await mcp_manager.connect(cfg.id)
+                    mcp_tools = await mcp_manager.list_tools(cfg.id)
+                    for t in mcp_tools:
+                        tool_name = f"mcp__{cfg.id}__{t['name']}"
+                        if tool_registry.has(tool_name):
+                            continue
+                        sid = cfg.id
+                        auto_approve = cfg.auto_approve
+                        srv_cfg = cfg
+
+                        async def mcp_exec(specific_tool=t["name"], sid=sid, auto=auto_approve, srv=srv_cfg, **tool_args):
+                            if not auto:
+                                return json.dumps({"error": f"MCP tool '{specific_tool}' requires approval (auto_approve=False on server '{srv.id}')"}, ensure_ascii=False)
+                            return await mcp_manager.call_tool(sid, specific_tool, tool_args)
+
+                        tool_registry.register(ToolDef(
+                            name=tool_name,
+                            description=t.get("description", f"MCP tool {t['name']} from {cfg.name}"),
+                            parameters=t.get("inputSchema", {"type": "object", "properties": {}}),
+                            handler=mcp_exec,
+                            source=f"mcp:{cfg.id}",
+                        ))
+                except Exception as e:
+                    log.warning("Failed to register MCP tools for '%s': %s", cfg.id, e)
         request_body["tools"] = tool_registry.schemas()
 
     # Intermediate tool-call events collected across the loop, returned to the
@@ -4959,6 +5012,120 @@ async def execute_tool(req: ToolExecuteIn):
 @app.get("/api/tools/log")
 async def tools_log(limit: int = 100):
     return {"log": tools_sandbox.recent_log(limit)}
+
+
+# ===== MCP SERVER MANAGEMENT =====
+class MCPServerIn(BaseModel):
+    id: str
+    name: str
+    transport: str  # "stdio" | "http"
+    command: str = ""
+    args: list = []
+    url: str = ""
+    headers: dict = {}
+    env: dict = {}
+    enabled: bool = True
+    auto_approve: bool = False
+
+
+@app.get("/api/mcp/servers")
+async def mcp_list_servers():
+    if mcp_manager is None:
+        return []
+    result = []
+    for cfg in mcp_manager.list_servers():
+        d = cfg.__dict__.copy()
+        if d.get("env"):
+            d["env"] = {k: "***" for k in d["env"]}  # mask env values
+        result.append(d)
+    return result
+
+
+@app.post("/api/mcp/servers")
+async def mcp_add_server(body: MCPServerIn):
+    if mcp_manager is None:
+        return {"error": "MCP manager not initialized"}
+    try:
+        cfg = MCPServerConfig(**body.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    mcp_manager.add_server(cfg)
+    return {"ok": True}
+
+
+@app.put("/api/mcp/servers/{server_id}")
+async def mcp_update_server(server_id: str, body: MCPServerIn):
+    if mcp_manager is None:
+        return {"error": "MCP manager not initialized"}
+    cfg = mcp_manager.get_server(server_id)
+    if cfg is None:
+        raise HTTPException(status_code=404, detail="Server not found")
+    cfg.name = body.name
+    cfg.transport = body.transport
+    cfg.command = body.command
+    cfg.args = body.args
+    cfg.url = body.url
+    cfg.headers = body.headers
+    cfg.env = body.env
+    cfg.auto_approve = body.auto_approve
+    mcp_manager.update_server(cfg)
+    # Unregister stale MCP tools for this server so they get re-registered
+    tool_registry.unregister_prefix(f"mcp__{server_id}")
+    return {"ok": True}
+
+
+@app.delete("/api/mcp/servers/{server_id}")
+async def mcp_remove_server(server_id: str):
+    if mcp_manager is None:
+        return {"error": "MCP manager not initialized"}
+    mcp_manager.remove_server(server_id)
+    tool_registry.unregister_prefix(f"mcp__{server_id}")
+    return {"ok": True}
+
+
+@app.post("/api/mcp/servers/{server_id}/test")
+async def mcp_test_server(server_id: str):
+    if mcp_manager is None:
+        return {"error": "MCP manager not initialized"}
+    try:
+        await mcp_manager.connect(server_id)
+        tools = await mcp_manager.list_tools(server_id)
+        return {"status": "connected", "tools": tools}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/mcp/servers/{server_id}/tools")
+async def mcp_list_tools(server_id: str):
+    if mcp_manager is None:
+        return []
+    try:
+        return await mcp_manager.list_tools(server_id)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/mcp/servers/{server_id}/enable")
+async def mcp_set_enabled(server_id: str, body: dict):
+    if mcp_manager is None:
+        return {"error": "MCP manager not initialized"}
+    enabled = body.get("enabled", True)
+    mcp_manager.set_enabled(server_id, enabled)
+    cfg = mcp_manager.get_server(server_id)
+    if enabled:
+        # Re-register tools for the now-enabled server
+        prefix = f"mcp__{server_id}"
+        tool_registry.unregister_prefix(prefix)
+    else:
+        tool_registry.unregister_prefix(f"mcp__{server_id}")
+    return {"ok": True}
+
+
+@app.post("/api/mcp/shutdown")
+async def mcp_shutdown():
+    if mcp_manager is not None:
+        mcp_manager.shutdown()
+    return {"ok": True}
 
 
 # ===== ВЗАИМОДЕЙСТВИЕ С СИСТЕМОЙ (оркестратор + гейтинг) =====

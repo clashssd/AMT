@@ -85,3 +85,110 @@ def test_add_server_rejects_duplicate_id(tmp_backend):
     mgr.add_server(cfg1)
     with pytest.raises(Exception):
         mgr.add_server(cfg2)
+
+
+# --- Task 5: connection lifecycle + tool calls ---
+import asyncio
+from unittest.mock import patch, AsyncMock, MagicMock
+
+
+def test_connect_stdio_mocked(tmp_backend):
+    from ai_engine.mcp_manager import MCPManager, MCPServerConfig
+
+    async def run():
+        mgr = MCPManager(str(tmp_backend["tmp"]))
+        cfg = MCPServerConfig(
+            id="mock", name="Mock", transport="stdio",
+            command="echo", args=["hello"],
+            url="", headers={}, env={},
+            enabled=True, auto_approve=False,
+        )
+        mgr.add_server(cfg)
+
+        # Mock the mcp SDK's stdio_client (module-level function)
+        mock_client = AsyncMock()
+        mock_client._session = AsyncMock()
+        mock_client._session.list_tools = AsyncMock(return_value={"tools": [
+            {"name": "test_tool", "description": "a test", "inputSchema": {"type": "object", "properties": {}}}
+        ]})
+
+        with patch("ai_engine.mcp_manager._stdio_client", return_value=mock_client):
+            await mgr.connect("mock")
+
+        assert "mock" in mgr._clients
+
+        tools = await mgr.list_tools("mock")
+        assert len(tools) == 1
+        assert tools[0]["name"] == "test_tool"
+
+        await mgr.disconnect("mock")
+        assert "mock" not in mgr._clients
+
+    asyncio.run(run())
+
+
+def test_call_tool_timeout(tmp_backend):
+    from ai_engine.mcp_manager import MCPManager, MCPServerConfig
+
+    async def run():
+        mgr = MCPManager(str(tmp_backend["tmp"]))
+        cfg = MCPServerConfig(id="slow", name="Slow", transport="http", command="", args=[], url="http://slow", headers={}, env={}, enabled=True, auto_approve=False)
+        mgr.add_server(cfg)
+
+        # Simulate a connected client whose call_tool hangs
+        import asyncio as aio
+
+        async def hanging_call_tool(name, args):
+            await aio.sleep(60)
+
+        mock_client = AsyncMock()
+        mock_client._session = AsyncMock()
+        mock_client._session.call_tool = AsyncMock(side_effect=hanging_call_tool)
+        mgr._clients["slow"] = mock_client
+
+        # Patch the timeout to 1s so the test runs fast (global constraint is 30s)
+        import ai_engine.mcp_manager as mm
+        orig = mm.MCP_TOOL_TIMEOUT
+        mm.MCP_TOOL_TIMEOUT = 1.0
+        try:
+            result = await mgr.call_tool("slow", "hang_tool", {})
+        finally:
+            mm.MCP_TOOL_TIMEOUT = orig
+        assert "timed out" in result.lower() or "timeout" in result.lower()
+
+    asyncio.run(run())
+
+
+def test_shutdown_kills_children(tmp_backend):
+    from ai_engine.mcp_manager import MCPManager, MCPServerConfig
+
+    async def run():
+        mgr = MCPManager(str(tmp_backend["tmp"]))
+        # Simulate a connected STDIO client with a process
+        mock_proc = MagicMock()
+        mock_proc.returncode = None
+        mock_client = AsyncMock()
+        mock_client._proc = mock_proc
+        mgr._clients["proc1"] = mock_client
+        mgr._procs["proc1"] = mock_proc
+
+        mgr.shutdown()
+
+        # SIGTERM should have been sent (or terminate called)
+        mock_proc.terminate.assert_called()
+
+    asyncio.run(run())
+
+
+def test_health_check(tmp_backend):
+    from ai_engine.mcp_manager import MCPManager, MCPServerConfig
+
+    async def run():
+        mgr = MCPManager(str(tmp_backend["tmp"]))
+        cfg = MCPServerConfig(id="h", name="H", transport="stdio", command="echo", args=[], url="", headers={}, env={}, enabled=True, auto_approve=False)
+        mgr.add_server(cfg)
+
+        health = await mgr.health("h")
+        assert health["status"] in ("disconnected", "error")  # not connected yet
+
+    asyncio.run(run())

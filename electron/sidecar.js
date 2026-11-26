@@ -57,12 +57,13 @@ function getSidecarCommand(port) {
   if (fs.existsSync(binExe)) {
     return [binExe, []];
   }
-  // dev fallback: python -m uvicorn backend.main:app
+  // dev fallback: python -m uvicorn main:app
   const py = getPythonPath();
+  const backendDir = path.join(__dirname, '..', 'backend');
   return [py, [
-    '-m', 'uvicorn', 'backend.main:app',
+    '-m', 'uvicorn', 'main:app',
     '--host', '127.0.0.1', '--port', String(port), '--log-level', 'warning',
-  ]];
+  ], { PYTHONPATH: backendDir }];
 }
 
 /**
@@ -78,20 +79,20 @@ function startSidecar(port = 8000) {
       child = null;
     }
 
-    const [cmd, args] = getSidecarCommand(port);
+    const [cmd, args, cmdEnv] = getSidecarCommand(port);
     const dbg = path.join(process.env.APPDATA || '.', 'AMT Chat', 'debug.log');
     try { fs.appendFileSync(dbg, `[sidecar] cmd: ${cmd} args: ${JSON.stringify(args)}\n`); } catch {}
     try { fs.appendFileSync(dbg, `[sidecar] APPDATA: ${process.env.APPDATA} HOME: ${process.env.HOME}\n`); } catch {}
     // For a bundled PyInstaller binary, set cwd to its own directory so that
     // _internal/ and any relative paths resolve correctly.
     const isBundledBin = cmd.endsWith('.exe') || cmd.endsWith('amt-backend');
-    const cwd = isBundledBin ? path.dirname(cmd) : path.join(__dirname, '..');
+    const cwd = isBundledBin ? path.dirname(cmd) : path.join(__dirname, '..', 'backend');
     // In packaged mode, redirect writable dirs to the user's app-data location
     // so the PyInstaller binary doesn't try to write inside its own bundle.
     const appDataDir = isBundledBin
       ? path.join(process.env.APPDATA || path.join(process.env.HOME || '.', 'AMT'), 'AMT Chat')
       : null;
-    const spawnEnv = { ...process.env, PORT: String(port) };
+    const spawnEnv = { ...process.env, ...(cmdEnv || {}), PORT: String(port) };
     if (appDataDir) {
       spawnEnv.AMT_LOG_DIR = path.join(appDataDir, 'logs');
       spawnEnv.AMT_CHATS_DIR = path.join(appDataDir, 'chats');

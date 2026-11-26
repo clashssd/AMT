@@ -896,9 +896,14 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
         if approval_state is not None:
             approval_state["gate"] = getattr(request_tool_registry, "approval_gate", None)
         toolset = getattr(request_tool_registry, "approval_toolset", None)
+        approval_gate = getattr(request_tool_registry, "approval_gate", None)
         if toolset and on_event:
-            def _emit_approval_request(rid, tool, args):
-                ev = {"type": "tool_approval_request", "id": rid, "tool": tool, "args": args}
+            def _emit_approval_request(rid):
+                meta = getattr(approval_gate, "pending_meta", {}).get(rid, {})
+                tool = meta.get("resource", "tool")
+                args = meta.get("args", {})
+                preview = meta.get("preview", "")
+                ev = {"type": "tool_approval_request", "id": rid, "tool": tool, "args": args, "preview": preview}
                 res = on_event(ev)
                 if asyncio.iscoroutine(res):
                     asyncio.ensure_future(res)
@@ -907,7 +912,7 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                     "coding_approval_request",
                     f"Approval requested for {tool}",
                     trace_id=trace_id,
-                    metadata={"tool": tool, "args": args, "request_id": rid},
+                    metadata={"tool": tool, "args": args, "preview": preview, "request_id": rid},
                 )
 
             toolset.on_request = _emit_approval_request

@@ -95,6 +95,29 @@ def test_require_reports_pending_request_id():
     assert seen and isinstance(seen[0], str)
 
 
+def test_require_stores_pending_metadata_for_emit_callbacks():
+    from ai_engine.permissions import ApprovalGate
+
+    gate = ApprovalGate([{"action": "edit", "resource": "*", "effect": "ask"}], timeout_seconds=5)
+    captured = {}
+
+    async def run():
+        async def answer_later():
+            await asyncio.sleep(0.02)
+            only_rid = next(iter(gate.pending))
+            captured["meta"] = gate.pending_meta.get(only_rid, {})
+            gate.pending[only_rid].set_result("once")
+
+        task = asyncio.create_task(answer_later())
+        return await gate.require("edit", "fs_write", {"path": "src/app.py"}, "write file")
+
+    result = asyncio.run(run())
+    assert result["approved"] is True
+    assert captured["meta"].get("resource") == "fs_write"
+    assert captured["meta"].get("args") == {"path": "src/app.py"}
+    assert captured["meta"].get("preview") == "write file"
+
+
 def test_require_accepts_response_when_future_resolves():
     from ai_engine.permissions import ApprovalGate
 

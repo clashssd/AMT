@@ -44,6 +44,7 @@ class ApprovalGate:
         self.saved_patterns = [_normalize_rule(rule) for rule in (saved_patterns or [])]
         self.timeout_seconds = max(float(timeout_seconds), 0.0)
         self.pending: dict[str, asyncio.Future] = {}
+        self.pending_meta: dict[str, dict] = {}
 
     def _last_matching_rule(self, rules: Iterable[PermissionRule], action: str, resource: str) -> PermissionRule | None:
         matched: PermissionRule | None = None
@@ -84,6 +85,12 @@ class ApprovalGate:
         future = loop.create_future()
         request_id = f"{action}:{resource}:{id(future)}"
         self.pending[request_id] = future
+        self.pending_meta[request_id] = {
+            "action": action,
+            "resource": resource,
+            "args": args or {},
+            "preview": preview,
+        }
         if on_request:
             on_request(request_id)
         try:
@@ -100,6 +107,7 @@ class ApprovalGate:
             }
         finally:
             self.pending.pop(request_id, None)
+            self.pending_meta.pop(request_id, None)
 
         decision = str(decision or "").lower()
         if decision in ("once", "always", "allow"):

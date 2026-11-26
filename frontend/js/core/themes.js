@@ -368,7 +368,21 @@
     }
 
     // Публичное API для main.js (если нужен)
-    window.AMTThemes = { init, setLang, applyTheme: (id) => { current.theme = id; const t = ({ ...customThemes, ...themes }[id]); if (t) applyThemeVars(t); renderAll(); persist(); }, current: () => current };
+    window.AMTThemes = {
+        init,
+        setLang,
+        applyTheme: (id) => { current.theme = id; const t = ({ ...customThemes, ...themes }[id]); if (t) applyThemeVars(t); renderAll(); persist(); },
+        current: () => current,
+        // theme-editor.js: перезагрузить в-память customThemes из localStorage
+        refreshCustomThemes() {
+            try { customThemes = JSON.parse(localStorage.getItem("amt_custom_themes_v2") || "{}"); } catch { customThemes = {}; }
+        },
+        // theme-editor.js: установить current.theme + перерисовать пикер, БЕЗ повторного применения хранящихся CSS-переменных
+        setThemeId(id) {
+            current.theme = id;
+            renderAll();
+        },
+    };
     // Для theme-editor.js: публикуем встроенные темы и их id (чтобы редактор знал, что кастомная, что нет)
     Object.defineProperty(window.AMTThemes, "builtinThemes", { get: () => themes, configurable: true });
     Object.defineProperty(window.AMTThemes, "customThemes", { get: () => customThemes, configurable: true });

@@ -172,7 +172,6 @@
         clearTimeout(previewTimer);
         previewTimer = setTimeout(() => {
             const t = buildDraft();
-            if (T().applyTheme) T().applyTheme("__preview__"); // noop-safe
             const vars = S().toCssVars(t);
             const r = document.documentElement.style;
             for (const k in vars) r.setProperty(k, vars[k]);
@@ -189,7 +188,6 @@
         t.id = id; t.label = name;
         all[id] = t;
         localStorage.setItem("amt_custom_themes_v2", JSON.stringify(all));
-        window.__AMT_CUSTOM_IDS__ = Object.keys(all).filter(k => k.startsWith("custom_"));
         selectedId = id; isCustom = true;
         loadToControls(t, id);
         applyAndPersist();
@@ -214,7 +212,6 @@
         t.id = id; t.label = name;
         all[id] = t;
         localStorage.setItem("amt_custom_themes_v2", JSON.stringify(all));
-        window.__AMT_CUSTOM_IDS__ = Object.keys(all).filter(k => k.startsWith("custom_"));
         selectedId = id; isCustom = true;
         loadToControls(t, id);
         applyAndPersist();
@@ -226,7 +223,6 @@
         const all = loadAllThemes();
         delete all[selectedId];
         localStorage.setItem("amt_custom_themes_v2", JSON.stringify(all));
-        window.__AMT_CUSTOM_IDS__ = Object.keys(all).filter(k => k.startsWith("custom_"));
         // переключаемся на ocean
         selectedId = "ocean"; isCustom = false;
         const ocean = S().DEFAULT_THEME;
@@ -262,7 +258,6 @@
                     t.id = id;
                     all[id] = t;
                     localStorage.setItem("amt_custom_themes_v2", JSON.stringify(all));
-                    window.__AMT_CUSTOM_IDS__ = Object.keys(all).filter(k => k.startsWith("custom_"));
                     selectedId = id; isCustom = true;
                     loadToControls(t, id);
                     applyAndPersist();
@@ -288,10 +283,10 @@
         const vars = S().toCssVars(t);
         const r = document.documentElement.style;
         for (const k in vars) r.setProperty(k, vars[k]);
-        // 2) Update the theme engine's internal state so renderAll/persist see the draft
-        if (T().applyTheme) T().applyTheme(t.id);
-        // 3) Re-apply draft vars (applyTheme may have clobbered them with stored values)
-        for (const k in vars) r.setProperty(k, vars[k]);
+        // 2) Refresh in-memory custom themes so renderAll/picker see the latest
+        if (T().refreshCustomThemes) T().refreshCustomThemes();
+        // 3) Set the current theme id in the engine and re-render the picker
+        if (T().setThemeId) T().setThemeId(t.id);
         // 4) Persist the UI state (font pick, etc.)
         if (T().persist) T().persist();
     }

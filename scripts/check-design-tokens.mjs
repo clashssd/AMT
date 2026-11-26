@@ -115,16 +115,15 @@ const cv2Lits   = countLiterals(cv2Src, false);
 // 4. White background check (outside tokens.css and outside accent-contrast)
 // ---------------------------------------------------------------------------
 const whiteBgRe = /background(-color)?\s*:\s*(#fff\b|#ffffff\b|white\b|rgb\(255\s*,\s*255\s*,\s*255\s*\)|rgba\(255\s*,\s*255\s*,\s*255\s*,\s*0\.[5-9])/gi;
-function findWhiteBg(src, label) {
+function findWhiteBg(src) {
   const clean = stripComments(src);
+  // Remove @media print { ... } blocks — print styles intentionally use white/black
+  const noPrint = clean.replace(/@media\s+print\s*{[\s\S]*?}/g, '');
   const hits = [];
   let m;
   whiteBgRe.lastIndex = 0;
-  while ((m = whiteBgRe.exec(clean)) !== null) {
-    const head = clean.slice(Math.max(0, m.index - 80), m.index);
-    // Allow `background: var(--accent-contrast)` — but the regex above doesn't
-    // match that, so no need to filter.
-    hits.push({ line: clean.slice(0, m.index).split('\n').length, match: m[0] });
+  while ((m = whiteBgRe.exec(noPrint)) !== null) {
+    hits.push({ line: noPrint.slice(0, m.index).split('\n').length, match: m[0] });
   }
   return hits;
 }

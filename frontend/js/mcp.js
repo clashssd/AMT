@@ -207,6 +207,29 @@ async function mcpSubmit(existingId) {
     }
 }
 
+// ===== RAG preset: one-click local knowledge-base MCP server =====
+async function mcpInstallRagPreset() {
+    flashStatus('Подключение RAG-сервера (база знаний)…');
+    try {
+        const resp = await fetch(`${API_BASE}/api/mcp/presets/rag`, { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok || data.error) {
+            alert('Ошибка: ' + (data.error || resp.status));
+            return;
+        }
+        if (data.created) {
+            flashStatus('RAG-сервер добавлен. Теперь проиндексируйте папку — см. инструмент index_folder в списке инструментов.');
+        } else {
+            flashStatus('RAG-сервер уже подключён.');
+        }
+        renderMcpSettings();
+        // Auto-open the RAG card so the user can hit «Тест» and see its tools.
+        setTimeout(() => { if (data.config) mcpTest('rag'); }, 400);
+    } catch (e) {
+        alert('Ошибка сети: ' + e);
+    }
+}
+
 // ===== Хранилище: секция «MCP-серверы» =====
 async function renderMcpStorage() {
     const list = document.getElementById('mcp-storage-list');

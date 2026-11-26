@@ -5083,6 +5083,59 @@ async def mcp_remove_server(server_id: str):
     return {"ok": True}
 
 
+# ---- RAG preset (one-click local knowledge-base server) ----
+def _rag_preset_config() -> dict:
+    """Build a ready-to-add MCP server config for the bundled local RAG server.
+
+    Uses the python that's running this backend (so it picks up the venv /
+    packaged interpreter that has `mcp` and `rag_server` available) and points
+    PYTHONPATH at the backend dir so `python -m rag_server` resolves.
+    """
+    import sys
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    # Default RAG data dir sits next to the backend (dev) — override via env.
+    default_data_dir = os.path.join(backend_dir, ".amt_rag")
+    env = {
+        "PYTHONPATH": backend_dir,
+        "AMT_RAG_DATA_DIR": os.environ.get("AMT_RAG_DATA_DIR", default_data_dir),
+    }
+    return {
+        "id": "rag",
+        "name": "База знаний (RAG)",
+        "transport": "stdio",
+        "command": sys.executable,
+        "args": ["-m", "rag_server"],
+        "env": env,
+        "enabled": True,
+        "auto_approve": True,  # local-only, read/index ops — safe to auto-approve
+    }
+
+
+@app.get("/api/mcp/presets/rag")
+async def mcp_preset_rag():
+    """Return the RAG preset config so the UI can pre-fill the add form."""
+    cfg = _rag_preset_config()
+    exists = mcp_manager is not None and mcp_manager.get_server(cfg["id"]) is not None
+    return {**cfg, "exists": exists}
+
+
+@app.post("/api/mcp/presets/rag")
+async def mcp_install_rag_preset():
+    """Add the RAG MCP server to the registry (idempotent)."""
+    if mcp_manager is None:
+        return {"error": "MCP manager not initialized"}
+    cfg = _rag_preset_config()
+    existing = mcp_manager.get_server(cfg["id"])
+    if existing is not None:
+        return {"ok": True, "created": False}
+    mcp_manager.add_server(MCPServerConfig(
+        id=cfg["id"], name=cfg["name"], transport=cfg["transport"],
+        command=cfg["command"], args=cfg["args"], env=cfg["env"],
+        enabled=cfg["enabled"], auto_approve=cfg["auto_approve"],
+    ))
+    return {"ok": True, "created": True, "config": {k: v for k, v in cfg.items() if k != "env"}}
+
+
 @app.post("/api/mcp/servers/{server_id}/test")
 async def mcp_test_server(server_id: str):
     if mcp_manager is None:

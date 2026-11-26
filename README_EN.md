@@ -99,6 +99,15 @@ them in your own repository.
    with Fernet (`mcp_key.key`); MCP tools require confirmation by
    default (`auto_approve=False`). Manage: "Settings → MCP servers" +
    "Storage".
+- **Knowledge base (RAG)** — standalone local RAG server
+  (`backend/rag_server`, STDIO-MCP, no heavy external deps): indexes
+  folders into multiple isolated bases + hybrid/keyword search
+  (BM25, CJK-aware) with citations (source + page/line/slide). Tools
+  `mcp__rag__…`: `index_folder`, `search_documents`, `read_chunk`,
+  `list_bases`, `base_info`, `delete_base`. One-click install:
+  "Settings → MCP servers → Install RAG server" (local STDIO server
+  `rag`, read/index-only). Incremental index (skip on sha1+mtime);
+  storage under `AMT_RAG_DATA_DIR` (default `<backend>/.amt_rag`).
 - **Media player** — YouTube/Twitch embeds, direct `.mp4`/`.m3u8`,
   photos, audio — plays in chat/player, fullscreen, filters
   (brightness/contrast/detail/noise/enhance). Sites that block iframes

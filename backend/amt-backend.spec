@@ -71,9 +71,12 @@ a = Analysis(
         # MCP (Task 6: mcp_manager.py lazy-imports mcp.client.stdio/streamable_http;
         # the package ships JSON schemas + data files, so use collect_all below)
         'mcp', 'mcp.client', 'mcp.client.stdio', 'mcp.client.streamable_http',
-        'mcp.server', 'mcp.shared',
+        'mcp.server', 'mcp.shared', 'mcp.server.mcpserver',
         # Локальные tool-calling модули (Task 1, 6)
         'ai_engine.tool_registry', 'ai_engine.mcp_manager',
+        # Локальный RAG MCP-сервер (backend/rag_server) — запуск как
+        # `python -m rag_server` (STDIO). Бандлится вместе с backend'ом.
+        'rag_server', 'rag_server.server', 'rag_server.engine', 'rag_server.parsers',
     ],
     collect_all=['mcp'],
     hookspath=[],

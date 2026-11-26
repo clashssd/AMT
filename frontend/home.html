@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="./css/voice.css">
 </head>
 <body>
+    <a href="#homePage" class="sr-only">Перейти к содержанию</a>
     <!-- Свой тайтлбар (frameless-окно): заменяет нативную серую полосу.
          Фон/граница подхватывают активную тему приложения (CSS-переменные). -->
     <div id="winTitlebar">
@@ -66,7 +67,7 @@
     </header>
 
     <!-- Main area: Home (главная — создать чат) -->
-    <main id="homePage" class="page active">
+    <main id="homePage" class="page active" tabindex="-1">
         <div class="home-container">
             <div class="home-hero reveal">
                 <div class="home-hero-icon">AMT</div>

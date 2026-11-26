@@ -1896,6 +1896,7 @@ async def chat(request: ChatRequest):
             extra_params['enable_memory'] = cmd_ctx.enable_memory
             extra_params['enable_orchestrator'] = cmd_ctx.enable_orchestrator
             extra_params['enable_jailbreak'] = cmd_ctx.enable_jailbreak
+            request.agent_id = _agent_from_enabled_agents(cmd_ctx.enabled_agents, request.agent_id)
             # Используем оставшийся текст (без команд)
             request.message = remaining_text
             # Используем оригинальный текст для display
@@ -3958,6 +3959,7 @@ async def websocket_chat(websocket: WebSocket):
                     
                     # Исполь��уем оставшийся текст (без команд)
                     effective_message = remaining_text or user_message
+                    effective_agent_id = _agent_from_enabled_agents(cmd_ctx.enabled_agents, payload.get("agent_id", ""))
                     
                     extra_params['extra_system_prompt'] = '\n'.join(cmd_ctx.system_prompt_fragments)
                     extra_params['enabled_tools'] = list(cmd_ctx.enabled_tools) if cmd_ctx.enabled_tools else []
@@ -3970,6 +3972,7 @@ async def websocket_chat(websocket: WebSocket):
                 settings = Settings(**raw_settings)
             except Exception:
                 settings = Settings()
+            effective_agent_id = payload.get("agent_id", "")
 
             try:
                 approval_state: dict = {}
@@ -3980,7 +3983,7 @@ async def websocket_chat(websocket: WebSocket):
                 task = asyncio.create_task(
                     call_ai_api(
                         effective_message, history, settings,
-                        agent_id=payload.get("agent_id", ""),
+                        agent_id=effective_agent_id,
                         extra_skills=payload.get("extra_skills", []),
                         core_agents=payload.get("core_agents", []),
                         key_id=payload.get("key_id", ""),
@@ -4349,6 +4352,20 @@ def _coding_command_result(raw: str) -> dict | None:
     rest = raw.strip().split(maxsplit=1)
     args = rest[1].split() if len(rest) > 1 else []
     return {"command": name, "args": args}
+
+
+def _agent_from_enabled_agents(enabled_agents: list[str], current_agent_id: str = "") -> str:
+    """Map command-engine agent aliases to AMT core agent ids."""
+    if current_agent_id:
+        return current_agent_id
+    if not enabled_agents:
+        return ""
+    alias_map = {"designer": "core_designer", "design": "core_designer", "ui": "core_designer"}
+    for name in enabled_agents:
+        mapped = alias_map.get(name, name)
+        if mapped:
+            return mapped
+    return ""
 
 
 def _coding_session_create(payload: dict) -> dict:

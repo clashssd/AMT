@@ -196,6 +196,16 @@
       "aliases": ["perms", "разрешения"],
       "description": "Управлять разрешениями кодинг-чата (allow/ask/deny)",
       "type": "coding"
+    },
+    {
+      "id": "design",
+      "aliases": ["ui", "дизайн", "designer"],
+      "description": "Включить premium designer-агента для UI/UX-задач в AMT",
+      "type": "feature",
+      "effects": {
+        "enable_agent": "designer",
+        "system_prompt_fragment": "Ты работаешь в режиме premium UI/UX-дизайнера. Давай конкретные визуальные правки: layout, spacing, typography, motion, a11y."
+      }
     }
   ]
 }

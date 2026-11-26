@@ -35,6 +35,7 @@ from ai_engine import extensions as ext_loader
 from ai_engine.async_utils import run_com_sync
 from ai_engine.tool_registry import tool_registry, MAX_TOOL_ITERATIONS, ToolDef
 from ai_engine.mcp_manager import MCPManager, mcp_manager as _mcp_mgr_singleton, MCPServerConfig
+from ai_engine.coding_profile import resolve_chat_profile, ChatProfile
 
 app = FastAPI()
 
@@ -361,6 +362,11 @@ class ChatRequest(BaseModel):
     systemPromptOverride: str = ""  # переопределение системного промпта (новая личность)
     attachments: list[dict] = []  # [{path, filename, mime_type}] — файлы из FILES_DIR
     commands: list[str] = []  # slash-команды (например, ["/rag", "/jailbreak"])
+    chat_mode: str = "general"  # "general" | "coding"
+    project_root: str = ""
+    tool_policy: list[dict] = []
+    session_coding: dict = {}
+    key_ids: list[str] = []
 
 
 # ===== ПЕРСИСТЕНТНАЯ ПАМЯТЬ =====
@@ -602,7 +608,10 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                       enabled_tools: list[str] = None,
                       enable_memory: bool = False,
                       enable_orchestrator: bool = False,
-                      enable_jailbreak: bool = False) -> dict:
+                      enable_jailbreak: bool = False,
+                      chat_mode: str = "general",
+                      project_root: str = "",
+                      tool_policy: list[dict] = None) -> dict:
     """
     Вызывает OpenAI-совместимый API с настройками.
     Поддерживает агентов (роль + скиллы), автопереключение ключей при 429,
@@ -617,6 +626,8 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     extra_skills = extra_skills or []
     core_agents = core_agents or []
     enabled_tools = enabled_tools or []
+    tool_policy = tool_policy or []
+
     # Автоактивация веб-агента: если пользователь просит видео/стрим/поиск,
     # включаем core_web даже без тумблера
     _VIDEO_KW = re.compile(
@@ -767,9 +778,26 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
         if "baseUrl" in agent_params:
             settings.baseUrl = agent_params["baseUrl"]
 
-    base_url = settings.effective_base_url
-    api_key = settings.effective_api_key
-    model = settings.effective_model
+    _profile_request = ChatRequest(
+        message=user_message,
+        history=history,
+        settings=settings,
+        agent_id=agent_id,
+        extra_skills=extra_skills,
+        core_agents=core_agents,
+        sysinteraction=sysinteraction,
+        key_id=key_id,
+        systemPromptOverride=systemPromptOverride,
+        attachments=attachments or [],
+        chat_mode=chat_mode,
+        project_root=project_root,
+        tool_policy=tool_policy,
+    )
+    profile = resolve_chat_profile(_profile_request, keys_mgr=keys_mgr, server_settings=server_settings)
+
+    base_url = profile.base_url or settings.effective_base_url
+    api_key = profile.api_key or settings.effective_api_key
+    model = profile.model or settings.effective_model
     system_prompt = settings.effective_system_prompt
 
     # Переопределение личности (новая личность сессии)
@@ -779,6 +807,9 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     # Добавляем extra_system_prompt от команд (slash-команды)
     if extra_system_prompt:
         system_prompt += '\n\n' + extra_system_prompt
+
+    if profile.system_prompt_suffix:
+        system_prompt += profile.system_prompt_suffix
 
     # Множественные API-ключи: явный key_id > активный мульти-ключ > настройки.
     # ВАЖНО: параметры агента (выше) имеют приоритет над дефолтами ключа.
@@ -840,25 +871,8 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     if not api_key:
         api_key = server_settings.apiKey or ""
 
-    # Коддинг-ключ: если пользователь задал отдельный ключ/базу/модель для кода
-    # и сообщение выглядит как кодинг-запрос — переопределяем параметры.
-    coding_key = (server_settings.codingKey or "").strip()
-    if coding_key:
-        coding_base = (server_settings.codingBaseUrl or "").strip()
-        coding_model = (server_settings.codingModel or "").strip()
-        # Простая эвристика: кодинг-ключ применяем, если текст содержит кодинг-маркеры
-        msg_lower = (user_message or "").lower()
-        coding_markers = ("код", "function", "def ", "class ", "import ", "python",
-                         "javascript", "typescript", "c++", "rust", "golang",
-             "напиши код", "создай код", "исправь", "баг", "debug",
-             "implement", "write code", "code", "скрипт", "regex", "sql", "api")
-        if any(m in msg_lower for m in coding_markers):
-            api_key = coding_key
-            if coding_base:
-                base_url = coding_base
-            if coding_model:
-                model = coding_model
-            log_chat_event("CODING_KEY", {"model": model, "base": coding_base or "(общий)"})
+    if profile.chat_mode == "coding":
+        log_chat_event("CODING_PROFILE", {"model": model, "base": base_url or "(общий)", "key_id": profile.key_id})
 
     # Агент + скиллы → системный промпт
     agent_block = agents_mgr.build_system_prompt(agent_id, extra_skills) if agent_id else ""

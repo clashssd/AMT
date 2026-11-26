@@ -5087,25 +5087,57 @@ async def mcp_remove_server(server_id: str):
 def _rag_preset_config() -> dict:
     """Build a ready-to-add MCP server config for the bundled local RAG server.
 
-    Uses the python that's running this backend (so it picks up the venv /
-    packaged interpreter that has `mcp` and `rag_server` available) and points
-    PYTHONPATH at the backend dir so `python -m rag_server` resolves.
+    Two modes:
+
+    - **Dev (not frozen):** the running interpreter is the venv python, and
+      `rag_server` is loose source under the backend dir — so we launch
+      `python -m rag_server` with `PYTHONPATH=<backend>`, data in
+      `<backend>/.amt_rag`.
+
+    - **Packaged app (frozen, PyInstaller onedir):** the running interpreter is
+      `amt-backend.exe` — the same bundled sidecar that serves the HTTP API.
+      The RAG preset reuses that bootloader in RAG mode: `AMT_BACKEND_MODE=rag`
+      tells main.py's entrypoint to run `rag_server` over STDIO instead of
+      uvicorn. Data lives in `%APPDATA%/AMT Chat/.amt_rag` (stable, persistent)
+      since the sidecar's own dir is a temp/onedir layout.
+
+    Local-only read/index/search, no network — safe to auto-approve.
     """
     import sys
+    frozen = bool(getattr(sys, "frozen", False))
     backend_dir = os.path.dirname(os.path.abspath(__file__))
-    # Default RAG data dir sits next to the backend (dev) — override via env.
+
+    if frozen:
+        appdata = os.environ.get("APPDATA", os.path.expanduser("~"))
+        data_dir = os.environ.get("AMT_RAG_DATA_DIR") or os.path.join(
+            appdata, "AMT Chat", ".amt_rag"
+        )
+        return {
+            "id": "rag",
+            "name": "База знаний (RAG)",
+            "transport": "stdio",
+            "command": sys.executable,        # amt-backend.exe (the sidecar bootloader)
+            "args": [],
+            "env": {
+                "AMT_BACKEND_MODE": "rag",
+                "AMT_RAG_DATA_DIR": data_dir,
+            },
+            "enabled": True,
+            "auto_approve": True,
+        }
+
+    # Dev: venv interpreter + PYTHONPATH on the backend (rag_server loose source).
     default_data_dir = os.path.join(backend_dir, ".amt_rag")
-    env = {
-        "PYTHONPATH": backend_dir,
-        "AMT_RAG_DATA_DIR": os.environ.get("AMT_RAG_DATA_DIR", default_data_dir),
-    }
     return {
         "id": "rag",
         "name": "База знаний (RAG)",
         "transport": "stdio",
         "command": sys.executable,
         "args": ["-m", "rag_server"],
-        "env": env,
+        "env": {
+            "PYTHONPATH": backend_dir,
+            "AMT_RAG_DATA_DIR": os.environ.get("AMT_RAG_DATA_DIR", default_data_dir),
+        },
         "enabled": True,
         "auto_approve": True,  # local-only, read/index ops — safe to auto-approve
     }
@@ -5576,6 +5608,15 @@ if os.path.exists(FRONTEND_DIR):
 # Запуск как `python -m uvicorn backend.main:app` (dev) или как
 # PyInstaller-бинарник `amt-backend` (production). Порт из env PORT (дефолт 8000).
 if __name__ == "__main__":
+    import sys as _sys
+    # Dual-mode sidecar. AMT_BACKEND_MODE=rag makes the same PyInstaller
+    # bootloader run the standalone RAG MCP server over STDIO instead of the
+    # HTTP API. The Electron shell's RAG preset sets this env when it spawns
+    # `amt-backend.exe` (packaged) so the frozen bootloader — which otherwise
+    # always runs main.py's uvicorn entrypoint — instead serves RAG.
+    if os.environ.get("AMT_BACKEND_MODE", "").strip() == "rag":
+        from rag_server.server import main as _rag_main
+        _sys.exit(_rag_main())
     import uvicorn
     _port = int(os.environ.get("PORT", "8000"))
     uvicorn.run(app, host="127.0.0.1", port=_port, log_level="warning")

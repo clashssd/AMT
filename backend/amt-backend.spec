@@ -74,8 +74,12 @@ a = Analysis(
         'mcp.server', 'mcp.shared', 'mcp.server.mcpserver',
         # Локальные tool-calling модули (Task 1, 6)
         'ai_engine.tool_registry', 'ai_engine.mcp_manager',
-        # Локальный RAG MCP-сервер (backend/rag_server) — запуск как
-        # `python -m rag_server` (STDIO). Бандлится вместе с backend'ом.
+        # Локальный RAG MCP-сервер (backend/rag_server). Dev: запуск как
+        # `python -m rag_server` (loose source). Packaged: бандлер
+        # amt-backend.exe в режиме RAG (env AMT_BACKEND_MODE=rag) импортирует
+        # rag_server из PYZ-архива (hiddenimports ниже), поэтому `from
+        # rag_server.server import main` в entrypoint main.py работает без
+        # loose-файлов. Бандлится вместе с backend'ом.
         'rag_server', 'rag_server.server', 'rag_server.engine', 'rag_server.parsers',
     ],
     collect_all=['mcp'],

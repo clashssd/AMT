@@ -1,8 +1,24 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "name": "AMT Chat",
-  "latest_at": "2026-11-26",
+  "latest_at": "2026-11-27",
   "releases": [
+    {
+      "version": "1.1.1",
+      "date": "2026-11-27",
+      "title": "Система slash-команд + структурированные логи + хоткеи",
+      "changes": [
+        "Slash-команды: 15 команд (/rag, /agent, /jailbreak, /gen, /nav_*, /help и др.) — overlay на один запрос, комбинируются через '+', контекст выбрасывается после выполнения. Реестр в backend/command_registry.json, парсер в command_engine.py.",
+        "Команда /gen: генерация медиа/файлов — /gen photo|image|video|audio|file|combo, image-to-image через референс, маппинг форматов (xlsx/docx/pptx→create_office, pdf→create_pdf, py/js→create_code и т.д.).",
+        "Фронтенд: autocomplete при вводе '/', кнопка '?' в композере (help overlay со списком всех команд), подсказки команд.",
+        "Структурированное логирование: backend/logging_structured.py (JSONL в backend/logs/, trace_id-корреляция). Логирование AI-вызовов, tool-calls, MCP-вызовов. Эндпоинты: /api/logs/structured, /api/logs/trace/{id}, /api/logs/dashboard.",
+        "Дашборд логов: новая вкладка «Структура» — 4 виджета (события, ошибки, AI/MCP вызовы) + таблица с фильтрами и автообновлением.",
+        "Хоткеи: 12 доступных (навігация, toggle агентов, быстрая генерация), по умолчанию все не назначены. Настройка в «Настройки → Хоткеи», storage в localStorage.",
+        "Выбор способа генерации файла: модалка «Базовая модель vs MCP Writer» при /gen file, показывается только если MCP Writer доступен.",
+        "27 тестов: tests/test_commands_system.py (парсер, контекст, логгер, реестр).",
+        "Документация: docs/COMMANDS_SYSTEM_DETAILED.md (архитектура, потоки запросов, расширяемость)."
+      ]
+    },
     {
       "version": "1.1.0",
       "date": "2026-11-26",

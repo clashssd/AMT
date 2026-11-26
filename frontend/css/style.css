@@ -4885,7 +4885,14 @@ code {
 .coding-file-tree { max-height: 180px; overflow: auto; padding-right: 2px; }
 .coding-tree-row { padding: 3px 6px; border-radius: 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .coding-tree-row:hover { background: rgba(255,255,255,.07); }
+.coding-tree-row.active { background: rgba(99,102,241,.24); }
 .coding-tree-dir { font-weight: 600; color: rgba(255,255,255,.9); }
+.coding-symbols-list { max-height: 180px; overflow: auto; padding-right: 2px; }
+.coding-symbol-row { display: flex; gap: 8px; padding: 4px 6px; border-radius: 7px; cursor: pointer; font-size: 11px; color: rgba(255,255,255,.78); }
+.coding-symbol-row:hover { background: rgba(255,255,255,.06); }
+.coding-symbol-row.active { background: rgba(99,102,241,.24); }
+.coding-symbol-row strong { min-width: 74px; color: rgba(255,255,255,.92); font-weight: 600; }
+.coding-symbol-row span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .72; }
 .coding-dash { margin: 10px 0; padding: 10px; border: 1px solid rgba(127,127,127,.18); border-radius: 12px; background: rgba(24,24,27,.55); }
 .coding-dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
 .coding-dash-stats .widget { padding: 8px; border-radius: 10px; background: rgba(255,255,255,.04); }

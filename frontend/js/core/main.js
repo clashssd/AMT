@@ -3466,6 +3466,47 @@ async function codingPanelCall(tool, args = {}) {
 }
 let _codingDiffMode = 'unstaged';
 let _codingTreeFiles = [];
+let _codingSymbols = [];
+let _codingActiveFilePath = '';
+
+function openCodingFile(path) {
+    if (!path) return;
+    _codingActiveFilePath = path;
+    document.querySelectorAll('.coding-tree-row.active, .coding-symbol-row.active').forEach(el => el.classList.remove('active'));
+    const diffInput = document.getElementById('codingDiffPath');
+    if (diffInput) diffInput.value = path;
+    codingPanelCall('fs_read', { path }).then(res => {
+        const termEl = document.getElementById('codingTerminalOutput');
+        if (res.ok && termEl) termEl.textContent = res.content || '';
+        codingPanelSetActiveTab('terminal');
+    });
+    document.querySelectorAll('.coding-tree-row').forEach(el => { if (el.title === path) el.classList.add('active'); });
+    document.querySelectorAll('.coding-symbol-row').forEach(el => { if (el.dataset.path === path) el.classList.add('active'); });
+}
+
+function _renderCodingDiffFiles() {
+    const diffEl = document.getElementById('codingDiffOutput');
+    if (!diffEl) return;
+    const res = codingPanelCall('git_diff', { name_status: true }).then(r => {
+        const lines = String(r.ok ? (r.output || r.text || r.content || '') : String(r.error || 'Diff недоступен')).split('\n').filter(Boolean);
+        const fileLines = lines.filter(l => !l.startsWith('+++') && !l.startsWith('---') && !l.startsWith('diff '));
+        const matches = fileLines.filter(l => /\b(M|A|D|R)\s+(?:\d+\s+)?/.test(l) || /^\d+\s+(?:M|A|D|R)\s/.test(l) || /^\S+\s+(M|A|D|R)\s+\S+/.test(l));
+        const candidates = matches.length ? matches : fileLines;
+        diffEl.innerHTML = '';
+        if (!candidates.length) { diffEl.textContent = 'Изменённых файлов не найдено'; return; }
+        candidates.forEach(line => {
+            const m = line.match(/(\S+(?:\s+\S+)*)\s+(?:M|A|D|R)/) || line.match(/(?:M|A|D|R)\s+(\S+(?:\s+\S+)*)/);
+            const filePath = m ? m[1].trim().split(/\s+/)[0] : '';
+            const row = document.createElement('div');
+            row.className = 'coding-symbol-row' + (filePath === _codingActiveFilePath ? ' active' : '');
+            row.dataset.path = filePath;
+            row.dataset.line = line.trim();
+            row.innerHTML = '<strong>' + escapeHtml(filePath || 'file') + '</strong><span>' + escapeHtml(line.trim()) + '</span>';
+            row.addEventListener('click', () => { if (filePath) openCodingFile(filePath); });
+            diffEl.appendChild(row);
+        });
+    });
+}
 function _codingTreeFromEntries(entries) {
     const root = { name: '', children: new Map() };
     for (const entry of entries || []) {
@@ -3490,17 +3531,9 @@ function _codingTreeToDom(node, depth = 0, filter = '') {
         row.style.paddingLeft = (10 + depth * 14) + 'px';
         row.textContent = (child.isDir ? '📁 ' : '• ') + child.name;
         row.title = child.path;
-        row.addEventListener('click', () => {
-            const diffInput = document.getElementById('codingDiffPath');
-            const termEl = document.getElementById('codingTerminalOutput');
-            if (!child.isDir && diffInput) diffInput.value = child.path;
-            codingPanelCall('fs_read', { path: child.path }).then(res => {
-                if (res.ok && termEl) {
-                    termEl.textContent = res.content || '';
-                    codingPanelSetActiveTab('terminal');
-                }
-            });
-        });
+        if (!child.isDir) row.dataset.path = child.path;
+        row.classList.toggle('active', child.path === _codingActiveFilePath);
+        row.addEventListener('click', () => { openCodingFile(child.path); });
         wrap.appendChild(row);
         if (child.isDir) wrap.appendChild(_codingTreeToDom(child, depth + 1, filter));
     }
@@ -3522,7 +3555,7 @@ async function refreshCodingFileTree() {
 async function refreshCodingDiff() {
     const diffEl = document.getElementById('codingDiffOutput');
     if (!diffEl) return;
-    diffEl.textContent = 'Загрузка…';
+    diffEl.innerHTML = '<span class="coding-dash-empty">Загрузка…</span>';
     const diffPath = ((document.getElementById('codingDiffPath') || {}).value || '').trim();
     let tool = 'git_diff';
     const args = {};
@@ -3530,7 +3563,32 @@ async function refreshCodingDiff() {
     if (_codingDiffMode === 'name-status') { args.staged = false; args.name_status = true; }
     if (_codingDiffMode === 'file' && diffPath) { args.path = diffPath; }
     const res = await codingPanelCall(tool, args);
-    diffEl.textContent = res.ok ? String(res.output || res.text || res.content || '') : String(res.error || res.message || res.status || 'Diff недоступен');
+    const text = res.ok ? String(res.output || res.text || res.content || '') : String(res.error || res.message || res.status || 'Diff недоступен');
+    diffEl.textContent = text;
+    if (_codingDiffMode === 'name-status' || args.name_status) _renderCodingDiffFiles();
+}
+
+function _renderCodingSymbols(symbols) {
+    const listEl = document.getElementById('codingSymbolsList');
+    if (!listEl) return;
+    const filter = String((document.getElementById('codingSymbolSearch') || {}).value || '').toLowerCase();
+    listEl.innerHTML = '';
+    const visible = (symbols || []).filter(s => !filter || String(s.path || '').toLowerCase().includes(filter) || String(s.text || '').toLowerCase().includes(filter));
+    visible.slice(0, 160).forEach(s => {
+        const row = document.createElement('div');
+        row.className = 'coding-symbol-row' + (s.path === _codingActiveFilePath ? ' active' : '');
+        row.dataset.path = s.path;
+        row.innerHTML = '<strong>' + escapeHtml(s.path.split('/').pop() || s.path || 'file') + ':' + (s.line || '') + '</strong><span>' + escapeHtml(s.text || '') + '</span>';
+        row.addEventListener('click', () => openCodingFile(s.path));
+        listEl.appendChild(row);
+    });
+    if (!visible.length) listEl.innerHTML = '<span class="coding-dash-empty">Символы не найдены</span>';
+}
+
+async function refreshCodingSymbols() {
+    const res = await codingPanelCall('list_symbols', { path: '.', depth: 4 });
+    _codingSymbols = res.ok ? (res.symbols || []) : [];
+    _renderCodingSymbols(_codingSymbols);
 }
 async function refreshCodingPanels() {
     const c = currentCodingPanelChat();
@@ -3542,14 +3600,7 @@ async function refreshCodingPanels() {
     if (activeTab === 'diff') await refreshCodingDiff();
     if (activeTab === 'files') await refreshCodingFileTree();
     if (activeTab === 'orchestrator') await refreshCodingOrchestratorSessions();
-    if (activeTab === 'symbols') {
-        const symbolsEl = document.getElementById('codingSymbolsOutput');
-        if (symbolsEl) {
-            const symRes = await codingPanelCall('list_symbols', { path: '.', depth: 3 });
-            const symbols = (symRes.ok ? (symRes.symbols || []) : []) || [];
-            symbolsEl.textContent = symbols.length ? symbols.slice(0, 120).map(s => `${s.path}:${s.line} ${s.text}`).join('\n') : String(symRes.error || symRes.message || 'Символы не найдены');
-        }
-    }
+    if (activeTab === 'symbols') await refreshCodingSymbols();
 }
 document.addEventListener('click', (e) => {
     const tab = e.target.closest ? e.target.closest('[data-coding-tab]') : null;
@@ -3563,9 +3614,15 @@ document.addEventListener('click', (e) => {
         return;
     }
     if (e.target.closest && e.target.closest('[data-coding-tree-refresh]')) { refreshCodingFileTree(); return; }
+    if (e.target.closest && e.target.closest('[data-coding-symbols-refresh]')) { refreshCodingSymbols(); return; }
 });
 document.addEventListener('input', (e) => {
     if (e.target && e.target.id === 'codingTreeSearch') refreshCodingFileTree();
+    if (e.target && e.target.id === 'codingSymbolSearch') _renderCodingSymbols(_codingSymbols);
+    if (e.target && e.target.id === 'codingDiffPath') {
+        const v = e.target.value.trim();
+        if (v) openCodingFile(v);
+    }
 });
 
 // ===== Coding orchestrator panel with child-session UI =====

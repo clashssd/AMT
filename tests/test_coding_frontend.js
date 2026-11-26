@@ -49,5 +49,9 @@ assert(home.includes('codingOrchestratorChildren'), 'home.html should expose orc
 assert(main.includes('codingOrchestratorChildren'), 'main.js should render orchestrator child sessions');
 assert(main.includes('refreshCodingOrchestratorChildren'), 'main.js should refresh orchestrator child sessions');
 assert(home.includes('codingOrchestratorSessions'), 'home.html should expose orchestrator session cards');
+assert(main.includes('openCodingFile'), 'main.js should open files from tree, symbols, and diff');
+assert(main.includes('openCodingFile'), 'main.js should expose an openCodingFile helper');
+assert(home.includes('id="codingSymbolSearch"'), 'home.html should expose a symbol search input');
+assert(main.includes('refreshCodingSymbols'), 'main.js should refresh the symbols panel with search');
 
 console.log('test_coding_frontend.js: PASS');

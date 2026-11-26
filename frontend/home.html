@@ -270,7 +270,13 @@
                         <div id="codingFileTree" class="coding-file-tree"></div>
                     </div>
                     <div id="codingPanelTerminal" class="coding-panel hidden"><pre class="coding-terminal" id="codingTerminalOutput"></pre></div>
-                    <div id="codingPanelSymbols" class="coding-panel hidden"><pre class="coding-terminal" id="codingSymbolsOutput"></pre></div>
+                    <div id="codingPanelSymbols" class="coding-panel hidden">
+                        <div class="coding-diff-controls">
+                            <input id="codingSymbolSearch" class="coding-diff-input" placeholder="filter symbols" />
+                            <button class="coding-diff-btn" data-coding-symbols-refresh="1">Refresh</button>
+                        </div>
+                        <div id="codingSymbolsList" class="coding-symbols-list"></div>
+                    </div>
                     <div id="codingPanelOrchestrator" class="coding-panel hidden">
                         <div class="coding-diff-controls">
                             <input id="codingOrchestratorGoal" class="coding-diff-input" placeholder="Goal: describe what to build/fix" />

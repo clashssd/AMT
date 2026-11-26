@@ -125,6 +125,23 @@ def test_git_status_and_log(tmp_path):
     assert "initial" in log["output"].lower()
 
 
+def test_coding_approval_gate_can_deny_write(tmp_path):
+    import asyncio
+    from ai_engine.coding_tools import ProjectContext, CodingToolset
+    from ai_engine.permissions import ApprovalGate
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    context = ProjectContext(root=str(root), allow_write=True, allow_commands=False, allow_git_commit=False, deny_globs=[])
+    gate = ApprovalGate([{"action": "edit", "resource": "*", "effect": "deny"}])
+    toolset = CodingToolset(context, approval=gate)
+
+    result = asyncio.run(toolset._approval("edit", "a.txt", {"path": "a.txt"}, "write a.txt"))
+
+    assert result["approved"] is False
+    assert result["decision"] == "deny"
+
+
 def test_git_commit_requires_permission(tmp_path):
     from ai_engine.coding_tools import ProjectContext, CodingToolset
 

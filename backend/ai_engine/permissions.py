@@ -73,7 +73,7 @@ class ApprovalGate:
             return "allow"
         return "ask"
 
-    async def require(self, action: str, resource: str, args: dict | None = None, preview: str = "") -> dict:
+    async def require(self, action: str, resource: str, args: dict | None = None, preview: str = "", on_request: Callable[[str], None] | None = None) -> dict:
         effect = self.match(action, resource)
         if effect == "allow":
             return {"approved": True, "decision": "allow", "action": action, "resource": resource}
@@ -84,6 +84,8 @@ class ApprovalGate:
         future = loop.create_future()
         request_id = f"{action}:{resource}:{id(future)}"
         self.pending[request_id] = future
+        if on_request:
+            on_request(request_id)
         try:
             decision = await asyncio.wait_for(future, timeout=self.timeout_seconds)
         except asyncio.TimeoutError:

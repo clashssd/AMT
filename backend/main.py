@@ -33,9 +33,11 @@ from command_engine import REGISTRY as COMMAND_REGISTRY
 from logging_structured import logger as structured_logger
 from ai_engine import extensions as ext_loader
 from ai_engine.async_utils import run_com_sync
-from ai_engine.tool_registry import tool_registry, MAX_TOOL_ITERATIONS, ToolDef
+from ai_engine.tool_registry import tool_registry, ToolRegistry, ToolDef, MAX_TOOL_ITERATIONS
 from ai_engine.mcp_manager import MCPManager, mcp_manager as _mcp_mgr_singleton, MCPServerConfig
 from ai_engine.coding_profile import resolve_chat_profile, ChatProfile
+from ai_engine.coding_tools import ProjectContext, CodingToolset
+from ai_engine.permissions import ApprovalGate
 
 app = FastAPI()
 
@@ -611,7 +613,9 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                       enable_jailbreak: bool = False,
                       chat_mode: str = "general",
                       project_root: str = "",
-                      tool_policy: list[dict] = None) -> dict:
+                      tool_policy: list[dict] = None,
+                      on_event=None,
+                      approval_state: dict | None = None) -> dict:
     """
     Вызывает OpenAI-совместимый API с настройками.
     Поддерживает агентов (роль + скиллы), автопереключение ключей при 429,
@@ -870,6 +874,21 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     # (то, что пользователь сохранил через POST /api/settings).
     if not api_key:
         api_key = server_settings.apiKey or ""
+
+    request_tool_registry = tool_registry
+    if profile.chat_mode == "coding" and project_root:
+        request_tool_registry = _build_coding_request_registry(project_root, tool_policy)
+        if approval_state is not None:
+            approval_state["gate"] = getattr(request_tool_registry, "approval_gate", None)
+        toolset = getattr(request_tool_registry, "approval_toolset", None)
+        if toolset and on_event:
+            def _emit_approval_request(rid, tool, args):
+                ev = {"type": "tool_approval_request", "id": rid, "tool": tool, "args": args}
+                res = on_event(ev)
+                if asyncio.iscoroutine(res):
+                    asyncio.ensure_future(res)
+
+            toolset.on_request = _emit_approval_request
 
     if profile.chat_mode == "coding":
         log_chat_event("CODING_PROFILE", {"model": model, "base": base_url or "(общий)", "key_id": profile.key_id})
@@ -1408,7 +1427,7 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                             ))
                     except Exception as e:
                         logger.warning("Failed to register MCP tools for '%s': %s", cfg.id, e)
-        request_body["tools"] = tool_registry.schemas_for_profile(profile)
+        request_body["tools"] = request_tool_registry.schemas_for_profile(profile)
 
     # Intermediate tool-call events collected across the loop, returned to the
     # frontend for rendering (see "tool_events" in the return below).
@@ -1503,7 +1522,7 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                             tool_events.append({"type": "tool_call_start", "tool": tc_name, "args": tc_args})
 
                             try:
-                                tc_result = await tool_registry.execute(tc_name, tc_args)
+                                tc_result = await request_tool_registry.execute(tc_name, tc_args)
                                 # Логируем успех
                                 structured_logger.log_tool_call(
                                     tool=tc_name,
@@ -3827,6 +3846,69 @@ async def _electron_screenshot(url: str, timeout: float = 12.0) -> Optional[tupl
     return None
 
 # ===== WebSocket (стриминг) =====
+def _build_coding_request_registry(project_root: str, tool_policy: list[dict]) -> ToolRegistry:
+    """Build a per-request tool registry for the coding profile.
+
+    It starts from the global registry (media + enabled MCP tools), strips
+    media tools for the coding surface, and registers project-scoped coding
+    tools with an ApprovalGate driven by the supplied tool_policy.
+    """
+    from ai_engine.tool_registry import ToolDef
+
+    registry = ToolRegistry()
+    for tool in tool_registry._tools.values():
+        if tool.name.startswith("generate_"):
+            continue
+        registry.register(tool)
+
+    context = ProjectContext(
+        root=project_root,
+        allow_write=True,
+        allow_commands=True,
+        allow_git_commit=True,
+        deny_globs=[".env", "*.key", "keys.json", "secrets*"],
+    )
+    gate = ApprovalGate(tool_policy or [])
+    toolset = CodingToolset(context, approval=gate)
+
+    def _tool(action: str, resource: str, fn, args: dict) -> "Callable":
+        async def handler(**kwargs):
+            preview = json.dumps(kwargs, ensure_ascii=False)[:500]
+            approval = await toolset._approval(action, resource, kwargs, preview)
+            if not approval.get("approved"):
+                return json.dumps({"ok": False, "error": f"Approval denied: {approval.get('decision', 'unknown')}"}, ensure_ascii=False)
+            result = fn(**kwargs)
+            return json.dumps(result, ensure_ascii=False)
+        return handler
+
+    coding_tools = [
+        ("fs_read", "read", "fs_read", {"type": "object", "properties": {"path": {"type": "string"}, "offset": {"type": "integer"}, "limit": {"type": "integer"}}, "required": ["path"]}, toolset.fs_read),
+        ("fs_list", "read", "fs_list", {"type": "object", "properties": {"path": {"type": "string"}, "depth": {"type": "integer"}}, "required": []}, toolset.fs_list),
+        ("fs_search", "read", "fs_search", {"type": "object", "properties": {"query": {"type": "string"}, "path": {"type": "string"}, "file_pattern": {"type": "string"}}, "required": ["query"]}, toolset.fs_search),
+        ("fs_write", "edit", "fs_write", {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}, toolset.fs_write),
+        ("fs_apply_patch", "edit", "fs_apply_patch", {"type": "object", "properties": {"patch_content": {"type": "string"}}, "required": ["patch_content"]}, toolset.fs_apply_patch),
+        ("run_command", "shell", "run_command", {"type": "object", "properties": {"argv": {"type": "array", "items": {"type": "string"}}, "timeout": {"type": "integer"}}, "required": ["argv"]}, toolset.run_command),
+        ("git_status", "git", "git_status", {"type": "object", "properties": {}}, toolset.git_status),
+        ("git_diff", "git", "git_diff", {"type": "object", "properties": {"staged": {"type": "boolean"}}}, toolset.git_diff),
+        ("git_log", "git", "git_log", {"type": "object", "properties": {"n": {"type": "integer"}}}, toolset.git_log),
+        ("git_add", "git", "git_add", {"type": "object", "properties": {"paths": {"type": "array", "items": {"type": "string"}}}, "required": ["paths"]}, toolset.git_add),
+        ("git_commit", "git", "git_commit", {"type": "object", "properties": {"paths": {"type": "array", "items": {"type": "string"}}, "message": {"type": "string"}}, "required": ["message"]}, toolset.git_commit),
+        ("git_branch", "git", "git_branch", {"type": "object", "properties": {}}, toolset.git_branch),
+        ("git_push", "git", "git_push", {"type": "object", "properties": {"remote": {"type": "string"}, "branch": {"type": "string"}}}, toolset.git_push),
+    ]
+    for name, action, _method, params, method in coding_tools:
+        registry.register(ToolDef(
+            name=name,
+            description=f"Coding tool {name} scoped to the active project root.",
+            parameters=params,
+            handler=_tool(action, name, method, None),
+            source="coding",
+        ))
+    registry.approval_gate = gate
+    registry.approval_toolset = toolset
+    return registry
+
+
 def _validate_chat_mode_project(payload: dict) -> None:
     """Coding requests must carry a project_root."""
     if str(payload.get("chat_mode", "general")).lower() == "coding" and not str(payload.get("project_root", "")).strip():
@@ -3890,20 +3972,48 @@ async def websocket_chat(websocket: WebSocket):
                 settings = Settings()
 
             try:
-                result = await call_ai_api(
-                    effective_message, history, settings,
-                    agent_id=payload.get("agent_id", ""),
-                    extra_skills=payload.get("extra_skills", []),
-                    core_agents=payload.get("core_agents", []),
-                    key_id=payload.get("key_id", ""),
-                    systemPromptOverride=payload.get("systemPromptOverride", ""),
-                    attachments=payload.get("attachments", []),
-                    sysinteraction=payload.get("sysinteraction", False),
-                    chat_mode=payload.get("chat_mode", "general"),
-                    project_root=payload.get("project_root", ""),
-                    tool_policy=payload.get("tool_policy", []),
-                    **extra_params
+                approval_state: dict = {}
+
+                async def _send_event(ev: dict) -> None:
+                    await websocket.send_json(ev)
+
+                task = asyncio.create_task(
+                    call_ai_api(
+                        effective_message, history, settings,
+                        agent_id=payload.get("agent_id", ""),
+                        extra_skills=payload.get("extra_skills", []),
+                        core_agents=payload.get("core_agents", []),
+                        key_id=payload.get("key_id", ""),
+                        systemPromptOverride=payload.get("systemPromptOverride", ""),
+                        attachments=payload.get("attachments", []),
+                        sysinteraction=payload.get("sysinteraction", False),
+                        chat_mode=payload.get("chat_mode", "general"),
+                        project_root=payload.get("project_root", ""),
+                        tool_policy=payload.get("tool_policy", []),
+                        on_event=_send_event,
+                        approval_state=approval_state,
+                        **extra_params
+                    )
                 )
+
+                while not task.done():
+                    try:
+                        raw = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
+                    except asyncio.TimeoutError:
+                        continue
+                    except WebSocketDisconnect:
+                        break
+                    try:
+                        msg = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    if msg.get("type") == "tool_approval_response":
+                        gate = approval_state.get("gate")
+                        rid = str(msg.get("id", ""))
+                        if gate and rid in gate.pending:
+                            gate.pending[rid].set_result(str(msg.get("decision", "reject")))
+
+                result = await task
                 response_text = result["text"]
                 usage = result.get("usage", {})
                 for ev in result.get("tool_events", []):
@@ -4354,6 +4464,55 @@ async def delete_coding_session(s: CodingSessionIn):
         raise HTTPException(400, "id required")
     ok = _coding_session_delete(s.id)
     return {"status": "deleted" if ok else "not_found"}
+
+
+class CodingToolIn(BaseModel):
+    root: str = ""
+    tool: str = ""
+    args: dict = {}
+    policy: list[dict] = []
+
+
+@app.post("/api/coding/tool")
+async def coding_tool(req: CodingToolIn):
+    """Direct execution of a coding tool for slash commands.
+
+    Used by /code_git, /code_test, and similar commands that need to run a
+    project-scoped tool without going through the chat LLM tool loop.
+    """
+    root = (req.root or "").strip()
+    if not root:
+        raise HTTPException(400, "Укажите рабочую директорию проекта (project root)")
+    if not os.path.isdir(root):
+        raise HTTPException(400, "Проектная директория не найдена")
+
+    context = ProjectContext(
+        root=root,
+        allow_write=True,
+        allow_commands=True,
+        allow_git_commit=True,
+        deny_globs=[".env", "*.key", "keys.json", "secrets*"],
+    )
+    toolset = CodingToolset(context)
+    method = getattr(toolset, req.tool, None)
+    if not callable(method):
+        raise HTTPException(404, f"Unknown coding tool: {req.tool}")
+
+    args = dict(req.args or {})
+    if req.tool == "run_command":
+        argv = args.pop("argv", args.get("command", []))
+        if isinstance(argv, str):
+            argv = argv.split()
+        args["argv"] = argv
+    if req.tool == "fs_read" and "limit" not in args:
+        args["limit"] = None
+
+    try:
+        result = await asyncio.to_thread(method, **args)
+    except TypeError as exc:
+        raise HTTPException(400, f"Invalid arguments for {req.tool}: {exc}")
+
+    return {"status": "ok", "tool": req.tool, **result}
 
 
 # ===== ПОИСК ПО ЧАТАМ =====

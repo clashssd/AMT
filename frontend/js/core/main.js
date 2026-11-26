@@ -1986,6 +1986,8 @@ async function streamViaWebSocket(message, history, agentId = '', attachments = 
                 const contentEl = el.querySelector('.message-content');
                 if (contentEl) contentEl.appendChild(card);
                 scrollToBottomIfNear();
+            } else if (data.type === 'tool_approval_request') {
+                showCodingApproval(data);
             } else if (data.type === 'tool_call_result') {
                 // Результат инструмента: ищем running-карточку с таким tool и обновляем её
                 const contentEl = el.querySelector('.message-content');
@@ -3565,6 +3567,7 @@ async function saveMediaKeys() {
 
 // ===== БЕЗОПАСНЫЕ ИНСТРУМЕНТЫ =====
 let toolPending = null; // {tool, args, resultEl}
+let codingApprovalReq = null; // {id, tool, risk, args, preview}
 async function loadToolsConfig() {
     try {
         const r = await fetch(`${API_BASE}/api/tools/config`);
@@ -3636,7 +3639,30 @@ function showToolConfirm(tool, args) {
     if (det) det.textContent = `Инструмент: ${tool}\n\nАргументы:\n${JSON.stringify(args, null, 2)}`;
     document.getElementById('toolConfirmModal').classList.remove('hidden');
 }
+function showCodingApproval(data) {
+    codingApprovalReq = data || null;
+    const det = document.getElementById('toolConfirmDetail');
+    if (det) {
+        det.textContent = `Коддинг-инструмент: ${data?.tool || 'tool'}\n\n` +
+            (data?.preview ? `Предпросмотр:\n${data.preview}\n\n` : '') +
+            `Аргументы:\n${JSON.stringify(data?.args || {}, null, 2)}`;
+    }
+    document.getElementById('toolConfirmModal').classList.remove('hidden');
+}
+function respondCodingApproval(decision) {
+    if (!codingApprovalReq) return;
+    const req = codingApprovalReq;
+    codingApprovalReq = null;
+    document.getElementById('toolConfirmModal').classList.add('hidden');
+    if (currentWs && currentWs.readyState === WebSocket.OPEN) {
+        currentWs.send(JSON.stringify({ type: 'tool_approval_response', id: req.id, decision }));
+    }
+}
 async function approveToolConfirm() {
+    if (codingApprovalReq) {
+        respondCodingApproval('once');
+        return;
+    }
     if (!toolPending) return;
     document.getElementById('toolConfirmModal').classList.add('hidden');
     const { tool, args, resultEl } = toolPending;
@@ -3648,11 +3674,19 @@ async function approveToolConfirm() {
     toolPending = null;
 }
 function denyToolConfirm() {
+    if (codingApprovalReq) {
+        respondCodingApproval('reject');
+        return;
+    }
     document.getElementById('toolConfirmModal').classList.add('hidden');
     const el = toolPending?.resultEl;
     if (el) showToolResult({ ok: false, error: 'Действие отклонено пользователем' }, el);
     toolPending = null;
 }
+if (document.getElementById('toolConfirmApprove')) document.getElementById('toolConfirmApprove').addEventListener('click', approveToolConfirm);
+if (document.getElementById('toolConfirmDeny')) document.getElementById('toolConfirmDeny').addEventListener('click', denyToolConfirm);
+const _tcModal = document.getElementById('toolConfirmModal');
+if (_tcModal) _tcModal.addEventListener('click', e => { if (e.target === _tcModal) denyToolConfirm(); });
 function showToolResult(res, el) {
     if (!el) return;
     const line = document.createElement('div');

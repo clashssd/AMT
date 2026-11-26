@@ -250,6 +250,37 @@
       .then(r => r.json());
   }
 
+  function appendSystemMessage(text) {
+    if (!text) return;
+    const chat = currentCodingChat();
+    if (chat) {
+      chat.messages.push({ role: 'system', content: text, ts: Date.now() });
+      if (window.saveChats) window.saveChats();
+    }
+    const host = document.getElementById('chatMessages');
+    if (!host) return;
+    const el = document.createElement('div');
+    el.className = 'message bot';
+    el.innerHTML = `<div class="message-content"><pre style="white-space:pre-wrap;margin:0;">${(window.escapeHtml || (s => s))(text)}</pre></div>`;
+    host.appendChild(el);
+    host.scrollTop = host.scrollHeight;
+  }
+
+  async function runCodingTool(tool, args = {}) {
+    const chat = currentCodingChat();
+    if (!chat || !chat.projectRoot) {
+      appendSystemMessage('Сначала укажите проект: /code_project C:\\path');
+      return;
+    }
+    const res = await fetch('/api/coding/tool', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ root: chat.projectRoot, tool, args }),
+    }).then(r => r.json()).catch(err => ({ status: 'error', error: String(err) }));
+    const preview = res.output || res.error || JSON.stringify(res);
+    appendSystemMessage(`/${tool}: ${preview}`.trim());
+  }
+
   async function executeCodingCommand(command, args, raw) {
     const chat = currentCodingChat();
     const [sub, ...rest] = args;
@@ -277,13 +308,15 @@
         }
         break;
       case 'code_git':
-        if (window.appendChatMessage) {
-          window.appendChatMessage('system', `Git: ${sub || 'status'} ${restStr}`.trim());
-        }
+        await runCodingTool(sub || 'git_status');
         break;
-      case 'code_test':
-        if (window.appendChatMessage) window.appendChatMessage('system', 'Запуск тестов проекта…');
+      case 'code_test': {
+        const runner = (sub || 'pytest').toLowerCase();
+        const argv = runner === 'node' ? ['node', '--test'] : ['pytest', '-q'];
+        if (restStr) argv.push(restStr);
+        await runCodingTool('run_command', { argv });
         break;
+      }
       case 'code_mcp':
         if (window.amtPrompt) await window.amtPrompt('MCP-серверы для кодинг-чата (через запятую)', 'amt-coding');
         break;
@@ -309,7 +342,9 @@
     setCodingProjectRoot,
     codingSessionAction,
     executeCodingCommand,
-    currentCodingChat
+    currentCodingChat,
+    runCodingTool,
+    appendSystemMessage
   };
   window.AMTCmds = window.AMTCommands;
 })();

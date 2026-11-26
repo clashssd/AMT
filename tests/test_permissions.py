@@ -74,6 +74,27 @@ def test_require_timeout_rejects_pending_approval():
     assert elapsed < 0.5
 
 
+def test_require_reports_pending_request_id():
+    from ai_engine.permissions import ApprovalGate
+
+    gate = ApprovalGate([{"action": "shell", "resource": "*", "effect": "ask"}], timeout_seconds=5)
+    seen = []
+
+    async def run():
+        async def answer_later():
+            await asyncio.sleep(0.02)
+            gate.pending[seen[0]].set_result("once")
+
+        task = asyncio.create_task(answer_later())
+        return await gate.require("shell", "git commit", {}, "git commit", on_request=seen.append)
+
+    result = asyncio.run(run())
+
+    assert result["approved"] is True
+    assert result["decision"] == "once"
+    assert seen and isinstance(seen[0], str)
+
+
 def test_require_accepts_response_when_future_resolves():
     from ai_engine.permissions import ApprovalGate
 

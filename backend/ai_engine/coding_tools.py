@@ -78,11 +78,21 @@ class CodingToolset:
     ``content``/``entries``/``matches``/``output`` or ``error``.
     """
 
-    def __init__(self, context: ProjectContext, approval: Any = None) -> None:
+    def __init__(self, context: ProjectContext, approval: Any = None, on_request: Any = None) -> None:
         self.ctx = context
         self.approval = approval  # Optional ApprovalGate for permission checks.
+        self.on_request = on_request
 
     # --- internal helpers -----------------------------------------------------
+
+    async def _approval(self, action: str, resource: str, args: dict | None = None, preview: str = "") -> dict:
+        """Return an approval decision for a coding tool action.
+
+        When no ApprovalGate is configured the action is allowed automatically.
+        """
+        if not self.approval:
+            return {"approved": True, "decision": "allow", "action": action, "resource": resource}
+        return await self.approval.require(action, resource, args, preview, on_request=self.on_request)
 
     def _resolve_path(self, rel_path: str) -> tuple[Optional[str], Optional[str]]:
         """Resolve a relative path inside the project root.

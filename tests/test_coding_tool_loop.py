@@ -74,6 +74,20 @@ def test_coding_session_duplicate_copies_fields_without_base_chat(tmp_backend, m
     assert duplicated["baseChatId"] == ""
 
 
+def test_coding_request_registry_includes_project_scoped_tools(tmp_backend, tmp_path):
+    import main
+
+    root = str(tmp_path / "repo")
+    (tmp_path / "repo").mkdir(parents=True, exist_ok=True)
+    reg = main._build_coding_request_registry(root, [])
+
+    names = {s["function"]["name"] for s in reg.schemas_for_profile(main.ChatProfile(chat_mode="coding", key_id="", api_key="", base_url="", model="", system_prompt_suffix=""))}
+
+    assert "fs_read" in names
+    assert "run_command" in names
+    assert "generate_image" not in names
+
+
 def test_coding_session_delete(tmp_backend, monkeypatch):
     import main
 
@@ -81,3 +95,37 @@ def test_coding_session_delete(tmp_backend, monkeypatch):
     original = main._coding_session_create({"name": "del", "root": "C:\\tmp"})
     assert main._coding_session_delete(original["id"]) is True
     assert all(item["id"] != original["id"] for item in main._coding_session_list())
+
+
+def test_coding_tool_endpoint_runs_git_status(tmp_backend, tmp_path):
+    import main
+    from fastapi.testclient import TestClient
+
+    root = tmp_path / "repo"
+    root.mkdir(parents=True)
+    client = TestClient(main.app)
+
+    resp = client.post(
+        "/api/coding/tool",
+        json={"root": str(root), "tool": "git_status", "args": {}},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("status") == "ok"
+    assert "output" in body or "error" in body
+
+
+def test_coding_tool_endpoint_rejects_missing_root(tmp_backend):
+    import main
+    from fastapi.testclient import TestClient
+
+    client = TestClient(main.app)
+
+    resp = client.post(
+        "/api/coding/tool",
+        json={"root": "", "tool": "git_status", "args": {}},
+    )
+
+    assert resp.status_code == 400
+    assert "root" in resp.json()["detail"].lower() or "проект" in resp.json()["detail"].lower()

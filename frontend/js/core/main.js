@@ -2060,6 +2060,9 @@ async function fallbackRest(message, history, agentId = '', attachments = [], co
             systemPromptOverride: currentSystemPromptOverride || (currentSession && currentSession.systemPromptOverride) || '',
             sysinteraction: sysInteractionActive,
             commands: commands,  // Добавляем команды
+            chat_mode: getCurrentChat()?.chat_mode || 'general',
+            project_root: getCurrentChat()?.projectRoot || '',
+            tool_policy: getCurrentChat()?.toolPolicy || [],
         };
         // Ядровые агенты + мульти-выбор агентов в шапке чата → core_agents
         const coreList = agentMselCurrent();
@@ -3400,7 +3403,39 @@ function showSettingsPage(secId) {
         const container = document.getElementById('hotkeySettingsContainer');
         if (container) window.AMTHotkeys.renderHotkeySettings(container);
     }
+    if (secId === 'sec-coding') loadCodingSettingsUI();
 }
+function loadCodingSettingsUI() {
+    const s = JSON.parse(localStorage.getItem('amt_coding_settings') || '{}');
+    const vis = document.getElementById('codingPageVisibility');
+    const root = document.getElementById('codingProjectRoot');
+    const preset = document.getElementById('codingPolicyPreset');
+    if (vis) vis.checked = s.visibility !== false;
+    if (root) root.value = s.projectRoot || '';
+    if (preset) preset.value = s.policy || 'balanced';
+    applyCodingPageVisibility(vis ? vis.checked : true);
+}
+function saveCodingSettingsUI() {
+    const s = {
+        visibility: document.getElementById('codingPageVisibility')?.checked ?? true,
+        projectRoot: document.getElementById('codingProjectRoot')?.value || '',
+        policy: document.getElementById('codingPolicyPreset')?.value || 'balanced',
+    };
+    localStorage.setItem('amt_coding_settings', JSON.stringify(s));
+    applyCodingPageVisibility(s.visibility);
+    const chat = getCurrentChat();
+    if (chat && s.projectRoot) {
+        chat.projectRoot = s.projectRoot;
+        saveChats();
+    }
+    flashStatus('Коддинг-настройки сохранены');
+}
+function applyCodingPageVisibility(visible) {
+    const nav = document.getElementById('codePageNav');
+    if (nav) nav.style.display = visible ? '' : 'none';
+}
+if (document.getElementById('codingSettingsSaveBtn')) document.getElementById('codingSettingsSaveBtn').addEventListener('click', saveCodingSettingsUI);
+loadCodingSettingsUI();
 
 // ===== Справка (Docs page): под-навигация + хаб расширений =====
 const docsSubnavLinks = () => document.querySelectorAll('#docsSubnav a');

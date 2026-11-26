@@ -4,7 +4,7 @@
 const { spawnSync } = require('node:child_process');
 const { join } = require('node:path');
 
-const files = ['test_secure_store.js', 'test_token_estimator.js', 'test_main_logic.js', 'test_ctx_menu.js', 'test_stream_cards.js', 'test_player_overlay.js', 'test_round7.js', 'test_build_script.js', 'test_secrets.js', 'test_voice_state.js', 'test_update.js', 'test_theme_fixes.js'];
+const files = ['test_secure_store.js', 'test_token_estimator.js', 'test_main_logic.js', 'test_ctx_menu.js', 'test_stream_cards.js', 'test_player_overlay.js', 'test_round7.js', 'test_build_script.js', 'test_secrets.js', 'test_voice_state.js', 'test_update.js', 'test_theme_fixes.js', 'test_coding_frontend.js'];
 let failed = 0;
 for (const f of files) {
     const p = join(__dirname, f);

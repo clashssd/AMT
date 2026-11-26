@@ -76,6 +76,8 @@ a = Analysis(
         'mcp.server', 'mcp.shared', 'mcp.server.mcpserver',
         # Локальные tool-calling модули (Task 1, 6)
         'ai_engine.tool_registry', 'ai_engine.mcp_manager',
+        # Coding profile, permissions, and project-scoped coding tools
+        'ai_engine.coding_profile', 'ai_engine.permissions', 'ai_engine.coding_tools',
         # Локальный RAG MCP-сервер (backend/rag_server). Dev: запуск как
         # `python -m rag_server` (loose source). Packaged: бандлер
         # amt-backend.exe в режиме RAG (env AMT_BACKEND_MODE=rag) импортирует

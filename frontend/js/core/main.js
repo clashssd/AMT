@@ -1055,12 +1055,20 @@ function updateTokenCounter() {
 
 // ===== Settings (безопасное хранение API Key) =====
 async function fetchServerSettings() {
+    // Таймаут: без AbortController зависший fetch (бэкенд ещё не слушает /
+    // медленно поднимается) не решается никогда, и init-цепочка
+    // (loadSettings → await) не завершается, из-за чего не регистрируются
+    // критичные UI-слушатели и все кнопки остаются мёртвыми.
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
     try {
-        const res = await fetch(`${API_BASE}/api/settings`);
+        const res = await fetch(`${API_BASE}/api/settings`, { signal: ctrl.signal });
         if (!res.ok) return null;
         return await res.json();
     } catch {
         return null;
+    } finally {
+        clearTimeout(t);
     }
 }
 

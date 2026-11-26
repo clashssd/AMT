@@ -13,8 +13,8 @@ Branch: `design/system-v2` (created)
 | 6 | Tokenization + guard script | ✅ | `afb5ee2` |
 | 7 | Motion + bento home | ✅ | `e01a28d` |
 | 8 | A11y + responsive | ✅ | `340fa20` |
-| 9 | Final QA | ⬜ | `chore(design): final QA and polish` |
-| 10 | Report | ⬜ | — |
+| 9 | Final QA | ✅ | `32c7743` |
+| 10 | Report | ✅ | — |
 
 ## Notes / decisions log
 - Фаза 3: глобальный field-base в components-v2.css (input/textarea/select/checkbox/range/file/color, autofill-fix, select option dark bg, accent-color). Точечные white-plaque-фиксы: .send-btn/.web-open-btn/.player-tab; style.css tokenized .modal-glass select/input, .test-btn.primary, .opt-select, .search-input-wrap, .form-group, .chat-input, .web-open-btn.

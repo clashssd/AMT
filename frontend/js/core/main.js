@@ -3568,26 +3568,89 @@ document.addEventListener('input', (e) => {
     if (e.target && e.target.id === 'codingTreeSearch') refreshCodingFileTree();
 });
 
-// ===== Coding orchestrator panel =====
-async function refreshCodingOrchestratorSessions() {
-    const el = document.getElementById('codingOrchestratorOutput');
+// ===== Coding orchestrator panel with child-session UI =====
+let _codingOrchestratorActiveRun = null;
+
+function _renderCodingOrchestratorSessions(sessions) {
+    const el = document.getElementById('codingOrchestratorSessions');
     if (!el) return;
+    el.innerHTML = '';
+    if (!sessions.length) return;
+    sessions.forEach(s => {
+        const card = document.createElement('div');
+        card.className = 'coding-orch-session-card';
+        card.textContent = s.name || s.id || 'session';
+        card.title = s.goal || s.id;
+        card.addEventListener('click', () => {
+            document.querySelectorAll('.coding-orch-session-card').forEach(c => c.classList.remove('active'));
+            card.classList.add('active');
+            if (s.run) _codingOrchestratorActiveRun = s.run;
+            refreshCodingOrchestratorChildren(s.run);
+            const outEl = document.getElementById('codingOrchestratorOutput');
+            if (outEl && s.run) {
+                outEl.textContent = [
+                    'Status: ' + (s.run.status || 'unknown'),
+                    'Rounds: ' + (s.run.rounds || 0),
+                    'Files changed: ' + (s.run.files_changed || []).length,
+                    'Reviewer approved: ' + (s.run.reviewer_approved ? 'yes' : 'no')
+                ].join('\n');
+            }
+        });
+        el.appendChild(card);
+    });
+}
+
+function refreshCodingOrchestratorChildren(run) {
+    const el = document.getElementById('codingOrchestratorChildren');
+    if (!el) return;
+    el.innerHTML = '';
+    const children = (run && run.children) || (_codingOrchestratorActiveRun && _codingOrchestratorActiveRun.children) || [];
+    if (!children.length) {
+        el.innerHTML = '<span class="coding-dash-empty">Нет child-сессий</span>';
+        return;
+    }
+    children.forEach(ch => {
+        const card = document.createElement('div');
+        card.className = 'coding-orch-child';
+        card.innerHTML = '<strong>' + escapeHtml(ch.role || 'role') + '</strong>';
+        const meta = document.createElement('span');
+        meta.textContent = [
+            'status: ' + (ch.status || 'unknown'),
+            ch.prompt_chars ? 'chars: ' + ch.prompt_chars : '',
+            ch.result ? JSON.stringify(ch.result).slice(0, 120) : ''
+        ].filter(Boolean).join(' · ');
+        card.appendChild(meta);
+        el.appendChild(card);
+    });
+}
+
+async function refreshCodingOrchestratorSessions() {
+    const outEl = document.getElementById('codingOrchestratorOutput');
     const c = currentCodingPanelChat();
-    if (!c || !c.projectRoot) { el.textContent = 'Не выбран рабочий проект'; return; }
-    el.textContent = 'Загрузка сессий…';
+    if (!c || !c.projectRoot) { if (outEl) outEl.textContent = 'Не выбран рабочий проект'; return; }
+    if (outEl) outEl.textContent = 'Загрузка сессий…';
     try {
         const res = await fetch(API_BASE + '/api/sessions/coding');
         const data = await res.json();
         const sessions = (data.coding_sessions || []).filter(s => s.root === c.projectRoot);
-        if (!sessions.length) { el.textContent = 'Сессий оркестратора нет для этого проекта'; return; }
-        el.textContent = sessions.map(s => [
-            s.id, s.name || '(без названия)', 'root: ' + (s.root || ''),
-            'created: ' + (s.createdAt || ''),
-            s.goal ? 'goal: ' + s.goal : '',
-            s.run ? 'status: ' + s.run.status + ' rounds: ' + (s.run.rounds || 0) + ' files: ' + (s.run.files_changed || 0) : ''
-        ].filter(Boolean).join('\n')).join('\n---\n');
-    } catch (err) { el.textContent = 'Ошибка: ' + err; }
+        _renderCodingOrchestratorSessions(sessions);
+        const last = sessions[sessions.length - 1];
+        if (last && last.run) {
+            _codingOrchestratorActiveRun = last.run;
+            refreshCodingOrchestratorChildren(last.run);
+        } else {
+            refreshCodingOrchestratorChildren(null);
+        }
+        if (outEl) {
+            outEl.textContent = sessions.length
+                ? 'Сессий: ' + sessions.length + '. Выбрана последняя. Выберите сессию выше, чтобы переключить child-агентов.'
+                : 'Сессий оркестратора нет для этого проекта';
+        }
+    } catch (err) {
+        if (outEl) outEl.textContent = 'Ошибка: ' + err;
+    }
 }
+
 async function runCodingOrchestrator() {
     const c = currentCodingPanelChat();
     const goalEl = document.getElementById('codingOrchestratorGoal');
@@ -3606,19 +3669,18 @@ async function runCodingOrchestrator() {
         });
         const data = await res.json();
         if (res.ok && data.run) {
+            _codingOrchestratorActiveRun = data.run;
+            refreshCodingOrchestratorChildren(data.run);
             const r = data.run;
-            outEl.textContent = [
+            if (outEl) outEl.textContent = [
                 'Status: ' + (r.status || 'unknown'),
                 'Rounds: ' + (r.rounds || 0),
-                'Files changed: ' + (r.files_changed || 0),
-                'Reviewer approved: ' + (r.reviewer_approved ? 'yes' : 'no'),
-                r.children ? 'Children: ' + r.children.map(ch => ch.role + ' (' + ch.status + ')').join(', ') : '',
-                '',
-                'Detail:',
-                JSON.stringify(r, null, 2)
-            ].filter(Boolean).join('\n');
+                'Files changed: ' + (r.files_changed || []).length,
+                'Reviewer approved: ' + (r.reviewer_approved ? 'yes' : 'no')
+            ].join('\n');
+            refreshCodingOrchestratorSessions();
         } else {
-            outEl.textContent = 'Ошибка: ' + (data.detail || data.error || res.status);
+            if (outEl) outEl.textContent = 'Ошибка: ' + (data.detail || data.error || res.status);
         }
     } catch (err) {
         if (outEl) outEl.textContent = 'Ошибка: ' + err;

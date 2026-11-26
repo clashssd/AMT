@@ -45,5 +45,9 @@ assert(fs.existsSync(path.join(__dirname, '..', 'extensions', 'amt-coding-exampl
 assert(home.includes('codingMaxIterations'), 'home.html should include coding max iterations input');
 assert(main.includes('codingMaxIterations'), 'main.js should persist coding max iterations');
 assert(main.includes('effective_max_iterations') || main.includes('maxIterations') || main.includes('codingMaxIterations'), 'main.js should expose or use coding iteration value');
+assert(home.includes('codingOrchestratorChildren'), 'home.html should expose orchestrator child-session list');
+assert(main.includes('codingOrchestratorChildren'), 'main.js should render orchestrator child sessions');
+assert(main.includes('refreshCodingOrchestratorChildren'), 'main.js should refresh orchestrator child sessions');
+assert(home.includes('codingOrchestratorSessions'), 'home.html should expose orchestrator session cards');
 
 console.log('test_coding_frontend.js: PASS');

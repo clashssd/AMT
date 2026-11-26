@@ -4892,5 +4892,13 @@ code {
 .coding-dash-row { display: flex; gap: 8px; padding: 4px 6px; border-radius: 8px; font-size: 12px; color: rgba(255,255,255,.7); }
 .coding-dash-row:hover { background: rgba(255,255,255,.05); }
 .coding-dash-empty { padding: 8px; font-size: 12px; color: rgba(255,255,255,.45); }
-@media (max-width: 640px) { .coding-panel { max-height: 160px; } .coding-dash-stats { grid-template-columns: repeat(2, 1fr); } }
+.coding-orch-sessions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; max-height: 120px; overflow: auto; }
+.coding-orch-session-card { padding: 6px 8px; border-radius: 9px; background: rgba(255,255,255,.05); font-size: 11px; cursor: pointer; }
+.coding-orch-session-card:hover { background: rgba(255,255,255,.1); }
+.coding-orch-session-card.active { background: rgba(99,102,241,.25); }
+.coding-orch-children { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.coding-orch-child { padding: 8px; border-radius: 10px; background: rgba(255,255,255,.04); font-size: 11px; color: rgba(255,255,255,.75); }
+.coding-orch-child strong { display: block; margin-bottom: 4px; color: #fff; }
+.coding-orch-child span { display: block; opacity: .72; font-size: 10px; }
+@media (max-width: 640px) { .coding-panel { max-height: 160px; } .coding-dash-stats { grid-template-columns: repeat(2, 1fr); } .coding-orch-children { grid-template-columns: 1fr; } }
 

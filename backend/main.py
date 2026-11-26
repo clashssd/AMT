@@ -458,6 +458,18 @@ def persist_settings():
 load_persisted_settings()
 
 
+def _language_policy_block() -> str:
+    return (
+        "\n\n[LANGUAGE POLICY / Языковая политика]\n"
+        "Internal agent prompts, subagent instructions, reviewer/planner/coder context, and tool-call reasoning "
+        "should be written in English (EN) by default for better model alignment.\n"
+        "The final user-facing response must be returned in the user's language, matching the language of their "
+        "message unless they explicitly request another language.\n"
+        "Если пользователь пишет на русском — отвечай на русском. If the user writes in English — answer in English. "
+        "Если пользователь пишет на другом языке — отвечай на этом языке.\n"
+    )
+
+
 def _detect_default_browser() -> str:
     """Детектит дефолтный браузер пользователя через реестр Windows.
 
@@ -811,6 +823,9 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     # Добавляем extra_system_prompt от команд (slash-команды)
     if extra_system_prompt:
         system_prompt += '\n\n' + extra_system_prompt
+
+    # Языковая политика: внутренние agent prompts — EN, ответ пользователю — язык пользователя.
+    system_prompt += _language_policy_block()
 
     if profile.system_prompt_suffix:
         system_prompt += profile.system_prompt_suffix

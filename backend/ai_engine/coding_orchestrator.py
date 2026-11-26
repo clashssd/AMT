@@ -91,11 +91,29 @@ class CodingOrchestrator:
 
     def _child_prompt(self, role: str, goal: str, context: Dict[str, Any]) -> str:
         base = {
-            "planner": "Ты planner. Разбей задачу на 1-3 коротких задачи для кодера. Верни JSON: {\"tasks\":[{\"id\",\"title\",\"files\",\"steps\",\"acceptance\"}]}." ,
-            "coder": "Ты coder. Сделай только запрошенную задачу. Верни JSON: {\"summary\",\"files\":[{\"path\",\"action\",\"content\"}],\"commands\":[]}. Не выходи за пределы проекта.",
-            "reviewer": "Ты reviewer. Проверь изменения кодера. Верни JSON: {\"approved\":true|false,\"issues\":[]}. Если есть проблемы — approved=false и явный список.",
+            "planner": (
+                "You are the planner. Break the goal into 1-3 short coding tasks for the coder. "
+                "Internal task titles and reasoning must be in English. User-facing task titles and acceptance "
+                "criteria should be in the user's language when they will read them. "
+                "Return JSON: {\"tasks\":[{\"id\",\"title\",\"files\",\"steps\",\"acceptance\"}]}."
+            ),
+            "coder": (
+                "You are the coder. Implement only the requested task inside the project root. "
+                "Internal reasoning, file contents, and command arguments must be in English where applicable. "
+                "Return JSON: {\"summary\",\"files\":[{\"path\",\"action\",\"content\"}],\"commands\":[]}. "
+                "The user-facing summary should be in the user's language."
+            ),
+            "reviewer": (
+                "You are the reviewer. Review the coder's changes and report issues in English. "
+                "Return JSON: {\"approved\":true|false,\"issues\":[]}. "
+                "If approved=true, add a brief user-facing summary in the user's language under 'user_summary' when possible."
+            ),
         }
-        prompt = f"[ROLE: {role}] {base.get(role, '')}\nGoal: {goal}\nContext: {json.dumps(context, ensure_ascii=False)}"
+        prompt = (
+            f"[ROLE: {role}] {base.get(role, '')}\n"
+            f"Goal: {goal}\n"
+            f"Context: {json.dumps(context, ensure_ascii=False)}"
+        )
         return prompt
 
     async def _run_role(self, run: Dict[str, Any], role: str, goal: str, context: Dict[str, Any], llm_call: _LLM_CALL, on_event: Optional[Callable[[Dict[str, Any]], None]] = None) -> Dict[str, Any]:

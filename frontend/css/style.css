@@ -1815,7 +1815,7 @@ body.density-spacious { --glass-pad: 28px; --page-px: 32px; --page-pty: 32px; }
     padding: 6px 12px;
     border-radius: 20px;
     border: 1px solid var(--glass-bg);
-    transition: all 0.2s;
+    transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out);
 }
 .settings-nav a:hover { color: var(--accent-contrast); background: var(--glass-bg); }
 .settings-nav a.active { background: var(--accent-soft); color: var(--accent-contrast); border-color: var(--accent-soft); }
@@ -3248,7 +3248,7 @@ input[type="number"] {
     font-size: 12px;
     padding: 5px 12px;
     cursor: pointer;
-    transition: all .15s;
+    transition: background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
 }
 .chip:hover { color: var(--accent-contrast); border-color: var(--accent, var(--accent)); }
 .chip.active { background: var(--accent, var(--accent)); border-color: var(--accent, var(--accent)); color: var(--accent-contrast); }
@@ -3302,7 +3302,7 @@ input[type="number"] {
     font-size: 12px;
     padding: 4px 12px;
     cursor: pointer;
-    transition: all .15s;
+    transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
 }
 .dash-view-btn:hover { background: var(--accent, var(--accent)); color: var(--accent-contrast); }
 .dash-empty { color: var(--muted, var(--text-dim)); font-size: 13px; text-align: center; padding: 24px; }

@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="./css/style.css">
     <link rel="stylesheet" href="./css/tokens.css">
     <link rel="stylesheet" href="./css/components-v2.css">
+    <link rel="stylesheet" href="./css/motion-v2.css">
     <link rel="stylesheet" href="./css/voice.css">
 </head>
 <body>
@@ -67,13 +68,13 @@
     <!-- Main area: Home (главная — создать чат) -->
     <main id="homePage" class="page active">
         <div class="home-container">
-            <div class="home-hero">
+            <div class="home-hero reveal">
                 <div class="home-hero-icon">AMT</div>
                 <h2 data-i18n="home_start" data-i18n-ru="С чего начнём?">С чего начнём?</h2>
                 <p class="home-hero-sub" data-i18n="home_sub" data-i18n-ru="Создайте чат — просто, или с личностью: агент, оркестратор, скиллы, системный промпт. Все детали можно настроить прямо здесь.">Создайте чат — просто, или с личностью: агент, оркестратор, скиллы, системный промпт. Все детали можно настроить прямо здесь.</p>
             </div>
 
-            <div class="home-card" id="homeCard">
+            <div class="home-card reveal" id="homeCard">
                 <div class="home-card-head">
                     <span class="home-card-title">Настройка чата</span>
                     <button class="home-reset" id="homeResetBtn" data-i18n-en="Reset">Сбросить</button>
@@ -219,7 +220,7 @@
             </div>
 
             <!-- Быстрые сценарии (создаваемые + группировка) -->
-            <div class="home-quick" id="homeQuick">
+            <div class="home-quick reveal" id="homeQuick">
                 <div class="home-quick-head">
                     <div class="home-quick-title">Быстрые сценарии</div>
                     <div class="home-quick-controls">

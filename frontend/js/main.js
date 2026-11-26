@@ -5659,6 +5659,35 @@ function resetHomeForm() {
     else start();
 })();
 
+// ===== Phase 7: scroll-reveal via IntersectionObserver =====
+(function initScrollReveal() {
+    const prefersReduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced || document.body.classList.contains('no-anim')) return;
+    const els = document.querySelectorAll('.reveal:not(.is-visible)');
+    if (!els.length) return;
+    const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+            if (e.isIntersecting) {
+                e.target.classList.add('is-visible');
+                io.unobserve(e.target);
+            }
+        }
+    }, { threshold: 0.15 });
+    els.forEach((el, i) => {
+        el.style.setProperty('--reveal-delay', (i * 60) + 'ms');
+        io.observe(el);
+    });
+    // Cleanup on pagehide
+    addEventListener('pagehide', () => io.disconnect());
+    // If elements are already in viewport, reveal immediately
+    requestAnimationFrame(() => {
+        els.forEach(el => {
+            const r = el.getBoundingClientRect();
+            if (r.top < innerHeight && r.bottom > 0) el.classList.add('is-visible');
+        });
+    });
+})();
+
 // ===== Event listeners =====
 document.addEventListener('DOMContentLoaded', async () => {
     // Защита: если любой из await-вызовов бросит ошибку,

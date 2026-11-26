@@ -1,4 +1,7 @@
 import sys
+import json
+import os
+from pathlib import Path
 
 # Layer 1: Set COM apartment threading BEFORE any COM-dependent import.
 # COINIT_APARTMENTTHREADED = 2 — required for UIA (comtypes/pywinauto).
@@ -11,9 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 import httpx
-import json
 import asyncio
-import os
 import re
 import logging
 import time
@@ -28,6 +29,8 @@ from ai_engine.tools import tools as tools_sandbox
 from ai_engine.sysinteraction import SysInteractionOrchestrator
 from ai_engine import filegen
 from ai_engine import media as media_gen
+from command_engine import REGISTRY as COMMAND_REGISTRY
+from logging_structured import logger as structured_logger
 from ai_engine import extensions as ext_loader
 from ai_engine.async_utils import run_com_sync
 from ai_engine.tool_registry import tool_registry, MAX_TOOL_ITERATIONS, ToolDef
@@ -357,6 +360,7 @@ class ChatRequest(BaseModel):
     key_id: str = ""          # явный API-ключ для этого запроса (сессионный)
     systemPromptOverride: str = ""  # переопределение системного промпта (новая личность)
     attachments: list[dict] = []  # [{path, filename, mime_type}] — файлы из FILES_DIR
+    commands: list[str] = []  # slash-команды (например, ["/rag", "/jailbreak"])
 
 
 # ===== ПЕРСИСТЕНТНАЯ ПАМЯТЬ =====
@@ -593,15 +597,26 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                       core_agents: list[str] = None,
                       key_id: str = "", systemPromptOverride: str = "",
                       attachments: list[dict] = None,
-                      sysinteraction: bool = False) -> dict:
+                      sysinteraction: bool = False,
+                      extra_system_prompt: str = "",
+                      enabled_tools: list[str] = None,
+                      enable_memory: bool = False,
+                      enable_orchestrator: bool = False,
+                      enable_jailbreak: bool = False) -> dict:
     """
     Вызывает OpenAI-совместимый API с настройками.
     Поддерживает агентов (роль + скиллы), автопереключение ключей при 429,
     явный выбор ключа (key_id) и переопределение личности (systemPromptOverride).
     Возвращает dict: {"text": str, "usage": dict}
     """
+    # Создаём trace_id для этого запроса — все MCP/AI/Tool-вызовы будут привязаны
+    trace_id = structured_logger.start_request(
+        request_id=f"chat_{int(time.time() * 1000)}",
+        user_message=user_message[:200]
+    )
     extra_skills = extra_skills or []
     core_agents = core_agents or []
+    enabled_tools = enabled_tools or []
     # Автоактивация веб-агента: если пользователь просит видео/стрим/поиск,
     # включаем core_web даже без тумблера
     _VIDEO_KW = re.compile(
@@ -760,6 +775,10 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     # Переопределение личности (новая личность сессии)
     if systemPromptOverride:
         system_prompt = systemPromptOverride
+
+    # Добавляем extra_system_prompt от команд (slash-команды)
+    if extra_system_prompt:
+        system_prompt += '\n\n' + extra_system_prompt
 
     # Множественные API-ключи: явный key_id > активный мульти-ключ > настройки.
     # ВАЖНО: параметры агента (выше) имеют приоритет над дефолтами ключа.
@@ -1298,40 +1317,83 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     # Native tool-calling: when enabled, send the unified tool schemas (native
     # media/file tools + any connected MCP tools) so the LLM can emit tool_calls.
     if settings.toolCalling:
-        # First, lazily register MCP tools from enabled servers (cached in the registry).
-        if mcp_manager:
-            for cfg in mcp_manager.list_servers():
-                if not cfg.enabled:
-                    continue
-                prefix = f"mcp__{cfg.id}"
-                # Skip if any tool from this server is already registered
-                if any(k.startswith(prefix) for k in tool_registry._tools):
-                    continue
-                try:
-                    await mcp_manager.connect(cfg.id)
-                    mcp_tools = await mcp_manager.list_tools(cfg.id)
-                    for t in mcp_tools:
-                        tool_name = f"mcp__{cfg.id}__{t['name']}"
-                        if tool_registry.has(tool_name):
-                            continue
-                        sid = cfg.id
-                        auto_approve = cfg.auto_approve
-                        srv_cfg = cfg
+        # Если заданы enabled_tools (из slash-команд) — фильтруем
+        if enabled_tools:
+            # Регистрируем только нужные инструменты
+            allowed_tools = set(enabled_tools)
+            if mcp_manager:
+                for cfg in mcp_manager.list_servers():
+                    if not cfg.enabled:
+                        continue
+                    prefix = f"mcp__{cfg.id}"
+                    # Если prefix в списке разрешённых — регистрируем все тулы этого сервера
+                    if any(t.startswith(prefix) for t in allowed_tools):
+                        try:
+                            mcp_tools = await mcp_manager.list_tools(cfg.id)
+                            for t in mcp_tools:
+                                tool_name = f"{prefix}__{t['name']}"
+                                if tool_registry.has(tool_name):
+                                    continue
+                                sid = cfg.id
+                                auto_approve = cfg.auto_approve
+                                srv_cfg = cfg
+                                
+                                async def mcp_exec(specific_tool=t["name"], sid=sid, auto=auto_approve, srv=srv_cfg, **tool_args):
+                                    if not auto:
+                                        return json.dumps({"error": f"MCP tool '{specific_tool}' requires approval (auto_approve=False on server '{srv.id}')"}, ensure_ascii=False)
+                                    return await mcp_manager.call_tool(sid, specific_tool, tool_args)
+                                
+                                tool_registry.register(ToolDef(
+                                    name=tool_name,
+                                    description=t.get("description", f"MCP tool {t['name']} from {cfg.name}"),
+                                    parameters=t.get("inputSchema", {"type": "object", "properties": {}}),
+                                    handler=mcp_exec,
+                                    source=f"mcp:{cfg.id}",
+                                ))
+                        except Exception as e:
+                            logger.warning("Failed to register MCP tools for '%s': %s", cfg.id, e)
+            
+            # Отфильтровываем схемы
+            request_body["tools"] = [
+                schema for name, schema in tool_registry.schemas().items()
+                if name in allowed_tools
+            ] if hasattr(tool_registry.schemas(), 'items') else tool_registry.schemas()
+        else:
+            # Обычный режим: все инструменты
+            # First, lazily register MCP tools from enabled servers (cached in the registry).
+            if mcp_manager:
+                for cfg in mcp_manager.list_servers():
+                    if not cfg.enabled:
+                        continue
+                    prefix = f"mcp__{cfg.id}"
+                    # Skip if any tool from this server is already registered
+                    if any(k.startswith(prefix) for k in tool_registry._tools):
+                        continue
+                    try:
+                        await mcp_manager.connect(cfg.id)
+                        mcp_tools = await mcp_manager.list_tools(cfg.id)
+                        for t in mcp_tools:
+                            tool_name = f"mcp__{cfg.id}__{t['name']}"
+                            if tool_registry.has(tool_name):
+                                continue
+                            sid = cfg.id
+                            auto_approve = cfg.auto_approve
+                            srv_cfg = cfg
 
-                        async def mcp_exec(specific_tool=t["name"], sid=sid, auto=auto_approve, srv=srv_cfg, **tool_args):
-                            if not auto:
-                                return json.dumps({"error": f"MCP tool '{specific_tool}' requires approval (auto_approve=False on server '{srv.id}')"}, ensure_ascii=False)
-                            return await mcp_manager.call_tool(sid, specific_tool, tool_args)
+                            async def mcp_exec(specific_tool=t["name"], sid=sid, auto=auto_approve, srv=srv_cfg, **tool_args):
+                                if not auto:
+                                    return json.dumps({"error": f"MCP tool '{specific_tool}' requires approval (auto_approve=False on server '{srv.id}')"}, ensure_ascii=False)
+                                return await mcp_manager.call_tool(sid, specific_tool, tool_args)
 
-                        tool_registry.register(ToolDef(
-                            name=tool_name,
-                            description=t.get("description", f"MCP tool {t['name']} from {cfg.name}"),
-                            parameters=t.get("inputSchema", {"type": "object", "properties": {}}),
-                            handler=mcp_exec,
-                            source=f"mcp:{cfg.id}",
-                        ))
-                except Exception as e:
-                    logger.warning("Failed to register MCP tools for '%s': %s", cfg.id, e)
+                            tool_registry.register(ToolDef(
+                                name=tool_name,
+                                description=t.get("description", f"MCP tool {t['name']} from {cfg.name}"),
+                                parameters=t.get("inputSchema", {"type": "object", "properties": {}}),
+                                handler=mcp_exec,
+                                source=f"mcp:{cfg.id}",
+                            ))
+                    except Exception as e:
+                        logger.warning("Failed to register MCP tools for '%s': %s", cfg.id, e)
         request_body["tools"] = tool_registry.schemas()
 
     # Intermediate tool-call events collected across the loop, returned to the
@@ -1428,8 +1490,46 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
 
                             try:
                                 tc_result = await tool_registry.execute(tc_name, tc_args)
+                                # Логируем успех
+                                structured_logger.log_tool_call(
+                                    tool=tc_name,
+                                    params=tc_args,
+                                    success=True,
+                                    trace_id=trace_id
+                                )
+                                # Если это MCP-инструмент — логируем отдельно
+                                if tc_name.startswith("mcp__"):
+                                    parts = tc_name.split("__")
+                                    server_id = parts[1]
+                                    tool_name = parts[2]
+                                    structured_logger.log_mcp_call(
+                                        server=server_id,
+                                        tool=tool_name,
+                                        params=tc_args,
+                                        result=tc_result,
+                                        duration_ms=100,  # approximate
+                                        trace_id=trace_id
+                                    )
                             except Exception as e:
                                 tc_result = json.dumps({"error": str(e)}, ensure_ascii=False)
+                                # Логируем ошибку
+                                structured_logger.log_tool_call(
+                                    tool=tc_name,
+                                    params=tc_args,
+                                    success=False,
+                                    error=str(e),
+                                    trace_id=trace_id
+                                )
+                                if tc_name.startswith("mcp__"):
+                                    parts = tc_name.split("__")
+                                    structured_logger.log_mcp_call(
+                                        server=parts[1],
+                                        tool=parts[2],
+                                        params=tc_args,
+                                        result=None,
+                                        duration_ms=0,
+                                        trace_id=trace_id
+                                    )
 
                             tool_events.append({"type": "tool_call_result", "tool": tc_name, "result": tc_result})
                             messages.append({
@@ -1494,6 +1594,25 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                     "finish_reason": finish_reason,
                     "resp_preview": text[:200].replace("\n", " "),
                 })
+                # Структурированный лог: вызов ИИ
+                structured_logger.log_ai_call(
+                    model=model,
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    duration_ms=elapsed * 1000,
+                    trace_id=trace_id
+                )
+                # Логируем tool-calls если были
+                for ev in tool_events:
+                    if ev.get("type") == "tool_call_start":
+                        structured_logger.log_tool_call(
+                            tool=ev.get("tool", "unknown"),
+                            params=ev.get("args", {}),
+                            success=True,
+                            trace_id=trace_id
+                        )
+                    elif ev.get("type") == "tool_call_result":
+                        pass  # Результат уже учтён в start
 
 
 
@@ -1707,7 +1826,36 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    """Обрабатывает сообщение и возвращает ответ AI + usage"""
+    """Обрабатывает сообщение и возвращает ответ AI + usage. Поддерживает slash-команды."""
+    # Обрабатываем команды если есть
+    extra_params = {}
+    if request.commands:
+        from command_engine import CommandParser, build_context
+        parser = CommandParser(COMMAND_REGISTRY)
+        # Объединяем команды в строку для парсинга: "/cmd1 + /cmd2 ..."
+        cmd_string = " + ".join(request.commands) + " " + request.message
+        parsed_commands, remaining_text = parser.parse(cmd_string)
+        
+        if parsed_commands:
+            cmd_ctx = build_context(parsed_commands, COMMAND_REGISTRY)
+            
+            # Включаем MCP-серверы
+            for server_id in cmd_ctx.enabled_mcp:
+                try:
+                    await mcp_manager.ensure_connected(server_id)
+                except Exception as e:
+                    print(f"MCP {server_id} not available: {e}")
+            
+            extra_params['extra_system_prompt'] = '\n'.join(cmd_ctx.system_prompt_fragments)
+            extra_params['enabled_tools'] = list(cmd_ctx.enabled_tools) if cmd_ctx.enabled_tools else []
+            extra_params['enable_memory'] = cmd_ctx.enable_memory
+            extra_params['enable_orchestrator'] = cmd_ctx.enable_orchestrator
+            extra_params['enable_jailbreak'] = cmd_ctx.enable_jailbreak
+            # Используем оставшийся текст (без команд)
+            request.message = remaining_text
+            # Используем оригинальный текст для display
+            display_message = request.message
+    
     result = await call_ai_api(
         request.message, request.history, request.settings,
         agent_id=request.agent_id, extra_skills=request.extra_skills,
@@ -1715,6 +1863,7 @@ async def chat(request: ChatRequest):
         key_id=request.key_id, systemPromptOverride=request.systemPromptOverride,
         attachments=request.attachments,
         sysinteraction=request.sysinteraction,
+        **extra_params
     )
     return {"response": result["text"], "usage": result["usage"], "tool_events": result.get("tool_events", [])}
 
@@ -3658,6 +3807,36 @@ async def websocket_chat(websocket: WebSocket):
             payload = json.loads(data)
             user_message = payload.get("message", "")
             history = [Message(**m) for m in payload.get("history", [])]
+            commands = payload.get("commands", [])  # Получаем команды
+
+            # Если есть команды — обрабатываем их
+            extra_params = {}
+            effective_message = user_message
+            if commands:
+                from command_engine import CommandParser, build_context
+                parser = CommandParser(COMMAND_REGISTRY)
+                # Объединяем: команды + остаток текста
+                cmd_string = " + ".join(commands) + " " + user_message
+                parsed_commands, remaining_text = parser.parse(cmd_string)
+                
+                if parsed_commands:
+                    cmd_ctx = build_context(parsed_commands, COMMAND_REGISTRY)
+                    
+                    # Включаем MCP-серверы
+                    for server_id in cmd_ctx.enabled_mcp:
+                        try:
+                            await mcp_manager.ensure_connected(server_id)
+                        except Exception as e:
+                            print(f"MCP {server_id} not available: {e}")
+                    
+                    # Исполь��уем оставшийся текст (без команд)
+                    effective_message = remaining_text or user_message
+                    
+                    extra_params['extra_system_prompt'] = '\n'.join(cmd_ctx.system_prompt_fragments)
+                    extra_params['enabled_tools'] = list(cmd_ctx.enabled_tools) if cmd_ctx.enabled_tools else []
+                    extra_params['enable_memory'] = cmd_ctx.enable_memory
+                    extra_params['enable_orchestrator'] = cmd_ctx.enable_orchestrator
+                    extra_params['enable_jailbreak'] = cmd_ctx.enable_jailbreak
 
             raw_settings = payload.get("settings", {})
             try:
@@ -3667,7 +3846,7 @@ async def websocket_chat(websocket: WebSocket):
 
             try:
                 result = await call_ai_api(
-                    user_message, history, settings,
+                    effective_message, history, settings,
                     agent_id=payload.get("agent_id", ""),
                     extra_skills=payload.get("extra_skills", []),
                     core_agents=payload.get("core_agents", []),
@@ -3675,6 +3854,7 @@ async def websocket_chat(websocket: WebSocket):
                     systemPromptOverride=payload.get("systemPromptOverride", ""),
                     attachments=payload.get("attachments", []),
                     sysinteraction=payload.get("sysinteraction", False),
+                    **extra_params
                 )
                 response_text = result["text"]
                 usage = result.get("usage", {})
@@ -4037,11 +4217,44 @@ async def search_chats(q: str = "", chat_id: str = ""):
     return {"matches": results[:100]}
 
 
+# ===== КОМАНДЫ =====
+@app.get("/api/command-registry")
+async def get_command_registry():
+    """Возвращает реестр всех slash-команд."""
+    return COMMAND_REGISTRY
+
+
 # ===== ЛОГИ =====
 @app.get("/api/logs")
 async def get_logs():
-    """Возвращает последние строки лог-файла за сегодня"""
+    """Возвращает последние строки лог-файла за сегодня."""
     return {"lines": _read_log_lines(200)}
+
+
+@app.get("/api/logs/structured")
+async def get_structured_logs(
+    limit: int = 100,
+    category: str = None,
+    level: str = None,
+    trace_id: str = None,
+):
+    """Возвращает структурированные лог-события (JSONL) с фильтрами + дашборд-данные."""
+    events = structured_logger.get_recent_logs(
+        limit=limit, category=category, level=level, trace_id=trace_id
+    )
+    dashboard = structured_logger.get_dashboard_data()
+    return {
+        "events": events,
+        "count": len(events),
+        "dashboard": dashboard,
+    }
+
+
+@app.get("/api/logs/trace/{trace_id}")
+async def get_log_trace(trace_id: str):
+    """Возвращает ��се события по trace_id (полная цепочка запроса)."""
+    events = structured_logger.get_trace(trace_id)
+    return {"trace_id": trace_id, "events": events, "count": len(events)}
 
 
 def _read_log_lines(n: int = 400) -> list:
@@ -4292,9 +4505,13 @@ def build_dashboard(lines: list) -> dict:
 
 @app.get("/api/logs/dashboard")
 async def get_logs_dashboard():
-    """Агрегированный дашборд: задачи + статистика + события оркестратора/агентов/скиллов."""
+    """Агрегированный дашборд: задачи + статистика + события оркестратора/агентов/скиллов + структурированные логи (MCP/AI/Tools)."""
     lines = _read_log_lines(400)
-    return build_dashboard(lines)
+    legacy_dashboard = build_dashboard(lines)
+    # Добавляем данные из структурированного логгера
+    structured_data = structured_logger.get_dashboard_data()
+    legacy_dashboard["structured_logs"] = structured_data
+    return legacy_dashboard
 
 
 @app.post("/api/logs/clear")

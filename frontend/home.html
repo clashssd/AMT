@@ -6,14 +6,9 @@
     <title>AMT Chat</title>
     <link rel="icon" href="./assets/icon.svg">
     <link rel="stylesheet" href="./css/style.css">
-    <link rel="stylesheet" href="./css/tokens.css">
-    <link rel="stylesheet" href="./css/components-v2.css">
-    <link rel="stylesheet" href="./css/motion-v2.css">
     <link rel="stylesheet" href="./css/voice.css">
-    <link rel="stylesheet" href="./css/commands.css">
 </head>
 <body>
-    <a href="#homePage" class="sr-only">Перейти к содержанию</a>
     <!-- Свой тайтлбар (frameless-окно): заменяет нативную серую полосу.
          Фон/граница подхватывают активную тему приложения (CSS-переменные). -->
     <div id="winTitlebar">
@@ -68,15 +63,15 @@
     </header>
 
     <!-- Main area: Home (главная — создать чат) -->
-    <main id="homePage" class="page active" tabindex="-1">
+    <main id="homePage" class="page active">
         <div class="home-container">
-            <div class="home-hero reveal">
+            <div class="home-hero">
                 <div class="home-hero-icon">AMT</div>
                 <h2 data-i18n="home_start" data-i18n-ru="С чего начнём?">С чего начнём?</h2>
                 <p class="home-hero-sub" data-i18n="home_sub" data-i18n-ru="Создайте чат — просто, или с личностью: агент, оркестратор, скиллы, системный промпт. Все детали можно настроить прямо здесь.">Создайте чат — просто, или с личностью: агент, оркестратор, скиллы, системный промпт. Все детали можно настроить прямо здесь.</p>
             </div>
 
-            <div class="home-card reveal" id="homeCard">
+            <div class="home-card" id="homeCard">
                 <div class="home-card-head">
                     <span class="home-card-title">Настройка чата</span>
                     <button class="home-reset" id="homeResetBtn" data-i18n-en="Reset">Сбросить</button>
@@ -222,7 +217,7 @@
             </div>
 
             <!-- Быстрые сценарии (создаваемые + группировка) -->
-            <div class="home-quick reveal" id="homeQuick">
+            <div class="home-quick" id="homeQuick">
                 <div class="home-quick-head">
                     <div class="home-quick-title">Быстрые сценарии</div>
                     <div class="home-quick-controls">
@@ -341,7 +336,6 @@
                     <input type="file" id="fileInput" multiple hidden>
                     <div class="composer-tools-wrap">
                         <button class="attach-btn composer-master" id="composerToolsBtn" title="Инструменты" aria-label="Инструменты"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M12 4l8 14H4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
-                        <button class="attach-btn composer-master" id="composerHelpBtn" title="Помощь: список команд" aria-label="Помощь">?</button>
                         <div class="composer-tools-pop hidden" id="composerToolsPop">
                             <button class="attach-btn" id="attachBtn" title="Прикрепить файл" data-i18n-en-title="Attach file"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M8 12l4 4 8-8a4 4 0 0 0-6-6l-8 8a4 4 0 0 0 6 6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
                             <button class="attach-btn" id="toolBtn" title="Инструменты (безопасно)" data-i18n-en-title="Tools (safe)" aria-label="Инструменты"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M14 6l4 4-8 8-4-4zM14 6l-3-3-3 3M10 10l3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg></button>
@@ -360,8 +354,8 @@
                         rows="1"
                         autocomplete="off"
                     ></textarea>
-                    <button class="input-btn stop-btn btn btn--icon hidden" id="stopBtn" title="Остановить" data-i18n-en-title="Stop" aria-label="Остановить"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.75"/></svg></button>
-                    <button class="input-btn send-btn btn btn--primary" id="sendBtn" title="Отправить" data-i18n-en-title="Send" aria-label="Отправить"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M4 12l16-8-6 8 6 8-16-8z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/></svg></button>
+                    <button class="input-btn stop-btn hidden" id="stopBtn" title="Остановить" data-i18n-en-title="Stop">⏹</button>
+                    <button class="input-btn send-btn" id="sendBtn" title="Отправить" data-i18n-en-title="Send">➤</button>
                 </div>
                 <!-- Быстрый выбор инструмента -->
                 <div class="tool-picker hidden" id="toolPicker">
@@ -415,7 +409,6 @@
 
                 <div class="dash-tabs" id="dashTabs">
                     <button class="dash-tab active" data-mode="dash" data-i18n-en="Dashboard">Дашборд</button>
-                    <button class="dash-tab" data-mode="structured" data-i18n-en="Structured logs">Структура</button>
                     <button class="dash-tab" data-mode="raw" data-i18n-en="Raw logs">Логи</button>
                 </div>
 
@@ -438,12 +431,6 @@
                         <div class="dash-empty" id="dashEmpty" hidden>Нет задач за сегодня</div>
                     </div>
                     <div class="dash-event" id="dashEvent" hidden></div>
-                </div>
-
-                <div id="structuredLogsWrap" hidden>
-                    <div class="structured-logs-container" id="structuredLogsContainer">
-                        <div class="structured-logs-loading">Загрузка структурированных логов...</div>
-                    </div>
                 </div>
 
                 <div id="rawLogsWrap" class="raw-logs-wrap" hidden>
@@ -469,7 +456,6 @@
                     <!-- Под-навигация по страницам настроек -->
                     <aside class="settings-subnav">
                         <h2 data-i18n="settings_title" data-i18n-ru="Настройки">Настройки</h2>
-                        <p class="subnav-hint" style="font-size:11px;opacity:.6;margin:4px 0 10px;line-height:1.4">Выберите раздел слева — каждый раздел сохраняет свои настройки</p>
                         <nav class="settings-subnav-links" id="settingsSubnav">
                             <a href="#" class="active" data-sec="sec-connect" data-i18n="s_connect" data-i18n-ru="Подключение">Подключение</a>
                             <a href="#" data-sec="sec-model" data-i18n="s_model" data-i18n-ru="Модель">Модель</a>
@@ -487,7 +473,6 @@
                             <a href="#" data-sec="sec-personality" class="subnav-special" data-i18n="s_personality" data-i18n-ru="Личность">Личность</a>
                             <a href="#" data-sec="sec-docs" class="subnav-special" data-i18n="s_docs" data-i18n-ru="Docs">Docs</a>
                             <a href="#" data-sec="sec-themes" class="subnav-special" data-i18n="s_themes" data-i18n-ru="Темы и конфиги">Темы и конфиги</a>
-                            <a href="#" data-sec="sec-hotkeys" class="subnav-special" data-i18n="s_hotkeys" data-i18n-ru="Хоткеи">Хоткеи</a>
                         </nav>
                     </aside>
 
@@ -522,7 +507,6 @@
                                 <div id="testResult" class="test-result"></div>
                                 <div id="modelsList" class="models-list"></div>
                             </div>
-                            <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                         </div>
                     </div>
 
@@ -591,7 +575,6 @@
                                 <textarea id="systemPrompt" rows="3" placeholder="Ты — полезный ассистент..."></textarea>
                                 <small>Определяет роль и стиль ответов</small>
                             </div>
-                            <div class="btn-row"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                         </div>
                     </div>
 
@@ -638,7 +621,6 @@
                                     <small>Сколько повторять при сбое</small>
                                 </div>
                             </div>
-                            <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                         </div>
                     </div>
 
@@ -709,7 +691,6 @@
                         </div>
 
                         <div class="skill-list" id="skillList"></div>
-                        <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                     </div>
                     </div><!-- /settings-page agents -->
 
@@ -754,7 +735,6 @@
                         </div>
 
                         <div class="key-list" id="keyList"></div>
-                        <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                     </div>
                     </div><!-- /settings-page keys -->
 
@@ -872,57 +852,8 @@
                             <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M6.5 6.5a3.5 3.5 0 1 1 7 0v3a3.5 3.5 0 1 1-7 0z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17.5" cy="9" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="18" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span> MCP-серверы</h3>
                             <p class="block-desc">Подключите внешние MCP-серверы (STDIO-процессы или HTTP-эндпоинты). Их инструменты автоматически появятся в доступных инструментах м��дели (при включённом tool-calling).</p>
                             <div id="mcp-server-list" class="mcp-list"><div class="mcp-empty">Загрузка…</div></div>
-                            <div class="mcp-presets-row">
-                                <button class="test-btn" id="mcp-rag-preset-btn" onclick="mcpInstallRagPreset()" title="Подключить локальный RAG-сервер: индексация папок + поиск по документам"><span class="btn-ic"><svg class="ic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span> База знаний (RAG)</button>
-                                <button class="test-btn" id="mcp-media-preset-btn" onclick="mcpInstallMediaPreset()" title="Подключить медиа-сервер: генерация картинок, видео, аудио"><span class="btn-ic"><svg class="ic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 8h10M7 12h10M7 16h6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span> Медиа-генерация</button>
-                                <button class="test-btn" id="mcp-writer-preset-btn" onclick="mcpInstallWriterPreset()" title="Подключить генератор файлов: тексты, Office, код, архивы, данные"><span class="btn-ic"><svg class="ic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M14 2v6h6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 13h8M8 17h5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span> Генератор файлов</button>
-                                <button class="test-btn primary" id="mcp-add-btn" onclick="mcpShowAddForm()">＋ Добавить MCP-сервер</button>
-                            </div>
+                            <button class="test-btn primary" id="mcp-add-btn" onclick="mcpShowAddForm()">＋ Добавить MCP-сервер</button>
                             <div id="mcp-add-form" class="mcp-form" style="display:none"></div>
-                            <div class="form-group" style="margin-top:14px">
-                                <label for="maxIterations">Лимит итераций tool-calling</label>
-                                <input type="number" id="maxIterations" min="0" max="50" value="5" step="1">
-                                <small>Макс. число циклов «модель → инструмент → модель» за запрос. 0 = дефолт (5). Значение выше 50 обрежется до 50.</small>
-                            </div>
-                            <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
-
-                            <!-- Writer generation form -->
-                            <div class="settings-block" style="margin-top:20px">
-                                <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M14 2v6h6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span> Генерация файла</h3>
-                                <p class="block-desc">Явная форма для генерации файла через Writer MCP. Укажите тип, содержимое и файл-основу (опционально).</p>
-                                <div class="form-group">
-                                    <label for="writerFamily">Тип файла</label>
-                                    <select id="writerFamily" class="opt-input">
-                                        <option value="docx">Word (.docx)</option>
-                                        <option value="xlsx">Excel (.xlsx)</option>
-                                        <option value="pptx">PowerPoint (.pptx)</option>
-                                        <option value="pdf">PDF (.pdf)</option>
-                                        <option value="json">JSON</option>
-                                        <option value="csv">CSV</option>
-                                        <option value="txt">Текст (.txt)</option>
-                                        <option value="py">Код (.py)</option>
-                                        <option value="zip">Архив (.zip)</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="writerTitle">Название</label>
-                                    <input type="text" id="writerTitle" class="opt-input" placeholder="Мой документ">
-                                </div>
-                                <div class="form-group">
-                                    <label for="writerSpec">Спецификация / содержимое</label>
-                                    <textarea id="writerSpec" class="opt-input" rows="6" placeholder='JSON-spec для Office: {"title":"...","paragraphs":[...],"tables":[...]}. Для текста — просто текст. Для JSON/CSV — данные.'></textarea>
-                                </div>
-                                <div class="form-group">
-                                    <label for="writerSourceFile">Файл-основа (опционально)</label>
-                                    <input type="file" id="writerSourceFile" class="opt-input" accept=".docx,.xlsx,.pptx,.pdf,.csv,.json,.txt,.py">
-                                    <small>Если выбран, Writer прочитает структуру файла и объединит её с вашей спецификацией.</small>
-                                </div>
-                                <div class="btn-row">
-                                    <button class="test-btn primary" id="writerGenerateBtn" onclick="writerGenerate()">Сгенерировать</button>
-                                    <button class="test-btn" id="writerResultBtn" onclick="writerDownload()" style="display:none">Скачать результат</button>
-                                </div>
-                                <div id="writerResult" class="mcp-empty" style="margin-top:12px;display:none"></div>
-                            </div>
                         </div>
                     </div><!-- /settings-page mcp -->
 
@@ -1068,7 +999,6 @@
                         </div>
                         <button class="test-btn danger" id="wipeMemoryBtn">Очистить память</button>
                         <div id="memoryResult" class="test-result"></div>
-                        <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                     </div>
                     </div><!-- /settings-page memory -->
 
@@ -1178,7 +1108,6 @@
                                 <button class="test-btn primary" id="startChatWithBtn">Создать чат</button>
                             </div>
                             <div id="chatModeResult" class="test-result"></div>
-                            <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                         </div>
                     </div>
 
@@ -1357,153 +1286,12 @@
                                 </div>
                             </div>
 
-                            <!-- Блок 2b: Полный редактор тем (v2) -->
-                            <div class="themes-section" id="themeEditor">
-                                <div class="themes-section-head" data-i18n-en="Full theme editor (v2)">Полный редактор тем (v2)</div>
-                                <p class="block-desc" data-i18n-en="Edit any parameter of the current theme. Changes preview live; save as a new custom theme or update an existing custom one. Built-in themes cannot be overwritten.">Измените любой параметр текущей темы. Предпросмотр — живой. Сохраните как новую кастомную тему или обновите существующую кастомную. Встроенные темы перезаписать нельзя.</p>
-
-                                <!-- Живой предпросмотр -->
-                                <div class="te-preview" id="tePreview" aria-label="Предпросмотр темы" data-i18n-en-title="Theme preview">
-                                    <div class="te-preview-card">
-                                        <div class="te-preview-title">Карточка</div>
-                                        <div class="te-preview-text">Так выглядит текст на поверхности карточки.</div>
-                                        <div class="te-preview-field"><input type="text" placeholder="Поле ввода" readonly></div>
-                                        <div class="te-preview-btns">
-                                            <button class="btn te-preview-btn-primary">Основная</button>
-                                            <button class="btn te-preview-btn-ghost">Ghost</button>
-                                        </div>
-                                    </div>
-                                    <div class="te-contrast" id="teContrast">Контраст: —</div>
-                                </div>
-
-                                <!-- Быстрая настройка: цвета -->
-                                <details class="te-group" open>
-                                    <summary>Цвета (быстро)</summary>
-                                    <div class="te-grid">
-                                        <div class="te-cell"><label>Акцент</label><input type="color" id="teAccent" value="#8b86c9"></div>
-                                        <div class="te-cell"><label>Акцент 2</label><input type="color" id="teAccent2" value="#aba5c9"></div>
-                                        <div class="te-cell"><label>Фон 1</label><input type="color" id="teBg1" value="#05050a"></div>
-                                        <div class="te-cell"><label>Фон 2</label><input type="color" id="teBg2" value="#11131a"></div>
-                                        <div class="te-cell"><label>Фон 3</label><input type="color" id="teBg3" value="#0b0f14"></div>
-                                        <div class="te-cell"><label>Текст</label><input type="color" id="teText" value="#d0d0d0"></div>
-                                        <div class="te-cell"><label>Текст (dim)</label><input type="color" id="teTextDim" value="#8a8a9a"></div>
-                                        <div class="te-cell"><label>Стекло (alpha)</label><input type="range" id="teGlass" min="0" max="40" value="2"><small class="te-cell-val" id="teGlassVal">2%</small></div>
-                                        <div class="te-cell"><label>Сила границы</label><input type="range" id="teBorder" min="0" max="40" value="6"><small class="te-cell-val" id="teBorderVal">6%</small></div>
-                                        <div class="te-cell"><label>Статус: успех</label><input type="color" id="teSuccess" value="#4ade80"></div>
-                                        <div class="te-cell"><label>Статус: warning</label><input type="color" id="teWarning" value="#facc15"></div>
-                                        <div class="te-cell"><label>Статус: danger</label><input type="color" id="teDanger" value="#f87171"></div>
-                                        <div class="te-cell"><label>Статус: info</label><input type="color" id="teInfo" value="#8ab4ff"></div>
-                                    </div>
-                                </details>
-
-                                <!-- Поля ввода -->
-                                <details class="te-group">
-                                    <summary>Поля ввода</summary>
-                                    <div class="te-grid">
-                                        <div class="te-cell"><label>Фон поля</label><input type="color" id="teFieldBg"></div>
-                                        <div class="te-cell"><label>Граница поля</label><input type="color" id="teFieldBorder"></div>
-                                        <div class="te-cell"><label>Текст поля</label><input type="color" id="teFieldText"></div>
-                                        <div class="te-cell"><label>Placeholder</label><input type="color" id="teFieldPlaceholder"></div>
-                                    </div>
-                                </details>
-
-                                <!-- Поверхности -->
-                                <details class="te-group">
-                                    <summary>Поверхности</summary>
-                                    <div class="te-grid">
-                                        <div class="te-cell"><label>Карточка</label><input type="color" id="teCardBg"></div>
-                                        <div class="te-cell"><label>Карточка-2</label><input type="color" id="teCardBg2"></div>
-                                        <div class="te-cell"><label>Модалка</label><input type="color" id="teModalBg"></div>
-                                        <div class="te-cell"><label>Оверлей (alpha)</label><input type="range" id="teOverlay" min="0" max="90" value="62"><small class="te-cell-val" id="teOverlayVal">62%</small></div>
-                                        <div class="te-cell"><label>Дропдаун</label><input type="color" id="teDropdownBg"></div>
-                                        <div class="te-cell"><label>Тултип</label><input type="color" id="teTooltipBg"></div>
-                                        <div class="te-cell"><label>Код</label><input type="color" id="teCodeBg"></div>
-                                        <div class="te-cell"><label>Таблица</label><input type="color" id="teTableBg"></div>
-                                        <div class="te-cell"><label>Hover строки</label><input type="color" id="teTableHover"></div>
-                                        <div class="te-cell"><label>Скроллбар (палец)</label><input type="color" id="teScrollbarThumb"></div>
-                                        <div class="te-cell"><label>Скроллбар (трек)</label><input type="color" id="teScrollbarTrack"></div>
-                                        <div class="te-cell"><label>Контрол (фон)</label><input type="color" id="teControlBg"></div>
-                                        <div class="te-cell"><label>Контрол (граница)</label><input type="color" id="teControlBorder"></div>
-                                        <div class="te-cell"><label>Контрол (отметка)</label><input type="color" id="teControlChecked"></div>
-                                    </div>
-                                </details>
-
-                                <!-- Форма и эффекты -->
-                                <details class="te-group">
-                                    <summary>Форма и эффекты</summary>
-                                    <div class="te-grid">
-                                        <div class="te-cell"><label>Радиус</label><input type="range" id="teRadius" min="4" max="40" value="18"><small class="te-cell-val" id="teRadiusVal">18px</small></div>
-                                        <div class="te-cell"><label>Blur</label><input type="range" id="teBlur" min="0" max="40" value="18"><small class="te-cell-val" id="teBlurVal">18px</small></div>
-                                        <div class="te-cell"><label>Glow</label><input type="range" id="teGlow" min="0" max="100" value="35"><small class="te-cell-val" id="teGlowVal">35%</small></div>
-                                        <div class="te-cell"><label>Тень</label>
-                                            <select id="teShadow" class="opt-select">
-                                                <option value="sm">Маленькая</option>
-                                                <option value="md" selected>Средняя</option>
-                                                <option value="lg">Большая</option>
-                                            </select>
-                                        </div>
-                                        <div class="te-cell"><label>Скорость анимации</label>
-                                            <select id="teMotion" class="opt-select">
-                                                <option value="fast">Быстро</option>
-                                                <option value="normal" selected>Обычно</option>
-                                                <option value="slow">Медленно</option>
-                                                <option value="off">Выкл</option>
-                                            </select>
-                                        </div>
-                                        <div class="te-cell"><label>Шрифт body</label>
-                                            <select id="teFont" class="opt-select">
-                                                <option value="system">Системный</option>
-                                                <option value="inter">Inter</option>
-                                                <option value="georgia">Georgia</option>
-                                                <option value="mono">Моно</option>
-                                                <option value="rounded">Скруглённый</option>
-                                                <option value="custom">Свой…</option>
-                                            </select>
-                                            <input type="text" id="teFontCustom" class="opt-input" placeholder="Напр. 'Fira Code', monospace" style="display:none;margin-top:4px">
-                                        </div>
-                                        <div class="te-cell"><label>Шрифт заголовков</label>
-                                            <select id="teHeadingFont" class="opt-select">
-                                                <option value="system">Системный</option>
-                                                <option value="inter">Inter</option>
-                                                <option value="georgia">Georgia</option>
-                                                <option value="mono">Моно</option>
-                                                <option value="custom">Свой…</option>
-                                            </select>
-                                            <input type="text" id="teHeadingFontCustom" class="opt-input" placeholder="Напр. 'Georgia', serif" style="display:none;margin-top:4px">
-                                        </div>
-                                        <div class="te-cell"><label>Масштаб шрифта</label><input type="range" id="teScale" min="85" max="120" value="100"><small class="te-cell-val" id="teScaleVal">100%</small></div>
-                                    </div>
-                                </details>
-
-                                <!-- Название + действия -->
-                                <div class="te-actions">
-                                    <div class="te-name-row">
-                                        <label class="home-sublabel" for="teName">Название темы</label>
-                                        <input type="text" id="teName" class="opt-input" placeholder="Моя тема">
-                                    </div>
-                                    <div class="te-btn-row">
-                                        <button class="test-btn primary" id="teSaveNew">Сохранить как новую</button>
-                                        <button class="test-btn" id="teUpdate">Обновить текущую</button>
-                                        <button class="test-btn" id="teDuplicate">Дублировать</button>
-                                        <button class="test-btn danger" id="teDelete">Удалить</button>
-                                    </div>
-                                    <div class="te-btn-row">
-                                        <button class="test-btn" id="teExport">Экспорт JSON</button>
-                                        <button class="test-btn" id="teImport">Импорт JSON</button>
-                                        <button class="test-btn" id="teReset">Сброс</button>
-                                        <input type="file" id="teImportFile" accept="application/json,.json" style="display:none">
-                                    </div>
-                                    <div class="te-warning" id="teWarning" hidden></div>
-                                </div>
-                            </div>
-
                             <!-- Блок 3: Шрифт и фон -->
                             <div class="themes-section">
                                 <div class="themes-section-head">Шрифт и фон</div>
                                 <div class="form-group">
                                     <label>Шрифт интерфейса</label>
                                     <select id="fontPick" class="opt-select"></select>
-                                    <input id="fontCustom" class="opt-input" type="text" placeholder="Напр. 'Fira Code', monospace" style="display:none;margin-top:6px;width:100%">
                                 </div>
                                 <div class="form-group">
                                     <label>Плотность интерфейса</label>
@@ -1541,15 +1329,8 @@
                                     <div id="cfgList" class="storage-items"></div>
                                 </div>
                             </div>
-                            <div class="btn-row" style="margin-top:12px"><button class="test-btn primary" onclick="saveSettings(); flashStatus('Настройки сохранены')">Сохранить</button></div>
                         </div>
                     </div><!-- /settings-page themes -->
-
-                    <div class="settings-page" id="sec-hotkeys" data-sec="sec-hotkeys" hidden>
-                        <h3>Хоткеи</h3>
-                        <p class="hint">Нажмите «Назначить» и затем клавишу. По умолчанию все хоткеи не назначены. Комбинации: Ctrl / Alt / Shift + буква или цифра.</p>
-                        <div id="hotkeySettingsContainer"></div>
-                    </div><!-- /settings-page hotkeys -->
 
                 </div><!-- /settings-form -->
                 </div><!-- /settings-pages -->
@@ -1972,21 +1753,6 @@
         </div>
     </div>
 
-    <!-- Модалка: результат теста MCP-сервера (список инструментов) -->
-    <div class="modal-overlay hidden" id="mcpToolsModal">
-        <div class="modal-glass">
-            <div style="display:flex;align-items:center;gap:10px">
-                <span class="btn-ic" style="color:var(--accent)"><svg class="ic" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 3v6M15 3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M6 9h12v3a6 6 0 01-6 6 6 6 0 01-6-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 18v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-                <h3 id="mcpToolsTitle">MCP-сервер</h3>
-            </div>
-            <p class="block-desc" id="mcpToolsSummary"></p>
-            <div id="mcpToolsList" class="mcp-tools-list"></div>
-            <div class="btn-row">
-                <button class="test-btn" id="mcpToolsClose" type="button">Закрыть</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Модалка: подтверждение действия инструмента -->
     <div class="modal-overlay hidden" id="toolConfirmModal">
         <div class="modal-glass">
@@ -2026,20 +1792,12 @@
         </div>
     </div>
 
-    <script src="./js/core/token-estimator.js"></script>
-    <script src="./js/core/secure-store.js"></script>
-    <script src="./js/core/theme-schema.js"></script>
+    <script src="./js/token-estimator.js"></script>
+    <script src="./js/secure-store.js"></script>
 
-    <script src="./js/core/commands.js"></script>
-    <script src="./js/core/hotkeys.js"></script>
-    <script src="./js/components/helpOverlay.js"></script>
-    <script src="./js/components/filegenChoice.js"></script>
-    <script src="./js/pages/logsDashboard.js"></script>
-
-    <script src="./js/core/i18n.js"></script>
-    <script src="./js/core/themes.js"></script>
-    <script src="./js/core/theme-editor.js"></script>
-    <script src="./js/core/extensions.js"></script>
+    <script src="./js/i18n.js"></script>
+    <script src="./js/themes.js"></script>
+    <script src="./js/extensions.js"></script>
     <script>
         // После полной загрузки — инициализируем frontend-расширения
         window.addEventListener('load', function () {
@@ -2113,13 +1871,10 @@
             </div>
         </div>
     </div>
-    <script src="./js/core/update-ui.js"></script>
-    <script src="./js/core/main.js"></script>
-    <script src="./js/media/media-overlay.js"></script>
-    <script src="./js/core/bootstrap.js"></script>
     <script src="./js/media/player-browser.js"></script>
     <script src="./js/media/voice.js"></script>
-    <script src="./js/core/init.js"></script>
+    <script src="./js/core/update-ui.js"></script>
+    <script src="./js/core/main.js"></script>
     <script src="./js/mcp/mcp.js"></script>
     <script>
         // Инициализация UI обновлений (баннер + диалог)

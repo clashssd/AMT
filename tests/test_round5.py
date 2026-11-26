@@ -5,7 +5,7 @@ import re
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAIN_PY = os.path.join(BASE, "backend", "main.py")
 MAIN_JS = os.path.join(BASE, "frontend", "js", "main.js")
-PB_JS = os.path.join(BASE, "frontend", "js", "player-browser.js")
+PB_JS = os.path.join(BASE, "frontend", "js", "media", "player-browser.js")
 STYLE_CSS = os.path.join(BASE, "frontend", "css", "style.css")
 WEB_SCRAPER = os.path.join(BASE, "backend", "ai_engine", "web_scraper.py")
 

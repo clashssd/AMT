@@ -5,6 +5,7 @@
 # Frontend + extensions включаются через datas (self-contained бинарник).
 
 import os
+import shutil
 
 block_cipher = None
 
@@ -25,8 +26,8 @@ _VOSK_PKG = os.path.join(
 )
 
 a = Analysis(
-    ['main.py'],
-    pathex=['.'],
+    [os.path.join(_BACKEND_DIR, 'main.py')],
+    pathex=[_BACKEND_DIR, os.path.join(_BACKEND_DIR, '..')],
     binaries=[
         # Vosk native DLLs — bundle into _internal/ root so the runtime can find them.
         # PyInstaller binaries format: (abs_source, relative_dest_dir)
@@ -36,11 +37,13 @@ a = Analysis(
     ],
     datas=[
         # Фронтенд (HTML/CSS/JS) -> _internal/frontend
-        (_FRONTEND, os.path.join('frontend')),
+        (_FRONTEND, 'frontend'),
         # Расширения (manifest + js + py) -> _internal/extensions
-        (_EXTENSIONS, os.path.join('extensions')),
+        (_EXTENSIONS, 'extensions'),
         # Реестр slash-команд -> _internal/command_registry.json
         (os.path.join(_BACKEND_DIR, 'command_registry.json'), '.'),
+        # Локальные Python-пакеты (ai_engine, rag_server, command_engine, logging_structured)
+        (_BACKEND_DIR, '.'),
     ],
     hiddenimports=[
         # uvicorn + httpx ASGI-сервер
@@ -68,8 +71,7 @@ a = Analysis(
         'docx', 'openpyxl', 'pptx', 'reportlab', 'markdown', 'pygments',
         # UI Automation (Windows UIA — динамический импорт в desktop_tools.py)
         'comtypes', 'comtypes.client', 'comtypes.server',
-        'comtypes._comobject', 'comtypes._enum', 'comtypes._generate',
-        'comtypes._util', 'comtypes.automation',
+        'comtypes.automation',
         # MCP (Task 6: mcp_manager.py lazy-imports mcp.client.stdio/streamable_http;
         # the package ships JSON schemas + data files, so use collect_all below)
         'mcp', 'mcp.client', 'mcp.client.stdio', 'mcp.client.streamable_http',
@@ -78,6 +80,7 @@ a = Analysis(
         'ai_engine.tool_registry', 'ai_engine.mcp_manager',
         # Coding profile, permissions, and project-scoped coding tools
         'ai_engine.coding_profile', 'ai_engine.permissions', 'ai_engine.coding_tools',
+        'ai_engine.coding_orchestrator',
         # Локальный RAG MCP-сервер (backend/rag_server). Dev: запуск как
         # `python -m rag_server` (loose source). Packaged: бандлер
         # amt-backend.exe в режиме RAG (env AMT_BACKEND_MODE=rag) импортирует
@@ -85,8 +88,10 @@ a = Analysis(
         # rag_server.server import main` в entrypoint main.py работает без
         # loose-файлов. Бандлится вместе с backend'ом.
         'rag_server', 'rag_server.server', 'rag_server.engine', 'rag_server.parsers',
+        # Локальный media MCP-сервер (backend/media_server)
+        'media_server', 'media_server.server',
     ],
-    collect_all=['mcp'],
+    collect_all=['mcp', 'ai_engine', 'rag_server', 'media_server'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -117,3 +122,14 @@ coll = COLLECT(
     name='amt-backend',
     **{"distpath": _DIST, "workpath": os.path.join(_DIST, ".pybuild"), "specpath": _BACKEND_DIR},
 )
+
+# PyInstaller's COLLECT does not reliably place backend files at the root of
+# _internal/ when using datas entries. Explicitly copy command_registry.json
+# (and any other top-level backend JSON data) into dist/amt-backend/_internal/.
+_INTERNAL = os.path.join(_DIST, 'amt-backend', '_internal')
+if os.path.isdir(_INTERNAL):
+    for _fn in ('command_registry.json',):
+        _src = os.path.join(_BACKEND_DIR, _fn)
+        _dst = os.path.join(_INTERNAL, _fn)
+        if os.path.exists(_src):
+            shutil.copy2(_src, _dst)

@@ -21,6 +21,10 @@ def _find_registry_path() -> Path:
     candidate = Path(__file__).parent / 'command_registry.json'
     if candidate.exists():
         return candidate
+    # Dev/Packaged fallback: рядом с backend-каталогом (если бандлер его развернул)
+    backend_candidate = Path(__file__).resolve().parent / 'command_registry.json'
+    if backend_candidate.exists():
+        return backend_candidate
     # Fallback: в текущей папке
     candidate = Path.cwd() / 'command_registry.json'
     if candidate.exists():

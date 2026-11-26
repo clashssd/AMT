@@ -18,6 +18,7 @@ import asyncio
 import re
 import logging
 import time
+from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 from datetime import datetime
 from ai_engine.memory import Memory
@@ -39,15 +40,20 @@ from ai_engine.coding_profile import resolve_chat_profile, ChatProfile
 from ai_engine.coding_tools import ProjectContext, CodingToolset
 from ai_engine.permissions import ApprovalGate
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    _lifespan_init_mcp(app)
+    _lifespan_load_extensions(app)
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 # MCP manager singleton (initialized lazily at startup).
 # `None` until the startup hook runs; all call sites guard with `if mcp_manager:`.
 mcp_manager: "MCPManager | None" = None
 
 
-@app.on_event("startup")
-async def _startup_init_mcp():
+def _lifespan_init_mcp(app):
     """Initialize the MCP manager and register atexit cleanup."""
     global mcp_manager
     import atexit
@@ -60,8 +66,7 @@ async def _startup_init_mcp():
         atexit.register(mcp_manager.shutdown)
 
 
-@app.on_event("startup")
-async def _startup_load_extensions():
+def _lifespan_load_extensions(app):
     """Загружает backend-расширения при старте."""
     try:
         ext_loader.load_extensions()

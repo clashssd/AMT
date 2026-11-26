@@ -121,6 +121,13 @@ async def run_com_sync(
             "code": "timeout",
             "error": f"Таймаут COM-операции ({timeout:.1f}s): {fn.__name__}",
         }
+    except PermissionError as e:
+        logger.warning("run_com_sync permission denied: %s", e)
+        return {
+            "ok": False,
+            "code": "denied",
+            "error": str(e),
+        }
     except Exception as e:
         logger.warning("run_com_sync exception: %s", e)
         return {

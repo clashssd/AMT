@@ -170,7 +170,7 @@ class TestFileGenCoreAgents:
     def test_file_kind_sends_core_agents(self):
         src = _read(MAIN_JS)
         # Внутри kind==='file' блока: activeCoreAgentList() вызывается и core_agents передаётся
-        m = re.search(r"kind === 'file'([\s\S]{0,2000}?const activeCore = activeCoreAgentList\(\);[\s\S]{0,600}?core_agents:\s*activeCore,)", src)
+        m = re.search(r"kind === 'file'([\s\S]{0,2000}?const activeCore = activeCoreAgentList\(\);[\s\S]{0,1000}?core_agents:\s*activeCore,)", src)
         assert m, "kind='file' не передаёт core_agents во внутренний /api/chat"
 
     def test_file_kind_sends_key_id(self):

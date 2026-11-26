@@ -4779,7 +4779,7 @@ code {
     color: var(--text-dim, #c8c8d0);
 }
 .ext-hub-toggle input { cursor: pointer; }
-/* ===== MCP-серверы: настройки + хранилище ===== */
+/* ===== MCP-СЃРµСЂРІРµСЂС‹: РЅР°СЃС‚СЂРѕР№РєРё + С…СЂР°РЅРёР»РёС‰Рµ ===== */
 .mcp-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
 .mcp-empty { font-size: 12px; color: var(--text-dim, #c8c8d0); padding: 12px; text-align: center; }
 .mcp-server-card {

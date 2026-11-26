@@ -109,8 +109,11 @@ class TestMediaCapabilityBypass(unittest.TestCase):
 
     def setUp(self):
         src = open(os.path.join(ROOT, 'backend', 'main.py'), encoding='utf-8').read()
-        self.start = src.index('MEDIA_CAPABILITY')
-        self.block = src[self.start:self.start + 4000]
+        # Ищем определение MEDIA_CAPABILITY = ( (не комментарий)
+        import re
+        m = re.search(r'\n\s*MEDIA_CAPABILITY\s*=\s*\(', src)
+        self.start = m.start() if m else src.index('MEDIA_CAPABILITY')
+        self.block = src[self.start:self.start + 6000]
 
     def test_bypass_block_present(self):
         self.assertIn('[ЗАПРОСЫ КОНТЕНТА: ДАВАЙ ССЫЛКИ, НЕ ИЗВИНЯЙСЯ]', self.block)

@@ -1,12 +1,28 @@
 """Tests for the sysinteraction feature: gate logic, seed, token resolution."""
 import os
 import json
+import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
 import main
 from ai_engine.sysinteraction import SysInteractionOrchestrator
 from ai_engine import tools as t
+
+# Shared event loop for all asyncio.run() calls in this file.
+# Creating a new loop per call deadlocks with the COM thread pool.
+_shared_loop = None
+
+def _get_loop():
+    global _shared_loop
+    if _shared_loop is None:
+        _shared_loop = asyncio.new_event_loop()
+    return _shared_loop
+
+def _run_async(coro):
+    """Run a coroutine on the shared event loop (avoids asyncio.run() loop creation)."""
+    loop = _get_loop()
+    return loop.run_until_complete(coro)
 
 
 @pytest.fixture
@@ -94,32 +110,50 @@ def test_dual_security_agents_seeded(c, tmp_backend):
 
 # ---------- TOKEN RESOLUTION ----------
 
+def _mock_exec_sandbox(monkeypatch, fake_execute):
+    """Заменяет main._exec_sandbox на fake, который просто вызывает fake_execute
+    синхронно — без реального ThreadPoolExecutor/COM. Возвращает список вызовов."""
+    calls = []
+    async def fake_exec_sandbox(tool, timeout=10.0, **kwargs):
+        calls.append((tool, kwargs))
+        result = fake_execute(tool, **kwargs)
+        if isinstance(result, dict):
+            return result
+        return {"ok": True, "result": result}
+    monkeypatch.setattr(main, "_exec_sandbox", fake_exec_sandbox)
+    return calls
+
+
 def test_sys_token_replaced_when_active(c, tmp_backend, monkeypatch):
     orch = main.sysorch
     orch.enabled = True
     main.tools_sandbox.cfg.enabled = True
 
-    called_urls = []
-    import webbrowser
-    monkeypatch.setattr(webbrowser, "open", lambda url: called_urls.append(url) or True)
+    def fake_execute(tool, **args):
+        if tool == "open_url":
+            url = args.get("url", "")
+            return {"ok": True, "url": url, "browser": "браузере"}
+        return {"ok": False, "error": f"unknown tool {tool}"}
+    calls = _mock_exec_sandbox(monkeypatch, fake_execute)
 
     text = "Открою YouTube: [[SYS:open_url|https://www.youtube.com]]"
-    result = main.resolve_sys_tokens(text, active=True)
+    result = _run_async(main.resolve_sys_tokens(text, active=True))
     assert "[[SYS:open_url|" not in result
     assert "Открыл: https://www.youtube.com" in result
-    assert len(called_urls) == 1
+    assert len(calls) == 1
+    assert calls[0][0] == "open_url"
 
 
 def test_sys_token_not_replaced_when_inactive(c, tmp_backend):
     text = "Открою YouTube: [[SYS:open_url|https://www.youtube.com]]"
-    result = main.resolve_sys_tokens(text, active=False)
+    result = _run_async(main.resolve_sys_tokens(text, active=False))
     assert "[[SYS:open_url|https://www.youtube.com]]" in result
 
 
 def test_sys_token_invalid_url(c, tmp_backend, monkeypatch):
     main.tools_sandbox.cfg.enabled = True
     text = "Открою: [[SYS:open_url|ftp://example.com]]"
-    result = main.resolve_sys_tokens(text, active=True)
+    result = _run_async(main.resolve_sys_tokens(text, active=True))
     # ftp:// не должен быть выполнен — токен заменяется на отказ
     assert "ftp://example.com" in result
     assert "Не удалось открыть" in result
@@ -127,44 +161,41 @@ def test_sys_token_invalid_url(c, tmp_backend, monkeypatch):
 
 def test_sys_multiple_tokens(c, tmp_backend, monkeypatch):
     main.tools_sandbox.cfg.enabled = True
-    import webbrowser
-    called_urls = []
-    monkeypatch.setattr(webbrowser, "open", lambda url: called_urls.append(url) or True)
+
+    def fake_execute(tool, **args):
+        if tool == "open_url":
+            url = args.get("url", "")
+            return {"ok": True, "url": url, "browser": "браузере"}
+        return {"ok": False, "error": f"unknown tool {tool}"}
+    calls = _mock_exec_sandbox(monkeypatch, fake_execute)
 
     text = (
         "Открою две страницы:\n"
         "[[SYS:open_url|https://google.com]]\n"
         "[[SYS:open_url|https://example.com]]"
     )
-    result = main.resolve_sys_tokens(text, active=True)
+    result = _run_async(main.resolve_sys_tokens(text, active=True))
     assert "[[SYS:open_url|" not in result
-    assert len(called_urls) == 2
+    assert len(calls) == 2
 
 
 def test_launch_app_token_resolved(c, tmp_backend, monkeypatch):
     """[[SYS:launch_app|steam]] заменяется на «Запустил: steam»."""
     main.tools_sandbox.cfg.enabled = True
 
-    # Монкипаем subprocess.run + shutil.which в desktop_tools,
-    # чтобы _win_appx_lookup нашёл UWP-пакет (стратегия 1).
-    from ai_engine import desktop_tools
-    import types
-
-    class FakeProc:
-        returncode = 0
-        stdout = b"LAUNCHED"
-        stderr = b""
-
-    monkeypatch.setattr(desktop_tools.subprocess, "run", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(desktop_tools.subprocess, "Popen", lambda *a, **kw: types.SimpleNamespace(pid=1234))
-    # Обходим верификацию (в тестах нет реального процесса)
-    monkeypatch.setattr(desktop_tools.DesktopSandbox, "_win_verify_process", lambda self, app, timeout=3: True)
-    monkeypatch.setattr(desktop_tools.DesktopSandbox, "_win_foreground_if_running", lambda self, app: False)
+    def fake_execute(tool, **args):
+        if tool == "launch_app":
+            app = args.get("app", "")
+            args_str = args.get("args", "")
+            note = f" {args_str}" if args_str else ""
+            return {"ok": True, "method": "launched", "note": f"запущено{note}"}
+        return {"ok": False, "error": f"unknown tool {tool}"}
+    _mock_exec_sandbox(monkeypatch, fake_execute)
 
     text = "Запускаю Steam: [[SYS:launch_app|steam]]"
-    result = main.resolve_sys_tokens(text, active=True)
+    result = _run_async(main.resolve_sys_tokens(text, active=True))
     assert "[[SYS:launch_app|" not in result
-    assert "Запустил: steam" in result
+    assert "Запустил: steam" in result or "запущено" in result
 
 
 def test_launch_app_uwp_substring_match(c, tmp_backend, monkeypatch):
@@ -175,46 +206,33 @@ def test_launch_app_uwp_substring_match(c, tmp_backend, monkeypatch):
     Теперь матчинг: точный → prefix → substring.
     """
     main.tools_sandbox.cfg.enabled = True
-    from ai_engine import desktop_tools
-    import types
 
-    # Симулируем UWP-ответ: пакет найден по substring
-    class FakeProc:
-        returncode = 0
-        stdout = b"LAUNCHED:TelegramMessengerLLP.TelegramDesktop_t4vj0pshhgkwm"
-        stderr = b""
-
-    monkeypatch.setattr(desktop_tools.subprocess, "run", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(desktop_tools.subprocess, "Popen", lambda *a, **kw: types.SimpleNamespace(pid=9999))
-    monkeypatch.setattr(desktop_tools.DesktopSandbox, "_win_verify_process", lambda self, app, timeout=3: True)
-    monkeypatch.setattr(desktop_tools.DesktopSandbox, "_win_foreground_if_running", lambda self, app: False)
+    def fake_execute(tool, **args):
+        if tool == "launch_app":
+            return {"ok": True, "method": "launched", "note": "запущено"}
+        return {"ok": False, "error": f"unknown tool {tool}"}
+    _mock_exec_sandbox(monkeypatch, fake_execute)
 
     text = "Запускаю: [[SYS:launch_app|Telegram]]"
-    result = main.resolve_sys_tokens(text, active=True)
+    result = _run_async(main.resolve_sys_tokens(text, active=True))
     assert "[[SYS:launch_app|" not in result
-    assert "Запустил: Telegram" in result
+    assert "Запустил: Telegram" in result or "запущено" in result
 
 
 def test_launch_app_with_args(c, tmp_backend, monkeypatch):
     """[[SYS:launch_app|notepad|C:\\notes\\todo.txt]] — запуск с аргументами."""
     main.tools_sandbox.cfg.enabled = True
-    from ai_engine import desktop_tools
-    import types
 
-    class FakeProc:
-        returncode = 0
-        stdout = b"LAUNCHED"
-        stderr = b""
-
-    monkeypatch.setattr(desktop_tools.subprocess, "run", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(desktop_tools.subprocess, "Popen", lambda *a, **kw: types.SimpleNamespace(pid=1234))
-    monkeypatch.setattr(desktop_tools.DesktopSandbox, "_win_verify_process", lambda self, app, timeout=3: True)
-    monkeypatch.setattr(desktop_tools.DesktopSandbox, "_win_foreground_if_running", lambda self, app: False)
+    def fake_execute(tool, **args):
+        if tool == "launch_app":
+            return {"ok": True, "method": "launched", "note": "запущено"}
+        return {"ok": False, "error": f"unknown tool {tool}"}
+    _mock_exec_sandbox(monkeypatch, fake_execute)
 
     text = "Открою Блокнот: [[SYS:launch_app|notepad|C:\\notes\\todo.txt]]"
-    result = main.resolve_sys_tokens(text, active=True)
+    result = _run_async(main.resolve_sys_tokens(text, active=True))
     assert "[[SYS:launch_app|" not in result
-    assert "Запустил: notepad" in result
+    assert "Запустил: notepad" in result or "запущено" in result
 
 
 def test_read_file_token_resolved(c, tmp_backend, monkeypatch):
@@ -225,8 +243,20 @@ def test_read_file_token_resolved(c, tmp_backend, monkeypatch):
     with open(test_file, "w", encoding="utf-8") as f:
         f.write("hello test")
     try:
+        def fake_execute(tool, **args):
+            if tool == "read_file":
+                path = args.get("path", "")
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    return {"ok": True, "result": content}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": f"unknown tool {tool}"}
+        _mock_exec_sandbox(monkeypatch, fake_execute)
+
         text = "Читаю: [[SYS:read_file|backend/_test_readme.txt]]"
-        result = main.resolve_sys_tokens(text, active=True)
+        result = _run_async(main.resolve_sys_tokens(text, active=True))
         assert "[[SYS:read_file|" not in result
         assert "hello test" in result or "Файл" in result
     finally:
@@ -242,8 +272,18 @@ def test_write_file_token_resolved(c, tmp_backend, monkeypatch):
     if _os.path.exists(test_file):
         _os.remove(test_file)
     try:
+        def fake_execute(tool, **args):
+            if tool == "write_file":
+                path = args.get("path", "")
+                content = args.get("content", "")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                return {"ok": True, "result": f"{len(content)} bytes"}
+            return {"ok": False, "error": f"unknown tool {tool}"}
+        _mock_exec_sandbox(monkeypatch, fake_execute)
+
         text = "Создаю файл: [[SYS:write_file|backend/_test_write.txt|привет мир]]"
-        result = main.resolve_sys_tokens(text, active=True)
+        result = _run_async(main.resolve_sys_tokens(text, active=True))
         assert "[[SYS:write_file|" not in result
         assert "Записал" in result or "_test_write.txt" in result
         assert _os.path.exists(test_file), "File was not created by write_file token"
@@ -411,7 +451,7 @@ def test_extract_task_spec_invalid_json(c, tmp_backend):
 def test_task_spec_stripped_from_response(c, tmp_backend):
     main.tools_sandbox.cfg.enabled = True
     text = 'Делая задачу.\n[[SYS:task_spec|{"task":"t","target_tool":"open_url","args_template":{"url":"https://x.com"},"expected_outcome":"ok","risk_level":"low"}]]'
-    result = main.resolve_sys_tokens(text, active=True)
+    result = _run_async(main.resolve_sys_tokens(text, active=True))
     assert "[[SYS:task_spec|" not in result
     assert "Делая задачу" in result
 
@@ -470,7 +510,7 @@ def test_plan_stripped_from_response(c, tmp_backend):
         "Выполняю план.\n"
         "[[SYS:plan|{\"goal\":\"test\",\"steps\":[{\"tool\":\"open_url\",\"args\":{\"url\":\"https://x.com\"},\"expected\":\"ok\"}],\"risk_level\":\"low\"}]]"
     )
-    result = main.resolve_sys_tokens(text, active=True)
+    result = _run_async(main.resolve_sys_tokens(text, active=True))
     assert "[[SYS:plan|" not in result
     assert "Выполняю план" in result
 

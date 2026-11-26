@@ -52,6 +52,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
+    
+    // Кнопка Help
+    const composerHelpBtn = document.getElementById('composerHelpBtn');
+    if (composerHelpBtn) {
+        composerHelpBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (window.AMTHelp) {
+                window.AMTHelp.show();
+            }
+        });
+    }
+    
     // Кнопки композера: attach, tool, web/thinker/jailbreak
     if (attachBtn) attachBtn.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
     if (fileInput) fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files));
@@ -96,8 +108,61 @@ document.addEventListener('DOMContentLoaded', async () => {
     sendBtn.addEventListener('click', sendMessage);
     stopBtn.addEventListener('click', stopStreaming);
     messageInput.addEventListener('input', adjustTextareaHeight);
+    
+    // Подсказки команд при вводе /
+    let suggestionsEl = null;
+    messageInput.addEventListener('input', async () => {
+        const value = messageInput.value;
+        if (value.startsWith('/')) {
+            const suggestions = await window.AMTCommands.showCommandSuggestions(value);
+            if (suggestions.length > 0) {
+                if (!suggestionsEl) {
+                    suggestionsEl = document.createElement('div');
+                    suggestionsEl.className = 'command-suggestions';
+                    messageInput.parentElement.appendChild(suggestionsEl);
+                }
+                suggestionsEl.innerHTML = suggestions.map(s => `
+                    <div class="command-suggestion-item" data-cmd="${s.id}">
+                        <div class="suggestion-label">${s.label}</div>
+                        <div class="suggestion-desc">${s.description}</div>
+                    </div>
+                `).join('');
+                suggestionsEl.classList.add('visible');
+                
+                // Обработчик выбора
+                suggestionsEl.querySelectorAll('.command-suggestion-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const cmd = item.dataset.cmd;
+                        messageInput.value = '/' + cmd + ' ';
+                        messageInput.dispatchEvent(new Event('input'));
+                        closeSuggestions();
+                    });
+                });
+            } else {
+                closeSuggestions();
+            }
+        } else {
+            closeSuggestions();
+        }
+    });
+    
+    function closeSuggestions() {
+        if (suggestionsEl) {
+            suggestionsEl.classList.remove('visible');
+            setTimeout(() => {
+                if (suggestionsEl && !suggestionsEl.classList.contains('visible')) {
+                    suggestionsEl.remove();
+                    suggestionsEl = null;
+                }
+            }, 200);
+        }
+    }
+    
     messageInput.addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+        if (e.key === 'Escape' && suggestionsEl?.classList.contains('visible')) {
+            closeSuggestions();
+        }
     });
     // Навигация
     navLinks.forEach(a => {

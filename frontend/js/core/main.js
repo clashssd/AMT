@@ -74,7 +74,9 @@ const dashEmpty = document.getElementById('dashEmpty');
 const dashEvent = document.getElementById('dashEvent');
 const dashFilterChips = document.getElementById('dashFilterChips');
 const rawLogsWrap = document.getElementById('rawLogsWrap');
-let logViewMode = 'dash';        // 'dash' | 'raw'
+const structuredLogsWrap = document.getElementById('structuredLogsWrap');
+const structuredLogsContainer = document.getElementById('structuredLogsContainer');
+let logViewMode = 'dash';        // 'dash' | 'structured' | 'raw'
 let dashFilter = 'all';
 let dashData = null;             // {tasks, stats}
 const wipeMemoryBtn = document.getElementById('wipeMemoryBtn');
@@ -1672,28 +1674,60 @@ async function uploadAttachments() {
 
 
 async function sendMessage() {
-    const text = messageInput.value.trim();
+    const rawText = messageInput.value.trim();
     const hasFiles = attachedFiles.length > 0;
-    if ((!text && !hasFiles) || isStreaming) return;
+    if ((!rawText && !hasFiles) || isStreaming) return;
 
     messageInput.value = '';
     adjustTextareaHeight();
     hideWelcome();
 
+    // ПРОВЕРЯЕМ SLASH-КОМАНДЫ
+    let finalText = rawText;
+    let commands = [];
+    
+    if (rawText.startsWith('/')) {
+        const parsed = window.AMTCommands.parseCommands(rawText);
+        commands = parsed.commands;
+        finalText = parsed.text;
+        
+        // Если остались только команды без текста — используем описание
+        if (!finalText && commands.length > 0) {
+            finalText = 'Выполни команду: ' + commands.map(c => '/' + c.id).join(' + ');
+        }
+        
+        // Если /gen file и MCP Writer доступен — показываем выбор (базовая модель vs MCP)
+        const genCmd = commands.find(c => c.id === 'gen' && c.args && c.args.type === 'file');
+        if (genCmd && window.AMTFileGenChoice) {
+            const mcpAvailable = await isMcpWriterAvailable();
+            if (mcpAvailable) {
+                const choice = await window.AMTFileGenChoice.show();
+                if (choice === null) return; // отмена — прерываем отpravку
+                // Выбор влияет на enabled_tools: mcp → mcp__writer__*, base → create_office и т.д.
+                // Backend сам решит по enabled_tools из команды, но мы можем уточнить:
+                if (choice === 'mcp') {
+                    // Убедиться что в команде указан mcp-режим (backend подхватит по enabled_tools)
+                }
+            }
+        }
+    }
+    
     // Если есть файлы — они уже видны как карточки в attachment-area.
-    // Текст-заглушка [Файл: name] НЕ добавляем в сообщение: бэкенд получает
-    // файлы через структурированный payload (attachments), а не через текст.
-    let finalText = text;
     let attachmentsPayload = [];
     if (hasFiles) {
-        // Если текст пустой, показываем в пуле краткую подпись о файлах
-        if (!text) {
+        // Если текст пустой, показываем в пуле кратку�� подпись о файлах
+        if (!finalText) {
             finalText = attachedFiles.map(f => f.name).join(', ');
         }
         renderAttachments(); // очистим после отправки
     }
 
-    addUserMessage(finalText, true, hasFiles ? attachedFiles.map(f => f.name) : null);
+    // Добавляем метаданные команд в сообщение (для отображения)
+    const userMsgContent = commands.length > 0 
+        ? `[Команды: ${commands.map(c => '/' + c.id).join(' + ')}]\n${finalText}`
+        : finalText;
+    
+    addUserMessage(userMsgContent, true, hasFiles ? attachedFiles.map(f => f.name) : null);
 
     const chat = getCurrentChat();
     const historyForApi = chat.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
@@ -1707,7 +1741,7 @@ async function sendMessage() {
         return;
     }
 
-    // Загружаем файлы на бэкенд (если есть)
+    // Загружаем файлы на бэкенд (если е��ть)
     if (hasFiles) {
         attachmentsPayload = await uploadAttachments();
     }
@@ -1723,10 +1757,23 @@ async function sendMessage() {
 
     let assistantText = '';
     try {
-        assistantText = await streamViaWebSocket(finalText, historyForApi, currentAgentId, attachmentsPayload);
+        // Передаём команды в WebSocket
+        assistantText = await streamViaWebSocket(
+            finalText, 
+            historyForApi, 
+            currentAgentId, 
+            attachmentsPayload,
+            commands  // Новый параметр: список команд
+        );
         setStatus('connected');
     } catch (e) {
-        assistantText = await fallbackRest(finalText, historyForApi, currentAgentId, attachmentsPayload);
+        assistantText = await fallbackRest(
+            finalText, 
+            historyForApi, 
+            currentAgentId, 
+            attachmentsPayload,
+            commands
+        );
         setStatus('idle');
     }
 
@@ -1772,7 +1819,7 @@ function stopStreaming() {
     setStatus('idle');
 }
 
-async function streamViaWebSocket(message, history, agentId = '', attachments = []) {
+async function streamViaWebSocket(message, history, agentId = '', attachments = [], commands = []) {
     return new Promise((resolve, reject) => {
         const el = addBotPlaceholder();
         currentStreamingEl = el;
@@ -1786,6 +1833,7 @@ async function streamViaWebSocket(message, history, agentId = '', attachments = 
                 settings: toBackendSettings({ ...buildSettingsFromInputs(), apiKey: (apiKeyInput ? apiKeyInput.value : '').trim() }),
                 agent_id: agentId,
                 key_id: currentKeyId,
+                commands: commands  // Передаём список команд
             };
             // Ядровые агенты + мульти-выбор агентов в шапке чата → core_agents
             const coreList = agentMselCurrent();
@@ -1932,7 +1980,7 @@ async function streamViaWebSocket(message, history, agentId = '', attachments = 
     });
 }
 
-async function fallbackRest(message, history, agentId = '', attachments = []) {
+async function fallbackRest(message, history, agentId = '', attachments = [], commands = []) {
     const el = addBotPlaceholder();
     currentStreamingEl = el;
     currentFullText = '';
@@ -1945,6 +1993,7 @@ async function fallbackRest(message, history, agentId = '', attachments = []) {
             key_id: currentKeyId,
             systemPromptOverride: currentSystemPromptOverride || (currentSession && currentSession.systemPromptOverride) || '',
             sysinteraction: sysInteractionActive,
+            commands: commands,  // Добавляем команды
         };
         // Ядровые агенты + мульти-выбор агентов в шапке чата → core_agents
         const coreList = agentMselCurrent();
@@ -2427,8 +2476,63 @@ function setDashTab(mode) {
     logViewMode = mode;
     if (dashTabs) dashTabs.querySelectorAll('.dash-tab').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
     if (dashWrap) dashWrap.hidden = (mode !== 'dash');
+    if (structuredLogsWrap) structuredLogsWrap.hidden = (mode !== 'structured');
     if (rawLogsWrap) rawLogsWrap.hidden = (mode !== 'raw');
-    loadLogs();
+    if (mode === 'structured') {
+        loadStructuredLogs();
+    } else {
+        loadLogs();
+    }
+}
+
+async function loadStructuredLogs() {
+    if (!structuredLogsContainer) return;
+    structuredLogsContainer.innerHTML = '<div class="structured-logs-loading">Загрузка...</div>';
+    try {
+        const res = await fetch(`${API_BASE}/api/logs/structured?limit=100`);
+        const data = await res.json();
+        const events = data.events || [];
+        const dashboard = data.dashboard || {};
+        
+        if (events.length === 0) {
+            structuredLogsContainer.innerHTML = '<div class="log-empty">Нет структурированных событий</div>';
+            return;
+        }
+        
+        let html = '';
+        // Виджеты
+        const totalEvents = dashboard.total_events || events.length;
+        const errors = (dashboard.by_level || {}).ERROR || 0;
+        const mcpCalls = (dashboard.by_category || {}).mcp_call || 0;
+        const aiCalls = (dashboard.by_category || {}).ai_call || 0;
+        
+        html += `<div class="structured-widgets">
+            <div class="widget"><span class="widget-value">${totalEvents}</span><span class="widget-label">Событий</span></div>
+            <div class="widget"><span class="widget-value" style="color:#e74c3c">${errors}</span><span class="widget-label">Ошибок</span></div>
+            <div class="widget"><span class="widget-value">${aiCalls}</span><span class="widget-label">AI вызовов</span></div>
+            <div class="widget"><span class="widget-value">${mcpCalls}</span><span class="widget-label">MCP вызовов</span></div>
+        </div>`;
+        
+        // Таблица событий
+        html += '<table class="structured-table"><thead><tr><th>Время</th><th>Уровень</th><th>Категория</th><th>Сообщение</th><th>Длительность</th></tr></thead><tbody>';
+        for (const ev of events.slice(0, 50)) {
+            const ts = new Date(ev.timestamp).toLocaleTimeString();
+            const levelClass = {DEBUG:'level-debug',INFO:'level-info',WARN:'level-warn',ERROR:'level-error'}[ev.level] || 'level-info';
+            const duration = ev.duration_ms != null ? ev.duration_ms.toFixed(0) + 'ms' : '';
+            html += `<tr>
+                <td>${ts}</td>
+                <td><span class="level-badge ${levelClass}">${ev.level}</span></td>
+                <td><code>${ev.category || '—'}</code></td>
+                <td class="structured-msg" title="${escapeHtml(ev.message || '')}">${escapeHtml((ev.message || '').substring(0, 80))}</td>
+                <td>${duration}</td>
+            </tr>`;
+        }
+        html += '</tbody></table>';
+        
+        structuredLogsContainer.innerHTML = html;
+    } catch (e) {
+        structuredLogsContainer.innerHTML = '<div class="log-empty">Ошибка загрузки: ' + e.message + '</div>';
+    }
 }
 
 function setDashFilter(f) {
@@ -3226,6 +3330,10 @@ function showSettingsPage(secId) {
     if (secId === 'sec-tools') loadToolsConfig();
     if (secId === 'sec-media') loadMediaKeysUI();
     if (secId === 'sec-mcp' && typeof renderMcpSettings === 'function') renderMcpSettings();
+    if (secId === 'sec-hotkeys' && window.AMTHotkeys) {
+        const container = document.getElementById('hotkeySettingsContainer');
+        if (container) window.AMTHotkeys.renderHotkeySettings(container);
+    }
 }
 
 // ===== Справка (Docs page): под-навигация + хаб расширений =====
@@ -4617,6 +4725,17 @@ async function hasUsableKey() {
         return _knownKeys.some(k => k.hasKey);
     } catch {
         return _knownKeys.some(k => k.hasKey);
+    }
+}
+
+async function isMcpWriterAvailable() {
+    try {
+        const res = await fetch(`${API_BASE}/api/mcp/servers`);
+        const servers = await res.json();
+        if (!Array.isArray(servers)) return false;
+        return servers.some(s => s.id === 'writer' && s.enabled !== false);
+    } catch {
+        return false;
     }
 }
 

@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="./css/components-v2.css">
     <link rel="stylesheet" href="./css/motion-v2.css">
     <link rel="stylesheet" href="./css/voice.css">
+    <link rel="stylesheet" href="./css/commands.css">
 </head>
 <body>
     <a href="#homePage" class="sr-only">Перейти к содержанию</a>
@@ -340,6 +341,7 @@
                     <input type="file" id="fileInput" multiple hidden>
                     <div class="composer-tools-wrap">
                         <button class="attach-btn composer-master" id="composerToolsBtn" title="Инструменты" aria-label="Инструменты"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M12 4l8 14H4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+                        <button class="attach-btn composer-master" id="composerHelpBtn" title="Помощь: список команд" aria-label="Помощь">?</button>
                         <div class="composer-tools-pop hidden" id="composerToolsPop">
                             <button class="attach-btn" id="attachBtn" title="Прикрепить файл" data-i18n-en-title="Attach file"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M8 12l4 4 8-8a4 4 0 0 0-6-6l-8 8a4 4 0 0 0 6 6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
                             <button class="attach-btn" id="toolBtn" title="Инструменты (безопасно)" data-i18n-en-title="Tools (safe)" aria-label="Инструменты"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M14 6l4 4-8 8-4-4zM14 6l-3-3-3 3M10 10l3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg></button>
@@ -413,6 +415,7 @@
 
                 <div class="dash-tabs" id="dashTabs">
                     <button class="dash-tab active" data-mode="dash" data-i18n-en="Dashboard">Дашборд</button>
+                    <button class="dash-tab" data-mode="structured" data-i18n-en="Structured logs">Структура</button>
                     <button class="dash-tab" data-mode="raw" data-i18n-en="Raw logs">Логи</button>
                 </div>
 
@@ -435,6 +438,12 @@
                         <div class="dash-empty" id="dashEmpty" hidden>Нет задач за сегодня</div>
                     </div>
                     <div class="dash-event" id="dashEvent" hidden></div>
+                </div>
+
+                <div id="structuredLogsWrap" hidden>
+                    <div class="structured-logs-container" id="structuredLogsContainer">
+                        <div class="structured-logs-loading">Загрузка структурированных логов...</div>
+                    </div>
                 </div>
 
                 <div id="rawLogsWrap" class="raw-logs-wrap" hidden>
@@ -478,6 +487,7 @@
                             <a href="#" data-sec="sec-personality" class="subnav-special" data-i18n="s_personality" data-i18n-ru="Личность">Личность</a>
                             <a href="#" data-sec="sec-docs" class="subnav-special" data-i18n="s_docs" data-i18n-ru="Docs">Docs</a>
                             <a href="#" data-sec="sec-themes" class="subnav-special" data-i18n="s_themes" data-i18n-ru="Темы и конфиги">Темы и конфиги</a>
+                            <a href="#" data-sec="sec-hotkeys" class="subnav-special" data-i18n="s_hotkeys" data-i18n-ru="Хоткеи">Хоткеи</a>
                         </nav>
                     </aside>
 
@@ -1535,6 +1545,12 @@
                         </div>
                     </div><!-- /settings-page themes -->
 
+                    <div class="settings-page" id="sec-hotkeys" data-sec="sec-hotkeys" hidden>
+                        <h3>Хоткеи</h3>
+                        <p class="hint">Нажмите «Назначить» и затем клавишу. По умолчанию все хоткеи не назначены. Комбинации: Ctrl / Alt / Shift + буква или цифра.</p>
+                        <div id="hotkeySettingsContainer"></div>
+                    </div><!-- /settings-page hotkeys -->
+
                 </div><!-- /settings-form -->
                 </div><!-- /settings-pages -->
 
@@ -2013,6 +2029,12 @@
     <script src="./js/core/token-estimator.js"></script>
     <script src="./js/core/secure-store.js"></script>
     <script src="./js/core/theme-schema.js"></script>
+
+    <script src="./js/core/commands.js"></script>
+    <script src="./js/core/hotkeys.js"></script>
+    <script src="./js/components/helpOverlay.js"></script>
+    <script src="./js/components/filegenChoice.js"></script>
+    <script src="./js/pages/logsDashboard.js"></script>
 
     <script src="./js/core/i18n.js"></script>
     <script src="./js/core/themes.js"></script>

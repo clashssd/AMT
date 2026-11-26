@@ -4492,6 +4492,142 @@ input[type="file"], input[type="file"].opt-input {
     font-size: 13px;
     font-weight: 500;
     color: #e0e0f0;
+}
+
+/* ===== Update banner (thin strip under titlebar) ===== */
+.update-banner {
+    position: fixed;
+    top: 30px; /* under the custom HTML titlebar (~30px) */
+    left: 0;
+    right: 0;
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: rgba(59, 130, 246, 0.15);
+    border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+    backdrop-filter: blur(8px);
+    font-size: 13px;
+    color: #c0d4ff;
+}
+.update-banner.hidden { display: none !important; }
+.update-banner-icon { font-size: 15px; }
+.update-banner-text { flex: 1; }
+.update-banner-link {
+    background: none;
+    border: none;
+    color: #6ea8ff;
+    cursor: pointer;
+    font-size: 13px;
+    text-decoration: underline;
+    padding: 0;
+}
+.update-banner-link:hover { color: #9bc2ff; }
+.update-banner-dismiss {
+    background: none;
+    border: none;
+    color: #8899bb;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 2px;
+}
+.update-banner-dismiss:hover { color: #ffffff; }
+
+/* ===== Update dialog (modal) ===== */
+.update-dialog {
+    max-width: 480px;
+}
+.update-dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+.update-dialog-head h3 { margin: 0; }
+#updateDialogClose {
+    background: none;
+    border: none;
+    color: #8899bb;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0;
+}
+#updateDialogClose:hover { color: #ffffff; }
+
+.update-changelog-list {
+    max-height: 180px;
+    overflow-y: auto;
+    margin: 8px 0;
+    padding: 0;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    background: rgba(0,0,0,0.15);
+}
+.update-changelog-item {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    font-size: 12px;
+    color: #ccd6f0;
+}
+.update-changelog-item:last-child { border-bottom: none; }
+.update-changelog-item b { color: #e8eef8; }
+.update-changelog-item ul {
+    margin: 4px 0 0;
+    padding-left: 16px;
+}
+.update-changelog-item li {
+    color: #a0a8c0;
+    margin-bottom: 2px;
+}
+
+/* Progress bar */
+.update-progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+}
+.update-progress-wrap.hidden { display: none !important; }
+.update-progress-bar {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.1);
+    overflow: hidden;
+}
+.update-progress {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    transition: width 0.3s ease;
+}
+.update-progress-text {
+    font-size: 12px;
+    color: #8899bb;
+    min-width: 80px;
+    text-align: right;
+}
+
+/* Error text in dialog */
+.update-dialog-error {
+    margin: 8px 0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    font-size: 12px;
+    word-break: break-word;
+}
+.update-dialog-error.hidden { display: none !important; }
+
+/* Override: hide the progress bar when not downloading */
+.update-progress-wrap { display: none; }
+.update-progress-wrap:not(.hidden) { display: flex; }
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

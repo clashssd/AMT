@@ -11,6 +11,8 @@ const path = require('path');
 const { startSidecar, stopSidecar } = require('./electron/sidecar');
 const { registerIpc } = require('./electron/ipc');
 const { registerSecretsIpc, injectAllSecrets, setToken } = require('./electron/secrets');
+const { registerUpdateIpc } = require('./electron/update-ipc');
+const updateManager = require('./electron/update-manager');
 
 const PORT = parseInt(process.env.AMT_PORT || '8000', 10);
 let win = null;
@@ -55,6 +57,12 @@ app.whenReady().then(async () => {
 
   registerIpc(sidecar);
   registerSecretsIpc(() => sidecar.port);
+  registerUpdateIpc();
+  updateManager.init({
+    delayMs: 5000,
+    intervalMs: 24 * 60 * 60 * 1000,
+    getWindows: () => BrowserWindow.getAllWindows(),
+  });
 
   // Убираем стандартное светлое меню (File/Edit/View/Window) — оставляем только
   // тёмный заголовок окна, без серой полоски.

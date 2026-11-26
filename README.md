@@ -121,6 +121,47 @@ release/AMT Chat Setup 1.0.6.exe
 ### Скачать из GitHub Release
 
 Готовый ZIP-архив с установщиком лежит в релизе
+[`v1.0.7`](https://github.com/clashssd/AMT/releases/tag/v1.0.7) как attachment
+`AMT-Chat-Setup-1.0.7.zip` (~175 МБ).
+
+> **С 1.0.7 встроена система автообновлений** — приложение само проверяет
+> обновления на GitHub Releases при старте (через 5 сек) и раз в сутки.
+> При появлении новой версии появляется баннер: «Справка → Апдейты» →
+> «Проверить обновления» → «Скачать» → «Перезапустить и обновить».
+
+### Релизный цикл (для разработчика)
+
+Каждый релиз — несколько шагов:
+
+1. **Обновить версию** в `package.json` → `version: "1.0.8"`.
+2. **Добавить запись** в `backend/changelog.json` (новая версия в начале массива
+   `releases`, обновить топ-уровневый `version` и `latest_at`).
+3. **Собрать установщик**:
+   ```bash
+   npm run build:win
+   ```
+   Это создаст `release/AMT-Chat-Setup-1.0.8.exe` и `release/latest.yml`.
+4. **Создать GitHub-тэг и тег-релиз**:
+   ```bash
+   git tag v1.0.8
+   git push --tags
+   ```
+5. **Публикация на GitHub** (один из вариантов):
+   - **Вручную**: зайти на `https://github.com/clashssd/AMT/releases/new`,
+     выбрать тег `v1.0.8`, загрузить `AMT-Chat-Setup-1.0.8.exe` и
+     `latest.yml` из `release/` в качестве Assets.
+   - **Автоматически**:
+     ```bash
+     npx electron-builder --win --publish always
+     ```
+     (нужен `GH_TOKEN` в окружении; создаст Release с бинарниками сам).
+
+`electron-updater` читает `latest.yml` из GitHub Releases — приложение
+автоматически находит новую версию после публикации.
+
+### Скачать из GitHub Release (1.0.6, старые сборки)
+
+Готовый ZIP-архив с установщиком лежит в релизе
 [`v1.0.6`](https://github.com/clashssd/AMT/releases/tag/v1.0.6) как attachment
 `AMT-Chat-Setup-1.0.6.zip` (~175 МБ).
 

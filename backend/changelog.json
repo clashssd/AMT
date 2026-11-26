@@ -1,8 +1,22 @@
 {
-  "version": "1.0.6",
+  "version": "1.0.7",
   "name": "AMT Chat",
-  "latest_at": "2026-11-25",
+  "latest_at": "2026-11-26",
   "releases": [
+    {
+      "version": "1.0.7",
+      "date": "2026-11-26",
+      "title": "Система автообновлений (electron-updater + GitHub Releases)",
+      "changes": [
+        "Автоматическая проверка обновлений при старте (через 5 сек) и раз в сутки (24 ч).",
+        "Ручная проверка: «Справка → Апдейты → Проверить обновления».",
+        "Баннер о доступном обновлении + диалог с changelog и прогрессом загрузки (% + скорость).",
+        "Скачивание только после подтверждения. Установка: «Перезапустить и обновить» / «Позже».",
+        "Кроссплатформенность: Windows (NSIS + AutoUpdater), Linux/macOS — ссылка на GitHub Releases.",
+        "Хэш-проверка через latest.yml, откат при неудачной установке, логирование в %APPDATA%\\AMT Chat\\debug.log.",
+        "electron-builder: publish provider=github, owner=clashssd, repo=AMT."
+      ]
+    },
     {
       "version": "1.0.6",
       "date": "2026-11-25",

@@ -6074,6 +6074,55 @@ async def mcp_install_writer_preset():
     return {"ok": True, "created": True, "config": {k: v for k, v in cfg.items() if k != "env"}}
 
 
+def _amt_coding_preset_config() -> dict:
+    import sys
+    frozen = bool(getattr(sys, "frozen", False))
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    server_path = os.path.join(backend_dir, "coding_mcp_server.py")
+
+    if frozen:
+        appdata = os.environ.get("APPDATA", os.path.expanduser("~"))
+        backend_dir = os.path.join(appdata, "AMT Chat", "backend") if os.path.exists(os.path.join(appdata, "AMT Chat", "backend")) else backend_dir
+        server_path = os.path.join(backend_dir, "coding_mcp_server.py")
+
+    return {
+        "id": "amt-coding",
+        "name": "AMT Coding (advanced)",
+        "transport": "stdio",
+        "command": sys.executable,
+        "args": [server_path],
+        "env": {
+            "PYTHONPATH": backend_dir,
+            "AMT_CODING_ROOT": os.environ.get("AMT_CODING_ROOT", ""),
+        },
+        "enabled": False,
+        "auto_approve": False,
+    }
+
+
+@app.get("/api/mcp/presets/amt-coding")
+async def mcp_preset_amt_coding():
+    cfg = _amt_coding_preset_config()
+    exists = mcp_manager is not None and mcp_manager.get_server(cfg["id"]) is not None
+    return {**cfg, "exists": exists}
+
+
+@app.post("/api/mcp/presets/amt-coding")
+async def mcp_install_amt_coding_preset():
+    if mcp_manager is None:
+        return {"error": "MCP manager not initialized"}
+    cfg = _amt_coding_preset_config()
+    existing = mcp_manager.get_server(cfg["id"])
+    if existing is not None:
+        return {"ok": True, "created": False}
+    mcp_manager.add_server(MCPServerConfig(
+        id=cfg["id"], name=cfg["name"], transport=cfg["transport"],
+        command=cfg["command"], args=cfg["args"], env=cfg["env"],
+        enabled=cfg["enabled"], auto_approve=cfg["auto_approve"],
+    ))
+    return {"ok": True, "created": True, "config": {k: v for k, v in cfg.items() if k != "env"}}
+
+
 @app.post("/api/mcp/servers/{server_id}/test")
 async def mcp_test_server(server_id: str):
     if mcp_manager is None:

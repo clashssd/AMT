@@ -24,5 +24,6 @@ const fallback = main.slice(main.indexOf('async function fallbackRest'));
 assert(fallback.includes('chat_mode'), 'fallbackRest should send chat_mode');
 assert(fallback.includes('project_root'), 'fallbackRest should send project_root');
 assert(fallback.includes('tool_policy'), 'fallbackRest should send tool_policy');
+assert(home.includes('mcpInstallAmtCodingPreset'), 'home.html should expose amt-coding MCP preset button');
 
 console.log('test_coding_frontend.js: PASS');

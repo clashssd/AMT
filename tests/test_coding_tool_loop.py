@@ -97,6 +97,29 @@ def test_coding_session_delete(tmp_backend, monkeypatch):
     assert all(item["id"] != original["id"] for item in main._coding_session_list())
 
 
+def test_amt_coding_mcp_preset_endpoints(tmp_backend, monkeypatch):
+    import main
+    from fastapi.testclient import TestClient
+    from ai_engine.mcp_manager import MCPManager
+
+    if main.mcp_manager is None:
+        main.mcp_manager = MCPManager(str(tmp_backend["tmp"]))
+
+    client = TestClient(main.app)
+    get = client.get("/api/mcp/presets/amt-coding")
+    assert get.status_code == 200
+    assert get.json()["id"] == "amt-coding"
+    assert get.json()["transport"] == "stdio"
+    assert get.json()["enabled"] is False
+    assert get.json()["auto_approve"] is False
+
+    post = client.post("/api/mcp/presets/amt-coding")
+    assert post.status_code == 200
+    body = post.json()
+    assert body.get("config", {}).get("id", "amt-coding") == "amt-coding"
+    assert "created" in body
+
+
 def test_coding_tool_endpoint_runs_git_status(tmp_backend, tmp_path):
     import main
     from fastapi.testclient import TestClient

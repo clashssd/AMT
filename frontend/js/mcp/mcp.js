@@ -326,6 +326,28 @@ async function mcpInstallWriterPreset() {
 }
 
 // ===== Хран��лище: секция «MCP-серверы» =====
+// ===== AMT Coding preset: advanced read-only diagnostics MCP server =====
+async function mcpInstallAmtCodingPreset() {
+    flashStatus('Подключение AMT Coding MCP (диагностика кодинг-проекта)…');
+    try {
+        const resp = await fetch(`${API_BASE}/api/mcp/presets/amt-coding`, { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok || data.error) {
+            flashStatus('Ошибка: ' + (data.error || resp.status));
+            return;
+        }
+        if (data.created) {
+            flashStatus('AMT Coding MCP добавлен. Инструменты fs_read / fs_list / fs_search / git_status / git_diff / git_log / git_branch / run_tests / project_doctor доступны.');
+        } else {
+            flashStatus('AMT Coding MCP уже подключён.');
+        }
+        renderMcpSettings();
+        setTimeout(() => { if (data.config) mcpTest('amt-coding'); }, 400);
+    } catch (e) {
+        flashStatus('Ошибка сети: ' + e);
+    }
+}
+
 // ===== Writer generation form handlers =====
 let _writerLastResult = null;
 

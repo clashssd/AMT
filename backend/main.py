@@ -1321,7 +1321,7 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                             source=f"mcp:{cfg.id}",
                         ))
                 except Exception as e:
-                    log.warning("Failed to register MCP tools for '%s': %s", cfg.id, e)
+                    logger.warning("Failed to register MCP tools for '%s': %s", cfg.id, e)
         request_body["tools"] = tool_registry.schemas()
 
     # Intermediate tool-call events collected across the loop, returned to the
@@ -1434,7 +1434,7 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                         }
                         resp2 = await client.post(url, headers=headers, json=request_body)
                         if resp2.status_code == 400 and "tools" in resp2.text:
-                            log.warning("Provider rejected tools field; retrying without tools")
+                            logger.warning("Provider rejected tools field; retrying without tools")
                             request_body.pop("tools", None)
                             resp2 = await client.post(url, headers=headers, json=request_body)
                         data = resp2.json()

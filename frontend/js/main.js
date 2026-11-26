@@ -1312,6 +1312,7 @@ function svgIcon(name) {
         search: '<circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
         channel: '<rect x="3" y="6" width="18" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 3l4 3 4-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
         sysinteraction: '<rect x="3" y="4" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 22h10M12 18v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M7 9h4M7 13h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+        plug: '<path d="M9 3v6M15 3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M6 9h12v3a6 6 0 01-6 6 6 6 0 01-6-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 18v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
     };
     const inner = paths[name] || paths.chat;
     return `<svg class="ic" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">${inner}</svg>`;
@@ -3162,6 +3163,7 @@ function showSettingsPage(secId) {
     if (secId === 'sec-personality') fillPersonalitySelects();
     if (secId === 'sec-tools') loadToolsConfig();
     if (secId === 'sec-media') loadMediaKeysUI();
+    if (secId === 'sec-mcp' && typeof renderMcpSettings === 'function') renderMcpSettings();
 }
 
 // ===== Справка (Docs page): под-навигация + хаб расширений =====
@@ -4055,6 +4057,30 @@ function renderStorageInteractive(agents, skills, keys, sessions, files, memory,
             if (match) match.act();
         });
     });
+    // MCP-серверы: асинхронная секция (данные с бэкенда)
+    if (typeof renderMcpStorage === 'function') {
+        const mcpWrap = document.createElement('div');
+        mcpWrap.innerHTML = `
+            <div class="storage-section">
+                <div class="storage-section-head">
+                    <div class="ss-icon c4">${svgIcon('plug')}</div>
+                    <h3>MCP-серверы</h3>
+                    <span class="ss-count" id="mcp-ss-count">…</span>
+                    <button class="ss-add" data-mcp-add="1">＋ Добавить</button>
+                </div>
+                <div class="storage-items"><div id="mcp-storage-list" class="storage-items-mcp"></div></div>
+            </div>`;
+        storageSections.appendChild(mcpWrap.firstElementChild);
+        document.querySelector('.storage-section-head [data-mcp-add]')?.addEventListener('click', () => {
+            showPage('settings'); showSettingsPage('sec-mcp'); mcpShowAddForm();
+        });
+        // Загружаем список и обновляем счётчик
+        fetch(`${API_BASE}/api/mcp/servers`).then(r => r.json()).then(sv => {
+            const c = document.getElementById('mcp-ss-count');
+            if (c) c.textContent = Array.isArray(sv) ? sv.length : 0;
+        }).catch(() => {});
+        renderMcpStorage();
+    }
 }
 
 // Вкл/выкл агента и скилла (для хранилища)

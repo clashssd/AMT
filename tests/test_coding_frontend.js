@@ -39,5 +39,8 @@ const logsDashboard = read('frontend/js/pages/logsDashboard.js');
 assert(home.includes('id="codingDash"'), 'home.html should include a coding dashboard section');
 assert(logsDashboard.includes('_renderCodingDash'), 'logsDashboard.js should render coding dashboard');
 assert(logsDashboard.includes('coding_tool_calls'), 'logsDashboard.js should show coding tool call counters');
+assert(main.includes('codingExtensions = []'), 'main.js should accept coding extensions in storage');
+assert(main.includes("/api/extensions/coding"), 'main.js should fetch coding extensions');
+assert(fs.existsSync(path.join(__dirname, '..', 'extensions', 'amt-coding-example', 'manifest.json')), 'sample coding extension manifest should exist');
 
 console.log('test_coding_frontend.js: PASS');

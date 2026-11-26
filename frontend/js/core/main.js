@@ -4296,17 +4296,18 @@ async function loadStorage() {
     if (!storageSections) return;
     storageStats.innerHTML = '';
     storageSections.innerHTML = '<div class="storage-empty">Загрузка…</div>';
-    let agents = [], skills = [], keys = [], sessions = [], codingSessions = [], files = [], memory = { facts: [], user_prefs: {} };
+    let agents = [], skills = [], keys = [], sessions = [], codingSessions = [], codingExtensions = [], files = [], memory = { facts: [], user_prefs: {} };
     let localChats = [];
     let extensions = [];
     let customThemes = {};
     let sysinteraction = null;
     try {
-        const [agRes, keyRes, sesRes, codingSesRes, filesRes, memRes, extRes, sysRes] = await Promise.all([
+        const [agRes, keyRes, sesRes, codingSesRes, codingExtRes, filesRes, memRes, extRes, sysRes] = await Promise.all([
             fetch(`${API_BASE}/api/agents`).then(r => r.json()),
             fetch(`${API_BASE}/api/keys`).then(r => r.json()),
             fetch(`${API_BASE}/api/sessions`).then(r => r.json()),
             fetch(`${API_BASE}/api/sessions/coding`).then(r => r.json()),
+            fetch(`${API_BASE}/api/extensions/coding`).then(r => r.json()).catch(() => ({ extensions: [] })),
             fetch(`${API_BASE}/api/files`).then(r => r.json()),
             fetch(`${API_BASE}/api/memory`).then(r => r.json()),
             fetch(`${API_BASE}/api/extensions/list`).then(r => r.json()),
@@ -4317,6 +4318,7 @@ async function loadStorage() {
         keys = keyRes.keys || [];
         sessions = sesRes.sessions || [];
         codingSessions = codingSesRes.coding_sessions || [];
+        codingExtensions = codingExtRes.extensions || [];
         files = filesRes.files || [];
         memory = memRes;
         extensions = extRes.extensions || [];
@@ -4327,11 +4329,11 @@ async function loadStorage() {
     const scenarios = loadScenarios();
     try { customThemes = JSON.parse(localStorage.getItem('amt_custom_themes') || '{}'); } catch { customThemes = {}; }
 
-    renderStorageInteractive(agents, skills, keys, sessions, files, memory, localChats, scenarios, extensions, customThemes, sysinteraction, codingSessions);
+    renderStorageInteractive(agents, skills, keys, sessions, files, memory, localChats, scenarios, extensions, customThemes, sysinteraction, codingSessions, codingExtensions);
 }
 
 // Рендер интерактивного хранилища
-function renderStorageInteractive(agents, skills, keys, sessions, files, memory, localChats, scenarios, extensions = [], customThemes = {}, sysinteraction = null, codingSessions = []) {
+function renderStorageInteractive(agents, skills, keys, sessions, files, memory, localChats, scenarios, extensions = [], customThemes = {}, sysinteraction = null, codingSessions = [], codingExtensions = []) {
     const sections = [
         { key: 'chats', title: 'Чаты', icon: 'chat', c: 'c1',
             items: localChats.map(c => ({ id: c.id, t: c.title, s: `${c.messages?.length || 0} сообщ.` })),
@@ -4454,6 +4456,20 @@ function renderStorageInteractive(agents, skills, keys, sessions, files, memory,
                     { label: 'Удалить', cls: 'danger', act: () => amtConfirm({ title: 'Удалить кодинг-сессию?', text: 'Сессия будет удалена из хранилища.' }).then(ok => { if (ok) window.AMTCommands?.codingSessionAction?.('delete', { id: ses.id }).then(() => loadStorage()); }) },
                 ];
             } },
+        { key: 'coding-extensions', title: 'Коддинг-расширения', icon: 'code', c: 'c5',
+            items: codingExtensions.map(x => ({
+                id: x.name,
+                t: x.name,
+                s: x.description || 'расширение для кодинга',
+                data: x,
+                kind: 'ext',
+                on: x.enabled !== false,
+            })),
+            add: false,
+            itemActions: it => [
+                { label: it.data.enabled ? 'Выключить' : 'Включить', cls: '', act: () => toggleExtFromStorage(it.data.name, it.data.enabled ? false : true) },
+                { label: 'Удалить', cls: 'danger', act: () => removeExtFromStorage(it.data.name) },
+            ] },
         ...(sysinteraction ? [{ key: 'sysinteraction', title: 'Взаимодействие с системой', icon: 'sysinteraction', c: 'c2',
             items: [
                 { id: 'orchestrator', t: 'Оркестратор', s: sysinteraction.enabled ? 'ак��ивен' : 'выключен', on: sysinteraction.enabled, data: sysinteraction.orchestrator || {} },

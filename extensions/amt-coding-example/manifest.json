@@ -1,0 +1,8 @@
+{
+  "name": "amt-coding-example",
+  "version": "1.0.0",
+  "description": "AMT coding extension example",
+  "coding": true,
+  "frontend": false,
+  "backend": false
+}

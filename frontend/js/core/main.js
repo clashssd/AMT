@@ -3444,7 +3444,7 @@ function currentCodingPanelChat() {
     return (c && c.chat_mode === 'coding') ? c : null;
 }
 function codingPanelSetActiveTab(tab) {
-    ['files', 'diff', 'terminal', 'symbols'].forEach(t => {
+    ['files', 'diff', 'terminal', 'symbols', 'orchestrator'].forEach(t => {
         const panel = document.getElementById('codingPanel' + t[0].toUpperCase() + t.slice(1));
         if (panel) panel.classList.toggle('hidden', t !== tab);
         const btn = document.querySelector('.coding-tab[data-coding-tab="' + t + '"]');
@@ -3538,6 +3538,7 @@ async function refreshCodingPanels() {
     const activeTab = document.querySelector('.coding-tab.active')?.dataset.codingTab || 'diff';
     if (activeTab === 'diff') await refreshCodingDiff();
     if (activeTab === 'files') await refreshCodingFileTree();
+    if (activeTab === 'orchestrator') await refreshCodingOrchestratorSessions();
     if (activeTab === 'symbols') {
         const symbolsEl = document.getElementById('codingSymbolsOutput');
         if (symbolsEl) {
@@ -3563,6 +3564,65 @@ document.addEventListener('click', (e) => {
 document.addEventListener('input', (e) => {
     if (e.target && e.target.id === 'codingTreeSearch') refreshCodingFileTree();
 });
+
+// ===== Coding orchestrator panel =====
+async function refreshCodingOrchestratorSessions() {
+    const el = document.getElementById('codingOrchestratorOutput');
+    if (!el) return;
+    const c = currentCodingPanelChat();
+    if (!c || !c.projectRoot) { el.textContent = 'Не выбран рабочий проект'; return; }
+    el.textContent = 'Загрузка сессий…';
+    try {
+        const res = await fetch(API_BASE + '/api/sessions/coding');
+        const data = await res.json();
+        const sessions = (data.coding_sessions || []).filter(s => s.root === c.projectRoot);
+        if (!sessions.length) { el.textContent = 'Сессий оркестратора нет для этого проекта'; return; }
+        el.textContent = sessions.map(s => [
+            s.id, s.name || '(без названия)', 'root: ' + (s.root || ''),
+            'created: ' + (s.createdAt || ''),
+            s.goal ? 'goal: ' + s.goal : '',
+            s.run ? 'status: ' + s.run.status + ' rounds: ' + (s.run.rounds || 0) + ' files: ' + (s.run.files_changed || 0) : ''
+        ].filter(Boolean).join('\n')).join('\n---\n');
+    } catch (err) { el.textContent = 'Ошибка: ' + err; }
+}
+async function runCodingOrchestrator() {
+    const c = currentCodingPanelChat();
+    const goalEl = document.getElementById('codingOrchestratorGoal');
+    const roundsEl = document.getElementById('codingOrchestratorRounds');
+    const outEl = document.getElementById('codingOrchestratorOutput');
+    if (!c || !c.projectRoot) { if (outEl) outEl.textContent = 'Не выбран рабочий проект'; return; }
+    const goal = (goalEl && goalEl.value || '').trim();
+    if (!goal) { if (outEl) outEl.textContent = 'Введите goal для оркестратора'; return; }
+    const maxRounds = parseInt(roundsEl && roundsEl.value || '3', 10);
+    if (outEl) outEl.textContent = 'Запуск оркестратора (planner → coder → reviewer) …';
+    try {
+        const res = await fetch(API_BASE + '/api/coding/orchestrator', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ root: c.projectRoot, goal, max_rounds: maxRounds, policy: c.toolPolicy || [] })
+        });
+        const data = await res.json();
+        if (res.ok && data.run) {
+            const r = data.run;
+            outEl.textContent = [
+                'Status: ' + (r.status || 'unknown'),
+                'Rounds: ' + (r.rounds || 0),
+                'Files changed: ' + (r.files_changed || 0),
+                'Reviewer approved: ' + (r.reviewer_approved ? 'yes' : 'no'),
+                r.children ? 'Children: ' + r.children.map(ch => ch.role + ' (' + ch.status + ')').join(', ') : '',
+                '',
+                'Detail:',
+                JSON.stringify(r, null, 2)
+            ].filter(Boolean).join('\n');
+        } else {
+            outEl.textContent = 'Ошибка: ' + (data.detail || data.error || res.status);
+        }
+    } catch (err) {
+        if (outEl) outEl.textContent = 'Ошибка: ' + err;
+    }
+}
+document.getElementById('codingOrchestratorRun')?.addEventListener('click', runCodingOrchestrator);
+document.getElementById('codingOrchestratorRefresh')?.addEventListener('click', refreshCodingOrchestratorSessions);
 
 // ===== Справка (Docs page): под-навигация + хаб расширений =====
 const docsSubnavLinks = () => document.querySelectorAll('#docsSubnav a');

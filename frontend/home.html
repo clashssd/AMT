@@ -249,6 +249,7 @@
                         <button class="coding-tab" data-coding-tab="files">Файлы</button>
                         <button class="coding-tab" data-coding-tab="terminal">Терминал</button>
                         <button class="coding-tab" data-coding-tab="symbols">Символы</button>
+                        <button class="coding-tab" data-coding-tab="orchestrator">Оркестратор</button>
                     </div>
                     <div id="codingPanelDiff" class="coding-panel">
                         <div class="coding-diff-controls">
@@ -270,6 +271,19 @@
                     </div>
                     <div id="codingPanelTerminal" class="coding-panel hidden"><pre class="coding-terminal" id="codingTerminalOutput"></pre></div>
                     <div id="codingPanelSymbols" class="coding-panel hidden"><pre class="coding-terminal" id="codingSymbolsOutput"></pre></div>
+                    <div id="codingPanelOrchestrator" class="coding-panel hidden">
+                        <div class="coding-diff-controls">
+                            <input id="codingOrchestratorGoal" class="coding-diff-input" placeholder="Goal: describe what to build/fix" />
+                            <select id="codingOrchestratorRounds" class="coding-diff-input" style="max-width:80px">
+                                <option value="2">2</option>
+                                <option value="3" selected>3</option>
+                                <option value="4">4</option>
+                            </select>
+                            <button class="coding-diff-btn" id="codingOrchestratorRun">Запустить</button>
+                            <button class="coding-diff-btn" id="codingOrchestratorRefresh">Сессии</button>
+                        </div>
+                        <pre class="coding-terminal" id="codingOrchestratorOutput"></pre>
+                    </div>
                 </section>
                 <div class="chat-header">
                     <!-- Слева: название чата -->

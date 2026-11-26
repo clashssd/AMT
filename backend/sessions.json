@@ -1,0 +1,1529 @@
+{
+  "sessions": [],
+  "coding_sessions": [
+    {
+      "id": "ses_402af5b8",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795718793
+    },
+    {
+      "id": "ses_1c892559",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795718793
+    },
+    {
+      "id": "ses_da7674ca",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795718793
+    },
+    {
+      "id": "ses_81e44d8f",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-189\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795718801
+    },
+    {
+      "id": "ses_47998c7c",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795718801
+    },
+    {
+      "id": "ses_e706b78f",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795718801
+    },
+    {
+      "id": "ses_74ee0d61",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795718801
+    },
+    {
+      "id": "ses_1a761ce3",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-194\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795719610
+    },
+    {
+      "id": "ses_a3af2249",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795719610
+    },
+    {
+      "id": "ses_2048722a",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795719610
+    },
+    {
+      "id": "ses_29332e0e",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795719610
+    },
+    {
+      "id": "ses_79d163cb",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-195\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795719740
+    },
+    {
+      "id": "ses_8660fd3b",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795719740
+    },
+    {
+      "id": "ses_330fbc55",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795719740
+    },
+    {
+      "id": "ses_db650275",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795719740
+    },
+    {
+      "id": "ses_e99495ad",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-197\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795719992
+    },
+    {
+      "id": "ses_c44a3c83",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795719992
+    },
+    {
+      "id": "ses_44cb17d1",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795719992
+    },
+    {
+      "id": "ses_c5c42a8e",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795719992
+    },
+    {
+      "id": "ses_ae73610b",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-198\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795720011
+    },
+    {
+      "id": "ses_ffa316de",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795720011
+    },
+    {
+      "id": "ses_9f1cb6b2",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795720011
+    },
+    {
+      "id": "ses_af2b0817",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795720011
+    },
+    {
+      "id": "ses_05862034",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-202\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795720316
+    },
+    {
+      "id": "ses_5169e6bc",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795720316
+    },
+    {
+      "id": "ses_a0a93bfa",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795720316
+    },
+    {
+      "id": "ses_05f21d8d",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795720316
+    },
+    {
+      "id": "ses_032c2ccf",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-203\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795720374
+    },
+    {
+      "id": "ses_4dfd932b",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795720374
+    },
+    {
+      "id": "ses_f955cbdb",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795720374
+    },
+    {
+      "id": "ses_9566daaf",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795720374
+    },
+    {
+      "id": "ses_665d9fb4",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-208\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721261
+    },
+    {
+      "id": "ses_36a18368",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795721261
+    },
+    {
+      "id": "ses_15445c09",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721261
+    },
+    {
+      "id": "ses_410f2aa3",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721261
+    },
+    {
+      "id": "ses_7ea50417",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-209\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721295
+    },
+    {
+      "id": "ses_54b4b4f8",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795721295
+    },
+    {
+      "id": "ses_3826f4b4",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721295
+    },
+    {
+      "id": "ses_55f38814",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721295
+    },
+    {
+      "id": "ses_61816071",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-212\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721392
+    },
+    {
+      "id": "ses_af538c5c",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795721392
+    },
+    {
+      "id": "ses_d9cc3147",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721392
+    },
+    {
+      "id": "ses_886811a6",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721392
+    },
+    {
+      "id": "ses_c69643b8",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-213\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721435
+    },
+    {
+      "id": "ses_4985fbef",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795721435
+    },
+    {
+      "id": "ses_64cb3428",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721435
+    },
+    {
+      "id": "ses_b1356a3b",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721435
+    },
+    {
+      "id": "ses_6807a373",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-214\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721450
+    },
+    {
+      "id": "ses_f9751d48",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795721450
+    },
+    {
+      "id": "ses_b3f477b1",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721450
+    },
+    {
+      "id": "ses_43bbbc34",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795721451
+    },
+    {
+      "id": "ses_83539569",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-223\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795722487
+    },
+    {
+      "id": "ses_317dec80",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795722487
+    },
+    {
+      "id": "ses_89f2037b",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795722487
+    },
+    {
+      "id": "ses_8ba244b1",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795722487
+    },
+    {
+      "id": "ses_d56f68a7",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-224\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795722497
+    },
+    {
+      "id": "ses_7b0c599e",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795722497
+    },
+    {
+      "id": "ses_c2fc2fdf",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795722497
+    },
+    {
+      "id": "ses_4cb124b9",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795722497
+    },
+    {
+      "id": "ses_9fc02143",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-226\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795723030
+    },
+    {
+      "id": "ses_6308cff3",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795723030
+    },
+    {
+      "id": "ses_527232bf",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795723030
+    },
+    {
+      "id": "ses_ced172ba",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795723030
+    },
+    {
+      "id": "ses_b46c05f4",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-229\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795723174
+    },
+    {
+      "id": "ses_2dec8f8b",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795723174
+    },
+    {
+      "id": "ses_008991c1",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795723174
+    },
+    {
+      "id": "ses_44819bd2",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795723174
+    },
+    {
+      "id": "ses_1e6778e5",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-234\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795723728
+    },
+    {
+      "id": "ses_7064fccd",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795723728
+    },
+    {
+      "id": "ses_256dba38",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795723729
+    },
+    {
+      "id": "ses_39f9c0a9",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795723729
+    },
+    {
+      "id": "ses_9222c710",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-239\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795724411
+    },
+    {
+      "id": "ses_ff9657c4",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795724411
+    },
+    {
+      "id": "ses_740e1886",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795724411
+    },
+    {
+      "id": "ses_3f8326d5",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795724411
+    },
+    {
+      "id": "ses_f7768487",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-243\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795724802
+    },
+    {
+      "id": "ses_de6795a2",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795724802
+    },
+    {
+      "id": "ses_dde8006f",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795724802
+    },
+    {
+      "id": "ses_facfa2f4",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795724802
+    },
+    {
+      "id": "ses_49dca170",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-245\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795724942
+    },
+    {
+      "id": "ses_37487f52",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795724942
+    },
+    {
+      "id": "ses_f1a2cb41",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795724942
+    },
+    {
+      "id": "ses_c7307749",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795724942
+    },
+    {
+      "id": "ses_9992a902",
+      "name": "coding-session",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-257\\test_coding_session_create_and0\\repo",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795726360
+    },
+    {
+      "id": "ses_b2ba6c33",
+      "name": "continue",
+      "root": "C:\\tmp",
+      "keyId": "",
+      "agentId": "",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "chat_123",
+      "createdAt": 1795726360
+    },
+    {
+      "id": "ses_47290bb0",
+      "name": "orig",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795726360
+    },
+    {
+      "id": "ses_602e7722",
+      "name": "orig (копия)",
+      "root": "C:\\tmp",
+      "keyId": "k2",
+      "agentId": "coder",
+      "skills": [],
+      "mcp": [],
+      "permissions": [],
+      "savedPatterns": [],
+      "branch": "",
+      "baseChatId": "",
+      "createdAt": 1795726360
+    }
+  ],
+  "coding_orchestrator_runs": [
+    {
+      "id": "orch_47935458a9",
+      "goal": "do it",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-223\\test_coding_orchestrator_endpo1",
+      "status": "completed",
+      "created_at": 1795722487.1052155,
+      "children": [
+        {
+          "id": "child_planner_4eacce15",
+          "role": "planner",
+          "status": "completed",
+          "started_at": 1795722487.107135,
+          "prompt_chars": 287,
+          "output": "{\"tasks\":[{\"id\":\"1\",\"title\":\"t\",\"files\":[\"a.txt\"],\"steps\":[\"s\"],\"acceptance\":\"done\"}]}",
+          "result": {
+            "tasks": [
+              {
+                "id": "1",
+                "title": "t",
+                "files": [
+                  "a.txt"
+                ],
+                "steps": [
+                  "s"
+                ],
+                "acceptance": "done"
+              }
+            ]
+          },
+          "completed_at": 1795722487.1129956
+        },
+        {
+          "id": "child_coder_b49d9b8a",
+          "role": "coder",
+          "status": "completed",
+          "started_at": 1795722487.1181803,
+          "prompt_chars": 301,
+          "output": "{\"summary\":\"wrote\",\"files\":[{\"path\":\"a.txt\",\"action\":\"write\",\"content\":\"ok\"}],\"commands\":[]}",
+          "result": {
+            "summary": "wrote",
+            "files": [
+              {
+                "path": "a.txt",
+                "action": "write",
+                "content": "ok"
+              }
+            ],
+            "commands": []
+          },
+          "completed_at": 1795722487.122916
+        },
+        {
+          "id": "child_reviewer_21ed3c76",
+          "role": "reviewer",
+          "status": "completed",
+          "started_at": 1795722487.1298113,
+          "prompt_chars": 350,
+          "output": "{\"approved\":true,\"issues\":[]}",
+          "result": {
+            "approved": true,
+            "issues": []
+          },
+          "completed_at": 1795722487.1333516
+        }
+      ],
+      "files_changed": [
+        {
+          "path": "a.txt",
+          "status": "written",
+          "round": 1
+        }
+      ],
+      "reviewer_approved": true,
+      "rounds": 1,
+      "finished_at": 1795722487.138194
+    },
+    {
+      "id": "orch_c8a3005f8a",
+      "goal": "do it",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-224\\test_coding_orchestrator_endpo1",
+      "status": "completed",
+      "created_at": 1795722497.1624057,
+      "children": [
+        {
+          "id": "child_planner_eaa37ba1",
+          "role": "planner",
+          "status": "completed",
+          "started_at": 1795722497.1647363,
+          "prompt_chars": 287,
+          "output": "{\"tasks\":[{\"id\":\"1\",\"title\":\"t\",\"files\":[\"a.txt\"],\"steps\":[\"s\"],\"acceptance\":\"done\"}]}",
+          "result": {
+            "tasks": [
+              {
+                "id": "1",
+                "title": "t",
+                "files": [
+                  "a.txt"
+                ],
+                "steps": [
+                  "s"
+                ],
+                "acceptance": "done"
+              }
+            ]
+          },
+          "completed_at": 1795722497.1718519
+        },
+        {
+          "id": "child_coder_625e3267",
+          "role": "coder",
+          "status": "completed",
+          "started_at": 1795722497.1769814,
+          "prompt_chars": 301,
+          "output": "{\"summary\":\"wrote\",\"files\":[{\"path\":\"a.txt\",\"action\":\"write\",\"content\":\"ok\"}],\"commands\":[]}",
+          "result": {
+            "summary": "wrote",
+            "files": [
+              {
+                "path": "a.txt",
+                "action": "write",
+                "content": "ok"
+              }
+            ],
+            "commands": []
+          },
+          "completed_at": 1795722497.1825597
+        },
+        {
+          "id": "child_reviewer_cd6a463a",
+          "role": "reviewer",
+          "status": "completed",
+          "started_at": 1795722497.1915321,
+          "prompt_chars": 350,
+          "output": "{\"approved\":true,\"issues\":[]}",
+          "result": {
+            "approved": true,
+            "issues": []
+          },
+          "completed_at": 1795722497.1976254
+        }
+      ],
+      "files_changed": [
+        {
+          "path": "a.txt",
+          "status": "written",
+          "round": 1
+        }
+      ],
+      "reviewer_approved": true,
+      "rounds": 1,
+      "finished_at": 1795722497.2035809
+    },
+    {
+      "id": "orch_e1553eea95",
+      "goal": "do it",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-236\\test_coding_orchestrator_endpo1",
+      "status": "completed",
+      "created_at": 1795723999.396715,
+      "children": [
+        {
+          "id": "child_planner_c7f79b5d",
+          "role": "planner",
+          "status": "completed",
+          "started_at": 1795723999.3996222,
+          "prompt_chars": 361,
+          "output": "{\"tasks\":[{\"id\":\"1\",\"title\":\"t\",\"files\":[\"a.txt\"],\"steps\":[\"s\"],\"acceptance\":\"done\"}]}",
+          "result": {
+            "tasks": [
+              {
+                "id": "1",
+                "title": "t",
+                "files": [
+                  "a.txt"
+                ],
+                "steps": [
+                  "s"
+                ],
+                "acceptance": "done"
+              }
+            ]
+          },
+          "completed_at": 1795723999.4057093
+        },
+        {
+          "id": "child_coder_364b266c",
+          "role": "coder",
+          "status": "completed",
+          "started_at": 1795723999.413976,
+          "prompt_chars": 458,
+          "output": "{\"summary\":\"wrote\",\"files\":[{\"path\":\"a.txt\",\"action\":\"write\",\"content\":\"ok\"}],\"commands\":[]}",
+          "result": {
+            "summary": "wrote",
+            "files": [
+              {
+                "path": "a.txt",
+                "action": "write",
+                "content": "ok"
+              }
+            ],
+            "commands": []
+          },
+          "completed_at": 1795723999.4192083
+        },
+        {
+          "id": "child_reviewer_35488d35",
+          "role": "reviewer",
+          "status": "completed",
+          "started_at": 1795723999.427215,
+          "prompt_chars": 448,
+          "output": "{\"approved\":true,\"issues\":[]}",
+          "result": {
+            "approved": true,
+            "issues": []
+          },
+          "completed_at": 1795723999.4311566
+        }
+      ],
+      "files_changed": [
+        {
+          "path": "a.txt",
+          "status": "written",
+          "round": 1
+        }
+      ],
+      "reviewer_approved": true,
+      "rounds": 1,
+      "finished_at": 1795723999.438277
+    },
+    {
+      "id": "orch_eef9b99ba8",
+      "goal": "do it",
+      "root": "C:\\Users\\berds\\AppData\\Local\\Temp\\pytest-of-berds\\pytest-237\\test_coding_orchestrator_endpo1",
+      "status": "completed",
+      "created_at": 1795724016.0016665,
+      "children": [
+        {
+          "id": "child_planner_9baeea05",
+          "role": "planner",
+          "status": "completed",
+          "started_at": 1795724016.0050442,
+          "prompt_chars": 468,
+          "output": "{\"tasks\":[{\"id\":\"1\",\"title\":\"t\",\"files\":[\"a.txt\"],\"steps\":[\"s\"],\"acceptance\":\"done\"}]}",
+          "result": {
+            "tasks": [
+              {
+                "id": "1",
+                "title": "t",
+                "files": [
+                  "a.txt"
+                ],
+                "steps": [
+                  "s"
+                ],
+                "acceptance": "done"
+              }
+            ]
+          },
+          "completed_at": 1795724016.0113196
+        },
+        {
+          "id": "child_coder_50e45522",
+          "role": "coder",
+          "status": "completed",
+          "started_at": 1795724016.0182292,
+          "prompt_chars": 458,
+          "output": "{\"summary\":\"wrote\",\"files\":[{\"path\":\"a.txt\",\"action\":\"write\",\"content\":\"ok\"}],\"commands\":[]}",
+          "result": {
+            "summary": "wrote",
+            "files": [
+              {
+                "path": "a.txt",
+                "action": "write",
+                "content": "ok"
+              }
+            ],
+            "commands": []
+          },
+          "completed_at": 1795724016.02502
+        },
+        {
+          "id": "child_reviewer_29b048d6",
+          "role": "reviewer",
+          "status": "completed",
+          "started_at": 1795724016.0345652,
+          "prompt_chars": 448,
+          "output": "{\"approved\":true,\"issues\":[]}",
+          "result": {
+            "approved": true,
+            "issues": []
+          },
+          "completed_at": 1795724016.0403905
+        }
+      ],
+      "files_changed": [
+        {
+          "path": "a.txt",
+          "status": "written",
+          "round": 1
+        }
+      ],
+      "reviewer_approved": true,
+      "rounds": 1,
+      "finished_at": 1795724016.0461097
+    }
+  ]
+}

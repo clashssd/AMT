@@ -1639,7 +1639,8 @@ function deleteCurrentChat() {
 }
 
 async function startNewChat() {
-    const chat = createNewChat();
+    const surface = currentChatSurface();
+    const chat = createNewChat(surface === 'coding' ? 'coding' : 'general');
     currentChatId = chat.id;
     chatTitle.value = chat.title;
     renderGroupSelect();

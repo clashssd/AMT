@@ -1,4 +1,4 @@
-// Tests for the autoPickTemperature logic in frontend/js/main.js.
+// Tests for the autoPickTemperature logic in frontend/js/core/main.js.
 // The function depends on module-scoped `messageInput` and `getCurrentChat`,
 // so we extract its source and run it in a controlled scope.
 'use strict';

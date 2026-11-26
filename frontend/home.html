@@ -15,7 +15,7 @@
         <div class="win-tb-drag"></div>
         <div class="win-tb-title">
             <img src="./assets/icon.svg" alt="" class="win-tb-icon" width="18" height="18">
-            <span class="win-tb-name">AMT Chat</span>
+            <span class="win-tb-name" data-i18n-en="AMT Chat">AMT Chat</span>
         </div>
         <div class="win-tb-btns">
             <button class="win-tb-btn" id="winBtnMin" title="Свернуть">&#8212;</button>
@@ -37,29 +37,29 @@
 
     <!-- Sidebar -->
     <header>
-        <h1>AMT</h1>
+        <h1 data-i18n-en="AMT">AMT</h1>
         <nav>
             <a href="#" class="active" data-page="home" data-i18n="nav_home" data-i18n-ru="Главная">Главная</a>
             <a href="#" data-page="chat" data-i18n="nav_chat" data-i18n-ru="Чат">Чат</a>
-            <a href="#" data-page="code" id="codePageNav" data-i18n-ru="Код">Код</a>
+            <a href="#" data-page="code" id="codePageNav" data-i18n="nav_code" data-i18n-ru="Код">Код</a>
 
             <a href="#" data-page="settings" data-i18n="nav_settings" data-i18n-ru="Настройки">Настройки</a>
             <a href="#" data-page="docs" data-i18n="nav_docs" data-i18n-ru="Справка">Справка</a>
             <a href="#" data-page="storage" data-i18n="nav_storage" data-i18n-ru="Хранилище">Хранилище</a>
             <a href="#" data-page="logs" data-i18n="nav_logs" data-i18n-ru="Логи">Логи</a>
         </nav>
-        <button class="new-chat-btn" id="newChatBtn" data-i18n="new_chat" data-i18n-ru="+ Новый чат">+ Новый чат</button>
+        <button class="new-chat-btn" id="newChatBtn" data-i18n="new_chat" data-i18n-ru="+ Новый чат">+ New chat</button>
 
         <!-- Группы чатов -->
         <div class="group-controls">
-            <button class="group-add-btn" id="addGroupBtn" title="Создать группу" data-i18n="add_group" data-i18n-ru="＋ Группа">＋ Группа</button>
+            <button class="group-add-btn" id="addGroupBtn" title="Create group" data-i18n="add_group" data-i18n-ru="＋ Группа">＋ Group</button>
         </div>
 
         <div class="chats-list" id="chatsList"></div>
 
         <div class="sidebar-footer">
             <span class="status-dot" id="statusDot"></span>
-            <span class="status-text" id="statusText" data-i18n="status_ready" data-i18n-ru="Готов">Готов</span>
+            <span class="status-text" id="statusText" data-i18n="status_ready" data-i18n-ru="Готов">Ready</span>
         </div>
     </header>
 
@@ -1888,12 +1888,12 @@
         </div>
     </div>
 
-    <script src="./js/token-estimator.js"></script>
-    <script src="./js/secure-store.js"></script>
+    <script src="./js/core/token-estimator.js"></script>
+    <script src="./js/core/secure-store.js"></script>
 
-    <script src="./js/i18n.js"></script>
+    <script src="./js/core/i18n.js"></script>
     <script src="./js/themes.js"></script>
-    <script src="./js/extensions.js"></script>
+    <script src="./js/core/extensions.js"></script>
     <script>
         // После полной загрузки — инициализируем frontend-расширения
         window.addEventListener('load', function () {
@@ -1971,6 +1971,13 @@
     <script src="./js/media/voice.js"></script>
     <script src="./js/core/update-ui.js"></script>
     <script src="./js/core/main.js"></script>
+    <script src="./js/core/commands.js"></script>
+    <script src="./js/pages/logsDashboard.js"></script>
+    <script src="./js/components/filegenChoice.js"></script>
+    <script src="./js/components/helpOverlay.js"></script>
+    <script src="./js/core/hotkeys.js"></script>
+    <script src="./js/core/init.js"></script>
+    <script src="./js/media/media-overlay.js"></script>
     <script src="./js/mcp/mcp.js"></script>
     <script>
         // Инициализация UI обновлений (баннер + диалог)

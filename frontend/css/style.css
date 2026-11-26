@@ -4886,5 +4886,11 @@ code {
 .coding-tree-row { padding: 3px 6px; border-radius: 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .coding-tree-row:hover { background: rgba(255,255,255,.07); }
 .coding-tree-dir { font-weight: 600; color: rgba(255,255,255,.9); }
-@media (max-width: 640px) { .coding-panel { max-height: 160px; } }
+.coding-dash { margin: 10px 0; padding: 10px; border: 1px solid rgba(127,127,127,.18); border-radius: 12px; background: rgba(24,24,27,.55); }
+.coding-dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+.coding-dash-stats .widget { padding: 8px; border-radius: 10px; background: rgba(255,255,255,.04); }
+.coding-dash-row { display: flex; gap: 8px; padding: 4px 6px; border-radius: 8px; font-size: 12px; color: rgba(255,255,255,.7); }
+.coding-dash-row:hover { background: rgba(255,255,255,.05); }
+.coding-dash-empty { padding: 8px; font-size: 12px; color: rgba(255,255,255,.45); }
+@media (max-width: 640px) { .coding-panel { max-height: 160px; } .coding-dash-stats { grid-template-columns: repeat(2, 1fr); } }
 

@@ -35,4 +35,9 @@ assert(home.includes('id="codingFileTree"'), 'home.html should expose a file tre
 assert(main.includes('refreshCodingDiff'), 'main.js should refresh the coding diff panel');
 assert(main.includes('refreshCodingFileTree'), 'main.js should render the coding file tree');
 
+const logsDashboard = read('frontend/js/pages/logsDashboard.js');
+assert(home.includes('id="codingDash"'), 'home.html should include a coding dashboard section');
+assert(logsDashboard.includes('_renderCodingDash'), 'logsDashboard.js should render coding dashboard');
+assert(logsDashboard.includes('coding_tool_calls'), 'logsDashboard.js should show coding tool call counters');
+
 console.log('test_coding_frontend.js: PASS');

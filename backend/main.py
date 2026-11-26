@@ -902,6 +902,13 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                 res = on_event(ev)
                 if asyncio.iscoroutine(res):
                     asyncio.ensure_future(res)
+                structured_logger.log(
+                    "INFO",
+                    "coding_approval_request",
+                    f"Approval requested for {tool}",
+                    trace_id=trace_id,
+                    metadata={"tool": tool, "args": args, "request_id": rid},
+                )
 
             toolset.on_request = _emit_approval_request
 
@@ -1545,6 +1552,14 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                                     success=True,
                                     trace_id=trace_id
                                 )
+                                if profile.chat_mode == "coding" and not tc_name.startswith("mcp__"):
+                                    structured_logger.log(
+                                        "INFO",
+                                        "coding_tool_call",
+                                        f"Coding tool {tc_name} ok",
+                                        trace_id=trace_id,
+                                        metadata={"tool": tc_name, "args": tc_args, "ok": True},
+                                    )
                                 # Если это MCP-инструмент — логируем отдельно
                                 if tc_name.startswith("mcp__"):
                                     parts = tc_name.split("__")
@@ -1558,6 +1573,14 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                                         duration_ms=100,  # approximate
                                         trace_id=trace_id
                                     )
+                                    if profile.chat_mode == "coding":
+                                        structured_logger.log(
+                                            "INFO",
+                                            "coding_mcp_call",
+                                            f"Coding MCP {server_id}.{tool_name}",
+                                            trace_id=trace_id,
+                                            metadata={"server": server_id, "tool": tool_name},
+                                        )
                             except Exception as e:
                                 tc_result = json.dumps({"error": str(e)}, ensure_ascii=False)
                                 # Логируем ошибку
@@ -1568,6 +1591,14 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                                     error=str(e),
                                     trace_id=trace_id
                                 )
+                                if profile.chat_mode == "coding" and not tc_name.startswith("mcp__"):
+                                    structured_logger.log(
+                                        "ERROR",
+                                        "coding_error",
+                                        f"Coding tool {tc_name} failed: {e}",
+                                        trace_id=trace_id,
+                                        metadata={"tool": tc_name, "args": tc_args, "error": str(e)},
+                                    )
                                 if tc_name.startswith("mcp__"):
                                     parts = tc_name.split("__")
                                     structured_logger.log_mcp_call(
@@ -4942,6 +4973,16 @@ async def get_logs_dashboard():
     # Добавляем данные из структурированного логгера
     structured_data = structured_logger.get_dashboard_data()
     legacy_dashboard["structured_logs"] = structured_data
+    # Coding dashboard counters
+    by_cat = structured_data.get("by_category", {})
+    legacy_dashboard["coding_dashboard"] = {
+        "coding_tool_calls": by_cat.get("coding_tool_call", 0),
+        "coding_approvals": by_cat.get("coding_approval_request", 0),
+        "coding_mcp_calls": by_cat.get("coding_mcp_call", 0),
+        "coding_commands": by_cat.get("coding_command", 0) + by_cat.get("coding_tool", 0),
+        "coding_errors": by_cat.get("coding_error", 0),
+        "recent_coding_events": [e for e in structured_data.get("recent_events", []) if e.get("category", "").startswith("coding")][:20],
+    }
     return legacy_dashboard
 
 

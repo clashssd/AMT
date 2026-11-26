@@ -139,7 +139,7 @@ class LogsDashboard {
     document.getElementById('refreshLogs')?.addEventListener('click', () => {
       this.fetchEvents();
     });
-    
+
     // Автообновление
     document.getElementById('autorefresh')?.addEventListener('change', (e) => {
       if (this.pollingInterval) {
@@ -148,6 +148,14 @@ class LogsDashboard {
       if (e.target.checked) {
         this.pollingInterval = setInterval(() => this.fetchEvents(), 5000);
       }
+    });
+
+    // Coding dashboard filter chip
+    document.querySelector('[data-dashfilter="coding"]')?.addEventListener('click', (e) => {
+      document.querySelectorAll('[data-dashfilter]').forEach((b) => b.classList.remove('active'));
+      e.target.classList.add('active');
+      this.filters.module = 'coding';
+      this._renderCodingDash();
     });
     
     // Фильтры по уровню
@@ -212,6 +220,8 @@ class LogsDashboard {
       
       this.events = data.events || [];
       this.updateWidgets(data.dashboard || {});
+      this._codingDashData = data.dashboard?.coding_dashboard || {};
+      this._renderCodingDash();
       this.renderTable();
     } catch (error) {
       console.error('Failed to fetch logs:', error);
@@ -249,6 +259,33 @@ class LogsDashboard {
     }
   }
   
+  _renderCodingDash() {
+    const wrap = document.getElementById('codingDash');
+    if (!wrap) return;
+    const data = this._codingDashData || {};
+    if (!data.coding_tool_calls && !data.coding_approvals && !data.coding_mcp_calls) {
+      wrap.classList.add('hidden');
+      return;
+    }
+    wrap.classList.remove('hidden');
+    const stats = document.getElementById('codingDashStats');
+    if (stats) {
+      stats.innerHTML = `
+        <div class="widget"><div class="widget-value">${data.coding_tool_calls || 0}</div><div class="widget-label">Coding tool calls</div></div>
+        <div class="widget"><div class="widget-value">${data.coding_approvals || 0}</div><div class="widget-label">Approvals</div></div>
+        <div class="widget"><div class="widget-value">${data.coding_mcp_calls || 0}</div><div class="widget-label">Coding MCP</div></div>
+        <div class="widget"><div class="widget-value">${data.coding_errors || 0}</div><div class="widget-label">Errors</div></div>
+      `;
+    }
+    const recent = document.getElementById('codingDashRecent');
+    if (recent) {
+      const events = data.recent_coding_events || [];
+      recent.innerHTML = events.length
+        ? events.map((e) => `<div class="coding-dash-row"><span>${e.timestamp?.slice(11,19) || ''}</span><code>${e.category}</code><span>${e.message || ''}</span></div>`).join('')
+        : '<div class="coding-dash-empty">Нет coding-событий</div>';
+    }
+  }
+
   renderTable() {
     const tbody = document.getElementById('logsTableBody');
     if (!tbody) return;

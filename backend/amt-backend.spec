@@ -68,7 +68,14 @@ a = Analysis(
         'comtypes', 'comtypes.client', 'comtypes.server',
         'comtypes._comobject', 'comtypes._enum', 'comtypes._generate',
         'comtypes._util', 'comtypes.automation',
+        # MCP (Task 6: mcp_manager.py lazy-imports mcp.client.stdio/streamable_http;
+        # the package ships JSON schemas + data files, so use collect_all below)
+        'mcp', 'mcp.client', 'mcp.client.stdio', 'mcp.client.streamable_http',
+        'mcp.server', 'mcp.shared',
+        # Локальные tool-calling модули (Task 1, 6)
+        'ai_engine.tool_registry', 'ai_engine.mcp_manager',
     ],
+    collect_all=['mcp'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

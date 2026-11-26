@@ -166,3 +166,112 @@
     border-radius: var(--radius-sm, 10px);
     padding: 8px 10px;
 }
+
+/* ============================================================================
+   ПОЛЯ ВВОДА — глобальная базовая система (Фаза 3)
+   Включается ПОСЛЕ style.css, поэтому заполняет пробелы для нативных контролов,
+   которые не заданы классами. Не переопределяет классные правила выше.
+   ==========================================================================*/
+
+/* color-scheme — чинит белые нативные popup/option/скроллбары на Windows */
+:root { color-scheme: dark; }
+
+/* Базовый слой для всех нативных полей. Низкая специфичность: классные
+   правила в style.css побеждают, это только "подложка" для незад��нных. */
+input, textarea, select {
+    color-scheme: dark;
+    accent-color: var(--control-checked);
+    background: var(--field-bg);
+    color: var(--field-text);
+    border: 1px solid var(--field-border);
+    border-radius: var(--radius-sm, 10px);
+}
+input:hover, textarea:hover, select:hover { background: var(--field-bg-hover); }
+input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--field-border-focus);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+input::placeholder, textarea::placeholder { color: var(--field-placeholder); }
+
+/* Autofill — убираем белую плашку браузера */
+input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus,
+textarea:-webkit-autofill, select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px var(--field-bg) inset !important;
+    -webkit-text-fill-color: var(--field-text);
+    caret-color: var(--field-text);
+    transition: background-color 9999s ease-in-out 0s;
+}
+
+/* Нативные option (popup) — тёмный фон */
+select option, select optgroup {
+    background: var(--dropdown-bg);
+    color: var(--field-text);
+}
+select option:checked { background: var(--control-checked); color: var(--accent-contrast); }
+
+/* Стрелка select (нативная уб��рается, своя через background-image) */
+select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding-right: 30px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 12px;
+}
+/* option в <select multiple> не имеет стрелки */
+select[multiple] {
+    background-image: none;
+    padding-right: 8px;
+}
+/* Нативная стрелка в Firefox через ::-moz */
+select::-ms-expand { display: none; }
+
+/* Чекбокс / радио / range — акцент из токена */
+input[type="checkbox"], input[type="radio"], input[type="range"], input[type="color"], input[type="file"] {
+    accent-color: var(--control-checked);
+}
+input[type="color"] {
+    width: 32px; height: 32px; padding: 2px;
+    background: var(--field-bg);
+    border: 1px solid var(--field-border);
+    border-radius: var(--radius-sm, 10px);
+    cursor: pointer;
+}
+
+/* Файловый инпут — базовая тема (классные правила в style.css уточняют) */
+input[type="file"] {
+    background: var(--field-bg);
+    color: var(--field-text);
+    border: 1px solid var(--field-border);
+    border-radius: var(--radius-sm, 10px);
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+/* ============ БЕЛЫЕ ПЛАШКИ — точечные исправления (Фаза 3) ============ */
+/* Отправка сообщения: белая плашка → акцентный градиент */
+.send-btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--accent-contrast);
+}
+.send-btn:hover { filter: brightness(1.08); }
+.send-btn:disabled {
+    background: var(--surface-2);
+    color: var(--text-faint);
+    cursor: not-allowed;
+}
+
+/* web-open-btn: хардкод #7c5cff → token accent */
+.sidebar-video-card.web-link .web-open-btn {
+    background: var(--accent);
+    color: var(--accent-contrast);
+}
+.sidebar-video-card.web-link .web-open-btn:hover { background: var(--accent-2); }
+
+/* player-tab: белые rgba → токены text */
+.player-tab { color: var(--text-dim); }
+.player-tab:hover { background: var(--surface-hover); color: var(--text); }
+.player-tab.active { background: var(--accent-soft); color: var(--text-strong); }

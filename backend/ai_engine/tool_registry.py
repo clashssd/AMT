@@ -52,6 +52,29 @@ class ToolRegistry:
             for t in self._tools.values()
         ]
 
+    def schemas_for_profile(self, profile) -> list[dict]:
+        coding_tools = {"fs_read", "fs_list", "fs_search", "fs_write", "fs_apply_patch", "run_command", "git_status", "git_diff", "git_log", "git_add", "git_commit", "git_branch", "git_push"}
+        media_tools = {"generate_image", "generate_video", "generate_audio", "generate_file"}
+        result = []
+        for name, tool in self._tools.items():
+            if profile.chat_mode == "coding":
+                if name in coding_tools or tool.source.startswith("mcp:"):
+                    result.append(self._schema_for(tool))
+            else:
+                if name not in coding_tools:
+                    result.append(self._schema_for(tool))
+        return result
+
+    def _schema_for(self, tool: ToolDef) -> dict:
+        return {
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.parameters,
+            },
+        }
+
     def has(self, name: str) -> bool:
         return name in self._tools
 

@@ -41,6 +41,7 @@
         <nav>
             <a href="#" class="active" data-page="home" data-i18n="nav_home" data-i18n-ru="Главная">Главная</a>
             <a href="#" data-page="chat" data-i18n="nav_chat" data-i18n-ru="Чат">Чат</a>
+            <a href="#" data-page="code" id="codePageNav" data-i18n-ru="Код">Код</a>
 
             <a href="#" data-page="settings" data-i18n="nav_settings" data-i18n-ru="Настройки">Настройки</a>
             <a href="#" data-page="docs" data-i18n="nav_docs" data-i18n-ru="Справка">Справка</a>
@@ -464,6 +465,7 @@
                             <a href="#" data-sec="sec-keys" data-i18n="s_keys" data-i18n-ru="Ключи">Ключи</a>
                             <a href="#" data-sec="sec-tools" data-i18n="s_tools" data-i18n-ru="Инструменты">Инструменты</a>
                             <a href="#" data-sec="sec-projects" data-i18n="s_projects" data-i18n-ru="Проекты">Проекты</a>
+                            <a href="#" data-sec="sec-coding" data-i18n-ru="Код">Код</a>
                             <a href="#" data-sec="sec-media" data-i18n="s_media" data-i18n-ru="Медиа-ключи">Медиа-ключи</a>
                             <a href="#" data-sec="sec-mcp" data-i18n="s_mcp" data-i18n-ru="MCP-серверы">MCP-серверы</a>
                             <a href="#" data-sec="sec-voice" data-i18n="s_voice" data-i18n-ru="Голос">Голос</a>
@@ -1331,6 +1333,31 @@
                             </div>
                         </div>
                     </div><!-- /settings-page themes -->
+
+                    <!-- Страница: Код -->
+                    <div class="settings-page" id="sec-coding" data-page-key="coding">
+                        <div class="settings-block">
+                            <h3>Код</h3>
+                            <p class="block-desc">Отдельная страница «Код», кодинг-ключи, рабочие папки и права инструментов.</p>
+                            <div class="form-group">
+                                <label>Показывать страницу «Код» в меню</label>
+                                <input type="checkbox" id="codingPageVisibility" checked>
+                            </div>
+                            <div class="form-group">
+                                <label>Рабочая папка кодинг-чата</label>
+                                <input type="text" id="codingProjectRoot" class="opt-input" placeholder="C:\Users\...\project">
+                            </div>
+                            <div class="form-group">
+                                <label>Политика прав</label>
+                                <select id="codingPolicyPreset" class="opt-select">
+                                    <option value="balanced">Сбалансированная</option>
+                                    <option value="safe">Безопасная</option>
+                                    <option value="strict">Строгая</option>
+                                </select>
+                            </div>
+                            <button class="test-btn primary" id="codingSettingsSaveBtn">Сохранить настройки кода</button>
+                        </div>
+                    </div><!-- /settings-page coding -->
 
                 </div><!-- /settings-form -->
                 </div><!-- /settings-pages -->

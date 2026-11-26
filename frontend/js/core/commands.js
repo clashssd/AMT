@@ -226,6 +226,75 @@
     }
   }
   
+  // ---- Кодинг-команды (запускают действия на странице «Код») ----
+
+  function currentCodingChat() {
+    return (window.chats || []).find(c => c.id === window.currentChatId) || null;
+  }
+
+  function setCodingProjectRoot(root) {
+    const chat = currentCodingChat();
+    if (!chat || !root) return;
+    chat.projectRoot = root;
+    if (window.saveChats) window.saveChats();
+    const input = document.getElementById('codingProjectRoot');
+    if (input) input.value = root;
+    if (window.rebuildChatMeta) window.rebuildChatMeta();
+  }
+
+  function codingSessionAction(action, payload) {
+    const base = '/api/sessions/coding';
+    const method = action === 'list' ? 'GET' : 'POST';
+    const body = action === 'list' ? null : JSON.stringify(payload || {});
+    return fetch(base, { method, body, headers: body ? {'Content-Type': 'application/json'} : undefined })
+      .then(r => r.json());
+  }
+
+  async function executeCodingCommand(command, args, raw) {
+    const chat = currentCodingChat();
+    const [sub, ...rest] = args;
+    const restStr = rest.join(' ');
+    switch (command) {
+      case 'code':
+        navigateTo('code');
+        break;
+      case 'code_project':
+        if (restStr) setCodingProjectRoot(restStr);
+        else if (window.amtPrompt) await window.amtPrompt('Укажи рабочую директорию проекта', 'C:\\Projects');
+        break;
+      case 'code_session':
+        if (sub === 'list') {
+          const data = await codingSessionAction('list');
+          if (window.appendChatMessage) window.appendChatMessage('system', JSON.stringify(data.coding_sessions || []));
+        } else if (sub === 'create') {
+          await codingSessionAction('create', { name: restStr || 'coding', root: chat?.projectRoot || '' });
+        } else if (sub === 'continue') {
+          await codingSessionAction('continue', { id: restStr, base_chat_id: chat?.id || '' });
+        } else if (sub === 'duplicate') {
+          await codingSessionAction('duplicate', { id: restStr });
+        } else if (sub === 'delete') {
+          await codingSessionAction('delete', { id: restStr });
+        }
+        break;
+      case 'code_git':
+        if (window.appendChatMessage) {
+          window.appendChatMessage('system', `Git: ${sub || 'status'} ${restStr}`.trim());
+        }
+        break;
+      case 'code_test':
+        if (window.appendChatMessage) window.appendChatMessage('system', 'Запуск тестов проекта…');
+        break;
+      case 'code_mcp':
+        if (window.amtPrompt) await window.amtPrompt('MCP-серверы для кодинг-чата (через запятую)', 'amt-coding');
+        break;
+      case 'code_permissions':
+        if (window.amtPrompt) await window.amtPrompt('Разрешения: allow|ask|deny', 'ask');
+        break;
+      default:
+        break;
+    }
+  }
+
   // Экспорт (два имени для совместимости)
   window.AMTCommands = {
     parseCommands,
@@ -236,7 +305,11 @@
     showHelp,
     toggleAgent,
     toggleJailbreak,
-    quickGen
+    quickGen,
+    setCodingProjectRoot,
+    codingSessionAction,
+    executeCodingCommand,
+    currentCodingChat
   };
   window.AMTCmds = window.AMTCommands;
 })();

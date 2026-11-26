@@ -311,14 +311,18 @@ async function loadCurrentChatId() {
     currentChatId = await SecureStore.get(STORAGE_CURRENT_CHAT, null);
 }
 
-function createNewChat() {
+function createNewChat(mode = 'general') {
     const chat = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-        title: 'Новый чат',
+        title: mode === 'coding' ? 'Новый кодинг-чат' : 'Новый чат',
         messages: [],
         groupId: null,
         created_at: Date.now(),
-        updated_at: Date.now()
+        updated_at: Date.now(),
+        chat_mode: mode,
+        projectRoot: '',
+        toolPolicy: [],
+        syncToBackend: mode === 'coding' ? false : true
     };
     chats.unshift(chat);
     return chat;
@@ -335,12 +339,24 @@ function getCurrentChat() {
     return chats.find(c => c.id === currentChatId);
 }
 
+function currentChatSurface() {
+    return (document.querySelector('nav a.active[data-page]')?.dataset.page === 'code') ? 'code' : 'chat';
+}
+
+function chatMatchesSurface(chat, surface) {
+    const chatMode = chat?.chat_mode || 'general';
+    if (surface === 'code') return chatMode === 'coding';
+    return chatMode !== 'coding';
+}
+
 async function renderChatsList() {
     if (!chatsList) return;
     chatsList.innerHTML = '';
+    const surface = currentChatSurface();
 
     // Сгруппировать: сначала чаты без группы, потом по группам
-    const ungrouped = chats.filter(c => !c.groupId);
+    const visibleChats = chats.filter(c => chatMatchesSurface(c, surface));
+    const ungrouped = visibleChats.filter(c => !c.groupId);
     if (ungrouped.length > 0) {
         const label = document.createElement('div');
         label.className = 'chats-ungrouped-label';
@@ -350,7 +366,7 @@ async function renderChatsList() {
     }
 
     groups.forEach(group => {
-        const groupChats = chats.filter(c => c.groupId === group.id);
+        const groupChats = visibleChats.filter(c => c.groupId === group.id);
         if (groupChats.length === 0) return;
         const header = document.createElement('div');
         header.className = 'chat-group-header';
@@ -1278,15 +1294,20 @@ function setStatus(type) {
 function showPage(page) {
     navLinks.forEach(a => a.classList.toggle('active', a.dataset.page === page));
     homePage.classList.toggle('active', page === 'home');
-    chatPage.classList.toggle('active', page === 'chat');
+    chatPage.classList.toggle('active', page === 'chat' || page === 'code');
     settingsPage.classList.toggle('active', page === 'settings');
     logsPage.classList.toggle('active', page === 'logs');
     if (storagePage) storagePage.classList.toggle('active', page === 'storage');
     if (docsPage) docsPage.classList.toggle('active', page === 'docs');
+    const chatSurface = page === 'code' ? 'coding' : 'general';
+    if (chatPage.dataset) chatPage.dataset.surface = chatSurface;
     if (page === 'home') fillHomePage();
     if (page === 'logs') loadLogs();
     if (page === 'storage') loadStorage();
-    if (page === 'chat') toggleComposerVisibility();
+    if (page === 'chat' || page === 'code') {
+        toggleComposerVisibility();
+        renderChatsList();
+    }
     if (page === 'settings') showSettingsPage('sec-connect');
     if (page === 'docs') showDocsPage('docs-about');
 }
@@ -1713,8 +1734,17 @@ async function sendMessage() {
         
         // Удаляем nav и help из списка команд для отправки
         commands = commands.filter(c => !c.id.startsWith('nav_') && c.id !== 'help');
-        
-        // Если были ТОЛЬКО nav/help без текста — не отправляем запрос
+
+        // Кодинг-команды выполняются локально на странице «Код» и не отправляются в API
+        const codingCmds = commands.filter(c => c.id && c.id.startsWith('code'));
+        for (const cc of codingCmds) {
+            if (window.AMTCommands.executeCodingCommand) {
+                await window.AMTCommands.executeCodingCommand(cc.id, cc.args ? Object.values(cc.args).flat() : [], rawText);
+            }
+        }
+        commands = commands.filter(c => !(c.id && c.id.startsWith('code')));
+
+        // Если были ТОЛЬКО nav/help/coding без текста — не отправляем запрос
         if (commands.length === 0 && !finalText) {
             messageInput.value = '';
             adjustTextareaHeight();
@@ -1864,7 +1894,10 @@ async function streamViaWebSocket(message, history, agentId = '', attachments = 
                 settings: toBackendSettings({ ...buildSettingsFromInputs(), apiKey: (apiKeyInput ? apiKeyInput.value : '').trim() }),
                 agent_id: agentId,
                 key_id: currentKeyId,
-                commands: commands  // Передаём список команд
+                commands: commands,  // Передаём список команд
+                chat_mode: getCurrentChat()?.chat_mode || 'general',
+                project_root: getCurrentChat()?.projectRoot || '',
+                tool_policy: getCurrentChat()?.toolPolicy || []
             };
             // Ядровые агенты + мульти-выбор агентов в шапке чата → core_agents
             const coreList = agentMselCurrent();

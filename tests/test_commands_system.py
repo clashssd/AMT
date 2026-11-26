@@ -261,9 +261,9 @@ class TestCommandRegistry:
     """Тесты реестра команд."""
     
     def test_registry_structure(self):
-        """Реестр содержит все 15 команд."""
+        """Реестр содержит все 22 команды (15 базовых + 7 кодинг-команд)."""
         assert 'commands' in REGISTRY
-        assert len(REGISTRY['commands']) == 15
+        assert len(REGISTRY['commands']) == 22
     
     def test_registry_command_fields(self):
         """Каждая команда имеет обязательные поля."""

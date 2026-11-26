@@ -1408,7 +1408,7 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                             ))
                     except Exception as e:
                         logger.warning("Failed to register MCP tools for '%s': %s", cfg.id, e)
-        request_body["tools"] = tool_registry.schemas()
+        request_body["tools"] = tool_registry.schemas_for_profile(profile)
 
     # Intermediate tool-call events collected across the loop, returned to the
     # frontend for rendering (see "tool_events" in the return below).
@@ -4171,12 +4171,15 @@ def _load_sessions() -> dict:
     if os.path.exists(SESSIONS_FILE):
         try:
             with open(SESSIONS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+            data.setdefault("coding_sessions", [])
+            return data
         except Exception:
             pass
-    return {"sessions": []}
+    return {"sessions": [], "coding_sessions": []}
 
 def _save_sessions(data: dict):
+    data.setdefault("coding_sessions", [])
     with open(SESSIONS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -4219,6 +4222,138 @@ async def delete_session(session_id: str):
     data["sessions"] = [s for s in data["sessions"] if s["id"] != session_id]
     _save_sessions(data)
     return {"status": "deleted" if len(data["sessions"]) < before else "not_found"}
+
+
+def _coding_command_name(raw: str) -> str | None:
+    text = (raw or "").strip()
+    if not text.startswith("/code"):
+        return None
+    first_token = text.split(maxsplit=1)[0].lstrip("/")
+    return first_token or None
+
+
+def _coding_command_result(raw: str) -> dict | None:
+    name = _coding_command_name(raw)
+    if not name:
+        return None
+    rest = raw.strip().split(maxsplit=1)
+    args = rest[1].split() if len(rest) > 1 else []
+    return {"command": name, "args": args}
+
+
+def _coding_session_create(payload: dict) -> dict:
+    data = _load_sessions()
+    sid = "ses_" + os.urandom(4).hex()
+    session = {
+        "id": sid,
+        "name": payload.get("name") or f"Кодинг-сессия {len(data['coding_sessions']) + 1}",
+        "root": payload.get("root") or "",
+        "keyId": payload.get("keyId") or "",
+        "agentId": payload.get("agentId") or "",
+        "skills": payload.get("skills") or [],
+        "mcp": payload.get("mcp") or [],
+        "permissions": payload.get("permissions") or [],
+        "savedPatterns": payload.get("savedPatterns") or [],
+        "branch": payload.get("branch") or "",
+        "baseChatId": "",
+        "createdAt": int(time.time()),
+    }
+    data["coding_sessions"].append(session)
+    _save_sessions(data)
+    log_chat_event("CODING_SESSION_CREATED", {"id": sid, "name": session["name"]})
+    return session
+
+
+def _coding_session_list() -> list[dict]:
+    return _load_sessions().get("coding_sessions", [])
+
+
+def _coding_session_get(session_id: str) -> dict | None:
+    return next((s for s in _coding_session_list() if s.get("id") == session_id), None)
+
+
+def _coding_session_continue(session_id: str, base_chat_id: str = "") -> dict | None:
+    data = _load_sessions()
+    for s in data.get("coding_sessions", []):
+        if s.get("id") == session_id:
+            s["baseChatId"] = base_chat_id
+            _save_sessions(data)
+            return s
+    return None
+
+
+def _coding_session_duplicate(session_id: str) -> dict | None:
+    original = _coding_session_get(session_id)
+    if not original:
+        return None
+    payload = {
+        key: original.get(key, []) if key in ("skills", "mcp", "permissions", "savedPatterns") else original.get(key, "")
+        for key in ("name", "root", "keyId", "agentId", "skills", "mcp", "permissions", "savedPatterns", "branch")
+    }
+    payload["name"] = f"{original.get('name', '')} (копия)"
+    return _coding_session_create(payload)
+
+
+def _coding_session_delete(session_id: str) -> bool:
+    data = _load_sessions()
+    before = len(data.get("coding_sessions", []))
+    data["coding_sessions"] = [s for s in data.get("coding_sessions", []) if s.get("id") != session_id]
+    _save_sessions(data)
+    return len(data["coding_sessions"]) < before
+
+
+class CodingSessionIn(BaseModel):
+    name: str = ""
+    root: str = ""
+    keyId: str = ""
+    agentId: str = ""
+    skills: list[str] = []
+    mcp: list[str] = []
+    permissions: list[dict] = []
+    savedPatterns: list[dict] = []
+    branch: str = ""
+    base_chat_id: str = ""
+    id: str = ""
+
+
+@app.get("/api/sessions/coding")
+async def list_coding_sessions():
+    return {"status": "ok", "coding_sessions": _coding_session_list()}
+
+
+@app.post("/api/sessions/coding")
+async def create_coding_session(s: CodingSessionIn):
+    payload = s.model_dump(exclude={"id", "base_chat_id"})
+    session = _coding_session_create(payload)
+    return {"status": "created", "session": session}
+
+
+@app.post("/api/sessions/coding/continue")
+async def continue_coding_session(s: CodingSessionIn):
+    if not s.id:
+        raise HTTPException(400, "id required")
+    updated = _coding_session_continue(s.id, s.base_chat_id)
+    if not updated:
+        raise HTTPException(404, "not found")
+    return {"status": "ok", "session": updated}
+
+
+@app.post("/api/sessions/coding/duplicate")
+async def duplicate_coding_session(s: CodingSessionIn):
+    if not s.id:
+        raise HTTPException(400, "id required")
+    duplicated = _coding_session_duplicate(s.id)
+    if not duplicated:
+        raise HTTPException(404, "not found")
+    return {"status": "ok", "session": duplicated}
+
+
+@app.post("/api/sessions/coding/delete")
+async def delete_coding_session(s: CodingSessionIn):
+    if not s.id:
+        raise HTTPException(400, "id required")
+    ok = _coding_session_delete(s.id)
+    return {"status": "deleted" if ok else "not_found"}
 
 
 # ===== ПОИСК ПО ЧАТАМ =====

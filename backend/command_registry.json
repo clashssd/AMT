@@ -150,6 +150,52 @@
       "aliases": ["?", "помощь"],
       "description": "Показать список всех команд с описанием",
       "type": "help"
+    },
+    {
+      "id": "code",
+      "aliases": ["кодинг", "код"],
+      "description": "Перейти на страницу кодинга и создать/открыть кодинг-чат",
+      "type": "coding",
+      "target": "code"
+    },
+    {
+      "id": "code_project",
+      "aliases": ["code_proj", "проект"],
+      "description": "Указать рабочую директорию проекта для кодинг-чата",
+      "type": "coding",
+      "requires_args": true
+    },
+    {
+      "id": "code_session",
+      "aliases": ["code_sess", "сессия"],
+      "description": "Управлять кодинг-сессиями: list, create, continue, duplicate, delete",
+      "type": "coding",
+      "requires_args": true
+    },
+    {
+      "id": "code_git",
+      "aliases": ["git"],
+      "description": "Git-операции в проекте: status, diff, log, commit, push",
+      "type": "coding",
+      "requires_args": true
+    },
+    {
+      "id": "code_test",
+      "aliases": ["test"],
+      "description": "Запустить тесты в проекте (pytest/npm test/cargo test)",
+      "type": "coding"
+    },
+    {
+      "id": "code_mcp",
+      "aliases": ["mcp"],
+      "description": "Указать MCP-серверы для кодинг-чата",
+      "type": "coding"
+    },
+    {
+      "id": "code_permissions",
+      "aliases": ["perms", "разрешения"],
+      "description": "Управлять разрешениями кодинг-чата (allow/ask/deny)",
+      "type": "coding"
     }
   ]
 }

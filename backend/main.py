@@ -305,6 +305,8 @@ class Settings(BaseModel):
     tts_model: str = ""               # TTS model name
     tts_voice_id: str = ""            # empty = system default
     vosk_model_path: str = ""         # empty = use auto-downloaded default
+    # Tool-calling iteration limit (0 = default 5, max 50)
+    tool_iter_limit: int = 0
     wake_word_string: str = "Астра"   # string to match in Vosk transcript
     vad_silence_ms: int = 2000
     vad_sensitivity: float = 1.8

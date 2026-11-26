@@ -430,6 +430,37 @@ function writerDownload() {
     document.body.removeChild(a);
 }
 
+// ===== Лимит итераций tool-calling =====
+async function saveToolIterLimit() {
+    const limit = parseInt(document.getElementById('toolIterLimit').value, 10) || 0;
+    try {
+        const resp = await fetch(`${API_BASE}/api/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tool_iter_limit: limit }),
+        });
+        if (resp.ok) {
+            flashStatus('Лимит итераций tool-calling сохранён: ' + limit);
+        } else {
+            flashStatus('Ошибка при сохранении лимита');
+        }
+    } catch (e) {
+        flashStatus('Ошибка сети: ' + e);
+    }
+}
+
+// Load tool iter limit on settings page load
+async function loadToolIterLimit() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/settings`);
+        const settings = await resp.json();
+        if (settings.tool_iter_limit !== undefined) {
+            document.getElementById('toolIterLimit').value = settings.tool_iter_limit;
+        }
+    } catch { /* ignore */ }
+}
+
+// ===== Хранилище: секция «MCP-серверы» =====
 async function renderMcpStorage() {
     const list = document.getElementById('mcp-storage-list');
     if (!list) return;

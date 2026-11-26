@@ -1,0 +1,67 @@
+/* ============ FAZA 7: motion system + bento home ============ */
+
+/* ---- Motion: body.no-anim kill-switch ---- */
+body.no-anim *, body.no-anim *::before, body.no-anim *::after {
+    animation: none !important;
+    transition: none !important;
+}
+
+/* ---- prefers-reduced-motion: auto-disable ---- */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ---- Scroll-reveal: .reveal hidden until .is-visible (JS adds it) ---- */
+.reveal {
+    opacity: 0;
+    transform: translateY(16px);
+    transition:
+        opacity var(--motion-slow) var(--ease-out),
+        transform var(--motion-slow) var(--ease-out);
+    transition-delay: var(--reveal-delay, 0ms);
+    will-change: opacity, transform;
+}
+.reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    will-change: auto;
+}
+body.no-anim .reveal { opacity: 1 !important; transform: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; }
+}
+
+/* ---- Bento home: asymmetric grid at >=1024, single col at <900 ---- */
+.home-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: clamp(20px, 3vw, 40px);
+}
+@media (min-width: 1024px) {
+    .home-container {
+        grid-template-columns: 1.6fr 1fr;
+        grid-template-areas:
+            "hero hero"
+            "card quick";
+        gap: 24px;
+    }
+    .home-hero { grid-area: hero; }
+    .home-card { grid-area: card; }
+    .home-quick { grid-area: quick; }
+}
+@media (max-width: 899px) {
+    .home-container {
+        grid-template-columns: 1fr;
+    }
+    .home-hero, .home-card, .home-quick { grid-area: auto; }
+}
+@media (min-width: 1024px) {
+    .home-card { padding: clamp(24px, 3vw, 40px); }
+    .home-quick { padding: clamp(16px, 2vw, 28px); }
+}

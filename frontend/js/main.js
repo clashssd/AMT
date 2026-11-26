@@ -1855,6 +1855,59 @@ async function streamViaWebSocket(message, history, agentId = '', attachments = 
                 currentStreamingEl = null;
                 setBotError(el, data.content || 'Ошибка бэкенда.');
                 reject(new Error(data.content));
+            } else if (data.type === 'tool_call_start') {
+                // Карточка вызова инструмента: появляется в чате до результатов
+                const card = document.createElement('div');
+                card.className = 'tool-call-card running';
+                card.dataset.tool = data.tool || 'tool';
+                card.dataset.callId = data.callId || '';
+                card.innerHTML = `<span class="tool-icon">🔧</span> ${escapeHtml(data.tool || 'tool')}… <span class="tool-spinner" aria-hidden="true"></span>`;
+                const contentEl = el.querySelector('.message-content');
+                if (contentEl) contentEl.appendChild(card);
+                scrollToBottomIfNear();
+            } else if (data.type === 'tool_call_result') {
+                // Результат инструмента: ищем running-карточку с таким tool и обновляем её
+                const contentEl = el.querySelector('.message-content');
+                if (!contentEl) return;
+                const card = contentEl.querySelector(`.tool-call-card[data-tool="${CSS.escape(data.tool || 'tool')}"].running`);
+                if (card) {
+                    const result = data.result;
+                    const preview = typeof result === 'string' ? result.slice(0, 200) : JSON.stringify(result).slice(0, 200);
+                    card.classList.remove('running');
+                    card.classList.add('done');
+                    card.innerHTML = `<span class="tool-icon">��</span> ${escapeHtml(data.tool || 'tool')} → ${escapeHtml(preview)}`;
+                    // Для нативных медиа-инструментов (generate_image, generate_video, generate_audio, generate_file)
+                    // результат — JSON {type:'media', kind, data} или {type:'error', error}. Рендерим медиа/файл inline,
+                    // НЕ вызывая renderGenInChat (он сгенерирует заново).
+                    if ((data.tool || '').startsWith('generate_')) {
+                        let media = null;
+                        try { media = typeof result === 'string' ? JSON.parse(result) : result; } catch { /* not json */ }
+                        if (media && media.type === 'media') {
+                            const mwrap = document.createElement('div');
+                            mwrap.className = 'tool-result-media';
+                            const kind = media.kind || '';
+                            const dataStr = media.data || '';
+                            if (kind === 'image' && dataStr) {
+                                mwrap.innerHTML = `<img src="${dataStr}" alt="tool result" style="max-width:100%;border-radius:8px">`;
+                            } else if (kind === 'audio' && dataStr) {
+                                mwrap.innerHTML = `<audio controls src="${dataStr}" style="max-width:100%"></audio>`;
+                            } else if (kind === 'video' && dataStr) {
+                                mwrap.innerHTML = `<video controls src="${dataStr}" style="max-width:100%;border-radius:8px"></video>`;
+                            } else if (kind === 'file' && dataStr) {
+                                const a = document.createElement('a');
+                                a.href = dataStr;
+                                a.textContent = 'Скачать файл';
+                                a.download = '';
+                                a.target = '_blank';
+                                mwrap.appendChild(a);
+                            }
+                            card.appendChild(mwrap);
+                        } else if (media && media.type === 'error') {
+                            card.innerHTML = `<span class="tool-icon">⚠️</span> ${escapeHtml(data.tool || 'tool')} → ${escapeHtml(media.error || 'ошибка')}`;
+                        }
+                    }
+                    scrollToBottomIfNear();
+                }
             }
         };
 

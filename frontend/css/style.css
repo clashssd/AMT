@@ -4837,3 +4837,33 @@ code {
 .mcp-form-actions label { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .storage-items-mcp { display: flex; flex-direction: column; gap: 6px; min-height: 24px; }
 .storage-item.mcp-storage-item { align-items: center; }
+/* ===== Tool-call cards in chat (Task 8) ===== */
+.tool-call-card {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    margin: 4px 0;
+    border-radius: 6px;
+    background: var(--surface-dim, rgba(0,0,0,0.25));
+    font-size: 0.85em;
+    opacity: 0.9;
+    border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+}
+.tool-call-card .tool-icon { font-size: 0.95em; }
+.tool-call-card .tool-spinner {
+    width: 12px; height: 12px;
+    border: 2px solid var(--accent, #7aa2ff);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: tcc-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+.tool-call-card.running { opacity: 1; }
+.tool-call-card.done { opacity: 0.75; }
+.tool-result-media { margin-top: 6px; width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.tool-result-media img, .tool-result-media video { max-width: 100%; border-radius: 8px; }
+.tool-result-media audio { max-width: 100%; }
+.tool-result-media a { font-size: 0.9em; color: var(--accent, #7aa2ff); text-decoration: none; }
+.tool-result-media a:hover { text-decoration: underline; }
+@keyframes tcc-spin { to { transform: rotate(360deg); } }

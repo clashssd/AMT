@@ -321,6 +321,23 @@
       case 'code_permissions':
         if (window.amtPrompt) await window.amtPrompt('Разрешения: allow|ask|deny', 'ask');
         break;
+      case 'code_orchestrator': {
+        if (!chat || !chat.projectRoot) {
+          appendSystemMessage('Сначала укажите проект: /code_project C:\\path');
+          break;
+        }
+        const goal = restStr || (await window.amtPrompt?.('Задача для кодинг-оркестратора', 'исправь баг и запусти тесты'));
+        if (!goal) break;
+        appendSystemMessage('Запускаю кодинг-оркестратор: planner → coder → reviewer…');
+        const res = await fetch('/api/coding/orchestrator', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ root: chat.projectRoot, goal, policy: chat.toolPolicy || [] }),
+        }).then(r => r.json()).catch(err => ({ status: 'error', error: String(err) }));
+        const run = res.run || res;
+        appendSystemMessage(`Оркестратор завершён: ${run.status || res.status || 'error'}. Изменено файлов: ${(run.files_changed || []).length}. Раундов: ${run.rounds || 0}.`);
+        break;
+      }
       default:
         break;
     }

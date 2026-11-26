@@ -4540,6 +4540,48 @@ async def coding_tool(req: CodingToolIn):
     return {"status": "ok", "tool": req.tool, **result}
 
 
+class CodingOrchestratorIn(BaseModel):
+    root: str = ""
+    goal: str = ""
+    policy: list[dict] = []
+    max_rounds: int = 3
+    key_id: str = ""
+
+
+@app.post("/api/coding/orchestrator")
+async def coding_orchestrator(req: CodingOrchestratorIn):
+    """Run a small multi-agent coding orchestrator: planner → coder → reviewer."""
+    root = (req.root or "").strip()
+    goal = (req.goal or "").strip()
+    if not root:
+        raise HTTPException(400, "Укажите root: рабочую директорию проекта")
+    if not os.path.isdir(root):
+        raise HTTPException(400, "Проектная директория не найдена")
+    if not goal:
+        raise HTTPException(400, "Укажите goal: задачу для кодинг-оркестратора")
+
+    from ai_engine.coding_orchestrator import CodingOrchestrator
+
+    settings = Settings()
+    settings.toolCalling = False
+
+    async def llm_call(prompt: str, context: dict):
+        result = await call_ai_api(
+            prompt, [], settings, key_id=req.key_id, chat_mode="coding",
+            project_root=root, tool_policy=req.policy,
+        )
+        return result.get("text", "{}")
+
+    orch = CodingOrchestrator(
+        root,
+        storage_path=SESSIONS_FILE,
+        default_policy=req.policy or [{"action": "*", "resource": "*", "effect": "allow"}],
+        max_rounds=max(1, min(int(req.max_rounds or 3), 8)),
+    )
+    run = await orch.run_goal(goal, llm_call)
+    return {"status": "ok", "run": run}
+
+
 # ===== ПОИСК ПО ЧАТАМ =====
 class SearchQuery(BaseModel):
     q: str = ""

@@ -198,6 +198,13 @@
       "type": "coding"
     },
     {
+      "id": "code_orchestrator",
+      "aliases": ["code_orch", "code_orchestrator_ru", "кодинг_оркестратор"],
+      "description": "Запустить кодинг-оркестратор: planner → coder → reviewer",
+      "type": "coding",
+      "requires_args": true
+    },
+    {
       "id": "design",
       "aliases": ["ui", "дизайн", "designer"],
       "description": "Включить premium designer-агента для UI/UX-задач в AMT",

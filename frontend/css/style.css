@@ -1219,12 +1219,12 @@ main.page.active {
 }
 
 .stop-btn {
-    background: rgba(248, 113, 113, 0.15);
-    color: #f87171;
-    border: 1px solid rgba(248, 113, 113, 0.3);
+    background: var(--danger-soft);
+    color: var(--danger);
+    border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
 }
 .stop-btn:hover {
-    background: rgba(248, 113, 113, 0.25);
+    background: color-mix(in srgb, var(--danger) 22%, var(--surface-hover));
 }
 .stop-btn.hidden { display: none; }
 .send-btn.hidden { display: none; }

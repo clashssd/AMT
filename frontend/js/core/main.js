@@ -1691,7 +1691,24 @@ async function sendMessage() {
         commands = parsed.commands;
         finalText = parsed.text;
         
-        // Если остались только команды без текста — используем описание
+        // Навигационные команды выполняются на фронтенде, НЕ отправляются в API
+        const navCmds = commands.filter(c => c.id && c.id.startsWith('nav_'));
+        if (navCmds.length > 0) {
+            for (const nc of navCmds) {
+                const target = nc.id.replace('nav_', ''); // nav_home → home
+                if (window.showPage) window.showPage(target);
+            }
+            // Если были ТОЛЬКО nav-команды без текста — не отправляем запрос
+            const remaining = commands.filter(c => !c.id.startsWith('nav_'));
+            commands = remaining;
+            if (remaining.length === 0 && !finalText) {
+                messageInput.value = '';
+                adjustTextareaHeight();
+                return;
+            }
+        }
+        
+        // Если остались только feature-команды без текста — используем описание
         if (!finalText && commands.length > 0) {
             finalText = 'Выполни команду: ' + commands.map(c => '/' + c.id).join(' + ');
         }

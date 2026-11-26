@@ -1841,6 +1841,9 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     """Обрабатывает сообщение и возвращает ответ AI + usage. Поддерживает slash-команды."""
+    if str(request.chat_mode or "general").lower() == "coding" and not str(request.project_root or "").strip():
+        raise HTTPException(400, "Для кодинг-чата нужно указать project root")
+
     # Обрабатываем команды если есть
     extra_params = {}
     if request.commands:
@@ -1886,6 +1889,9 @@ async def chat(request: ChatRequest):
         key_id=request.key_id, systemPromptOverride=request.systemPromptOverride,
         attachments=request.attachments,
         sysinteraction=request.sysinteraction,
+        chat_mode=request.chat_mode,
+        project_root=request.project_root,
+        tool_policy=request.tool_policy,
         **extra_params
     )
     return {"response": result["text"], "usage": result["usage"], "tool_events": result.get("tool_events", [])}
@@ -3821,6 +3827,12 @@ async def _electron_screenshot(url: str, timeout: float = 12.0) -> Optional[tupl
     return None
 
 # ===== WebSocket (стриминг) =====
+def _validate_chat_mode_project(payload: dict) -> None:
+    """Coding requests must carry a project_root."""
+    if str(payload.get("chat_mode", "general")).lower() == "coding" and not str(payload.get("project_root", "")).strip():
+        raise HTTPException(400, "Для кодинг-чата нужно указать project root")
+
+
 @app.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket):
     await websocket.accept()
@@ -3831,6 +3843,7 @@ async def websocket_chat(websocket: WebSocket):
             user_message = payload.get("message", "")
             history = [Message(**m) for m in payload.get("history", [])]
             commands = payload.get("commands", [])  # Получаем команды
+            _validate_chat_mode_project(payload)
 
             # Если есть команды — обрабатываем их
             extra_params = {}
@@ -3886,6 +3899,9 @@ async def websocket_chat(websocket: WebSocket):
                     systemPromptOverride=payload.get("systemPromptOverride", ""),
                     attachments=payload.get("attachments", []),
                     sysinteraction=payload.get("sysinteraction", False),
+                    chat_mode=payload.get("chat_mode", "general"),
+                    project_root=payload.get("project_root", ""),
+                    tool_policy=payload.get("tool_policy", []),
                     **extra_params
                 )
                 response_text = result["text"]

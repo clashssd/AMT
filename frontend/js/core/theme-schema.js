@@ -266,6 +266,13 @@
         // Типографика
         vars["--font-scale"] = ty.scale;
         vars["--motion-speed"] = mo.speed;
+        // Custom font families (set by theme editor; takes precedence over global font pick)
+        if (ty.font === "custom" && ty.fontFamily) {
+            vars["--font-family"] = ty.fontFamily;
+        }
+        if ((ty.headingFont === "custom") && ty.headingFontFamily) {
+            vars["--heading-font-family"] = ty.headingFontFamily;
+        }
         // appearance
         vars["--appearance"] = t.appearance;
         return vars;

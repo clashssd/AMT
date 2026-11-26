@@ -18,6 +18,7 @@
         "teCardBg", "teCardBg2", "teModalBg", "teOverlay", "teDropdownBg", "teTooltipBg",
         "teCodeBg", "teTableBg", "teTableHover", "teScrollbarThumb", "teScrollbarTrack",
         "teControlBg", "teControlBorder", "teControlChecked",
+        "teFontCustom", "teHeadingFontCustom",
     ];
     const RANGE_VALS = { teGlass: "teGlassVal", teBorder: "teBorderVal", teOverlay: "teOverlayVal", teRadius: "teRadiusVal", teBlur: "teBlurVal", teGlow: "teGlowVal", teScale: "teScaleVal" };
 
@@ -42,9 +43,9 @@
         c.accent2 = readColor("teAccent2") || c.accent2;
         c.text = readColor("teText") || c.text;
         c.textDim = readColor("teTextDim") || c.textDim;
-        c.glass = `rgba(255,255,255,${(+readColor("teGlass") || 2) / 100})`;
-        c.glass2 = `rgba(255,255,255,${Math.max(0, (+readColor("teGlass") || 2) - 1) / 100})`;
-        c.border = `rgba(255,255,255,${(+readColor("teBorder") || 6) / 100})`;
+        c.glass = `rgba(255,255,255,${(readColor("teGlass") !== "" ? +readColor("teGlass") : 2) / 100})`;
+        c.glass2 = `rgba(255,255,255,${Math.max(0, (readColor("teGlass") !== "" ? +readColor("teGlass") : 2) - 1) / 100})`;
+        c.border = `rgba(255,255,255,${(readColor("teBorder") !== "" ? +readColor("teBorder") : 6) / 100})`;
         c.success = readColor("teSuccess") || c.success;
         c.warning = readColor("teWarning") || c.warning;
         c.danger = readColor("teDanger") || c.danger;
@@ -56,7 +57,7 @@
         setSurface("fieldText", "teFieldText"); setSurface("fieldPlaceholder", "teFieldPlaceholder");
         setSurface("cardBg", "teCardBg"); setSurface("cardBg2", "teCardBg2");
         setSurface("modalBg", "teModalBg");
-        s.overlayBg = `rgba(0,0,0,${(+readColor("teOverlay") || 62) / 100})`;
+        s.overlayBg = `rgba(0,0,0,${(readColor("teOverlay") !== "" ? +readColor("teOverlay") : 62) / 100})`;
         setSurface("dropdownBg", "teDropdownBg"); setSurface("tooltipBg", "teTooltipBg");
         setSurface("codeBg", "teCodeBg"); setSurface("tableBg", "teTableBg");
         setSurface("tableRowHover", "teTableHover");
@@ -65,14 +66,17 @@
         setSurface("controlChecked", "teControlChecked");
 
         // Форма/эффекты
-        sh.radius = +readColor("teRadius") || sh.radius;
-        ef.blur = +readColor("teBlur") || ef.blur;
-        ef.glow = (+readColor("teGlow") || 35) / 100;
+        sh.radius = readColor("teRadius") !== "" ? +readColor("teRadius") : sh.radius;
+        ef.blur = readColor("teBlur") !== "" ? +readColor("teBlur") : ef.blur;
+        ef.glow = (readColor("teGlow") !== "" ? +readColor("teGlow") : 35) / 100;
         ef.shadow = $("teShadow").value || ef.shadow;
         mo.speed = $("teMotion").value || mo.speed;
         ty.font = $("teFont").value || ty.font;
         ty.headingFont = $("teHeadingFont").value || ty.headingFont;
-        ty.scale = (+readColor("teScale") || 100) / 100;
+        // Custom font family strings (when select = "custom")
+        if (ty.font === "custom") ty.fontFamily = readColor("teFontCustom") || "";
+        if (ty.headingFont === "custom") ty.headingFontFamily = readColor("teHeadingFontCustom") || "";
+        ty.scale = (readColor("teScale") !== "" ? +readColor("teScale") : 100) / 100;
 
         theme.version = 2;
         theme.id = selectedId || ("custom_" + Date.now().toString(36));
@@ -133,6 +137,11 @@
         set("teGlow", Math.round(ef.glow * 100)); set("teGlowVal").textContent = Math.round(ef.glow * 100) + "%";
         set("teShadow", ef.shadow); set("teMotion", mo.speed);
         set("teFont", ty.font); set("teHeadingFont", ty.headingFont || ty.font);
+        // Custom font family strings
+        const fcEl = $("teFontCustom");
+        const hcEl = $("teHeadingFontCustom");
+        if (fcEl) { fcEl.value = ty.fontFamily || ""; fcEl.style.display = ty.font === "custom" ? "block" : "none"; }
+        if (hcEl) { hcEl.value = ty.headingFontFamily || ""; hcEl.style.display = (ty.headingFont || ty.font) === "custom" ? "block" : "none"; }
         set("teScale", Math.round(ty.scale * 100)); set("teScaleVal").textContent = Math.round(ty.scale * 100) + "%";
         set("teName", t.label || id);
 
@@ -275,11 +284,15 @@
 
     function applyAndPersist() {
         const t = buildDraft();
-        if (T().applyTheme) T().applyTheme(selectedId || "ocean");
-        // применить черновик как текущий (для предпросмотра)
+        // 1) Apply the draft's CSS vars directly (NOT the stored theme)
         const vars = S().toCssVars(t);
         const r = document.documentElement.style;
         for (const k in vars) r.setProperty(k, vars[k]);
+        // 2) Update the theme engine's internal state so renderAll/persist see the draft
+        if (T().applyTheme) T().applyTheme(t.id);
+        // 3) Re-apply draft vars (applyTheme may have clobbered them with stored values)
+        for (const k in vars) r.setProperty(k, vars[k]);
+        // 4) Persist the UI state (font pick, etc.)
         if (T().persist) T().persist();
     }
 
@@ -313,6 +326,19 @@
             const all = loadAllThemes();
             const t = all[tp.value] || S().DEFAULT_THEME;
             loadToControls(t, tp.value);
+        });
+
+        // Custom font show/hide: when teFont/teHeadingFont = "custom", reveal the text input
+        const fontSel = $("teFont"), hFontSel = $("teHeadingFont");
+        if (fontSel) fontSel.addEventListener("change", () => {
+            const fc = $("teFontCustom");
+            if (fc) fc.style.display = fontSel.value === "custom" ? "block" : "none";
+            schedulePreview();
+        });
+        if (hFontSel) hFontSel.addEventListener("change", () => {
+            const hc = $("teHeadingFontCustom");
+            if (hc) hc.style.display = hFontSel.value === "custom" ? "block" : "none";
+            schedulePreview();
         });
 
         // Начальное состояние: текущая тема

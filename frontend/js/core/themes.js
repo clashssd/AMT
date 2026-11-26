@@ -43,10 +43,19 @@
         document.documentElement.setAttribute("data-theme", (t && t.id) || "ocean");
         document.documentElement.setAttribute("data-appearance", theme.appearance || "dark");
     }
-    function applyFont(f) {
-        const p = FONTS.find(x => x.id === f) || FONTS[0];
-        document.documentElement.style.setProperty("--font-family", p.family);
-        document.body.style.fontFamily = p.family;
+    function applyFont(f, fontFamily) {
+        // f: font id from FONTS array, or "custom" (use fontFamily string)
+        const p = FONTS.find(x => x.id === f);
+        let family;
+        if (f === "custom" && fontFamily) {
+            family = fontFamily;
+        } else if (p) {
+            family = p.family;
+        } else {
+            family = FONTS[0].family;
+        }
+        document.documentElement.style.setProperty("--font-family", family);
+        document.body.style.fontFamily = family;
     }
     function applyBg(dim) {
         const m = document.getElementById("bgMedia");
@@ -122,7 +131,20 @@
         // Свотчи тем
         renderSwatches();
         const fp = document.getElementById("fontPick");
-        if (fp) { fp.innerHTML = FONTS.map(f => `<option value="${f.id}">${esc(f.label)}</option>`).join(""); fp.value = current.font; }
+        if (fp) {
+            fp.innerHTML = FONTS.map(f => `<option value="${f.id}">${esc(f.label)}</option>`).join("") + '<option value="custom">Свой…</option>';
+            fp.value = current.font;
+            // Show/hide custom font input
+            const cf = document.getElementById("fontCustom");
+            if (cf) cf.style.display = fp.value === "custom" ? "block" : "none";
+            if (!fp.__amtCustomFontListener) {
+                fp.__amtCustomFontListener = true;
+                fp.addEventListener("change", () => {
+                    const cf2 = document.getElementById("fontCustom");
+                    if (cf2) cf2.style.display = fp.value === "custom" ? "block" : "none";
+                });
+            }
+        }
         const dim = document.getElementById("bgDim"); if (dim) dim.oninput = () => { document.getElementById("bgDimVal").textContent = dim.value + "%"; applyBg(dim.value); };
     }
 
@@ -209,7 +231,27 @@
         const preview = document.getElementById("themePreviewBtn");
         if (preview) preview.onclick = () => { const t = ({ ...customThemes, ...themes })[tp.value]; if (t) applyThemeVars(t); };
         const fp = document.getElementById("fontPick");
-        if (fp) fp.onchange = () => { current.font = fp.value; applyFont(current.font); persist(); };
+        if (fp) {
+            fp.onchange = () => {
+                current.font = fp.value;
+                const cf = document.getElementById("fontCustom");
+                const ff = cf && cf.value ? cf.value.trim() : undefined;
+                applyFont(current.font, ff);
+                persist();
+            };
+            // Also re-apply when the custom font input changes
+            const cfIn = document.getElementById("fontCustom");
+            if (cfIn) {
+                let _cfTimer;
+                cfIn.addEventListener("input", () => {
+                    clearTimeout(_cfTimer);
+                    _cfTimer = setTimeout(() => {
+                        const v = cfIn.value.trim();
+                        if (current.font === "custom") { applyFont("custom", v || undefined); persist(); }
+                    }, 300);
+                });
+            }
+        }
         const ctBtn = document.getElementById("ctCreateBtn");
         if (ctBtn) ctBtn.onclick = () => {
             const name = (document.getElementById("ctName").value.trim() || "custom-" + Date.now().toString(36));
@@ -291,7 +333,11 @@
         const saved = JSON.parse(localStorage.getItem("amt_ui_state") || "{}");
         current.theme = saved.theme || "ocean"; current.font = saved.font || "system"; current.bg = saved.bg || ""; current.lang = saved.lang || "ru";
         applyThemeVars({ ...customThemes, ...themes }[current.theme] || Object.values(themes)[0]);
-        applyFont(current.font); applyBg(document.getElementById("bgDim")?.value);
+        applyFont(current.font, current.font === "custom" ? saved.fontFamily : undefined);
+        // Restore custom font input value
+        const cfRest = document.getElementById("fontCustom");
+        if (cfRest && current.font === "custom") { cfRest.value = saved.fontFamily || ""; cfRest.style.display = "block"; }
+        applyBg(document.getElementById("bgDim")?.value);
         setLang(current.lang); renderAll(); listConfigs();
         // Восстановить тумблеры и плотность
         if (typeof tAnim !== 'undefined' && tAnim) {
@@ -310,8 +356,10 @@
         const focus = document.getElementById("tFocus");
         const sb = document.getElementById("tSidebar");
         const den = document.getElementById("densitySlider");
+        const cf = document.getElementById("fontCustom");
         localStorage.setItem("amt_ui_state", JSON.stringify({
-            theme: current.theme, font: current.font, bg: current.bg, lang: current.lang,
+            theme: current.theme, font: current.font, fontFamily: cf && current.font === "custom" ? cf.value.trim() : undefined,
+            bg: current.bg, lang: current.lang,
             anim: anim ? anim.checked : true,
             focus: focus ? focus.checked : true,
             sidebar: sb ? sb.checked : false,

@@ -4538,6 +4538,12 @@ async def coding_tool(req: CodingToolIn):
     except TypeError as exc:
         raise HTTPException(400, f"Invalid arguments for {req.tool}: {exc}")
 
+    structured_logger.log(
+        "INFO",
+        "coding",
+        f"Direct coding tool {req.tool}",
+        metadata={"tool": req.tool, "root": root, "ok": result.get("ok")},
+    )
     return {"status": "ok", "tool": req.tool, **result}
 
 

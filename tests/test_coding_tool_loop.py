@@ -202,3 +202,22 @@ def test_coding_tool_endpoint_allows_list_symbols(tmp_backend, tmp_path):
     assert body.get("ok") is True
     symbols = body.get("symbols") or []
     assert any("alpha" in (s.get("text") or "") for s in symbols)
+
+
+def test_coding_tool_endpoint_logs_coding_event(tmp_backend, tmp_path, monkeypatch):
+    import main
+    from fastapi.testclient import TestClient
+
+    calls = []
+
+    class FakeStructuredLogger:
+        def log(self, level, category, message, trace_id=None, session_id=None, metadata=None):
+            calls.append(category)
+
+    monkeypatch.setattr(main, "structured_logger", FakeStructuredLogger())
+    root = tmp_path / "log_proj"
+    root.mkdir()
+    client = TestClient(main.app)
+    resp = client.post("/api/coding/tool", json={"root": str(root), "tool": "git_status", "args": {}})
+    assert resp.status_code == 200
+    assert "coding" in calls

@@ -174,3 +174,85 @@ def test_tool_call_error_appended(tmp_backend, monkeypatch):
     result = asyncio.run(main.call_ai_api("test error", [], settings))
     error_events = [e for e in result["tool_events"] if e["type"] == "tool_call_result" and "error" in e.get("result", "").lower()]
     assert len(error_events) == 1
+
+
+def test_ws_chat_emits_tool_events(tmp_backend, monkeypatch):
+    import main
+
+    mock_result = {
+        "text": "final answer",
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+        "tool_events": [
+            {"type": "tool_call_start", "tool": "generate_image", "args": {"prompt": "cat"}},
+            {"type": "tool_call_result", "tool": "generate_image", "result": '{"type":"media"}'},
+        ],
+    }
+
+    async def fake_ws_call_ai_api(*a, **kw):
+        return mock_result
+
+    monkeypatch.setattr(main, "call_ai_api", fake_ws_call_ai_api)
+
+    from starlette.testclient import TestClient
+    c = TestClient(main.app)
+    with c.websocket_connect("/ws/chat") as ws:
+        ws.send_json({
+            "message": "make a cat",
+            "history": [],
+            "settings": {},
+            "agent_id": "",
+            "extra_skills": [],
+            "core_agents": [],
+            "sysinteraction": False,
+            "key_id": "",
+            "systemPromptOverride": "",
+            "attachments": [],
+        })
+        messages = []
+        while True:
+            data = ws.receive_text()
+            msg = json.loads(data)
+            messages.append(msg)
+            if msg.get("type") == "done":
+                break
+
+        tool_event_types = [m for m in messages if m.get("type") in ("tool_call_start", "tool_call_result")]
+        assert len(tool_event_types) == 2
+        assert messages[-1]["type"] == "done"
+
+
+def test_rest_chat_returns_tool_events(tmp_backend, monkeypatch):
+    import main
+
+    mock_result = {
+        "text": "final answer",
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+        "tool_events": [
+            {"type": "tool_call_start", "tool": "generate_audio", "args": {"text": "hello"}},
+            {"type": "tool_call_result", "tool": "generate_audio", "result": '{"type":"media"}'},
+        ],
+    }
+
+    async def fake_call_ai_api(*a, **kw):
+        return mock_result
+
+    monkeypatch.setattr(main, "call_ai_api", fake_call_ai_api)
+
+    from starlette.testclient import TestClient
+    c = TestClient(main.app)
+    resp = c.post("/api/chat", json={
+        "message": "say hello",
+        "history": [],
+        "settings": {},
+        "agent_id": "",
+        "extra_skills": [],
+        "core_agents": [],
+        "sysinteraction": False,
+        "key_id": "",
+        "systemPromptOverride": "",
+        "attachments": [],
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "tool_events" in data
+    assert len(data["tool_events"]) == 2

@@ -1652,7 +1652,7 @@ async def chat(request: ChatRequest):
         attachments=request.attachments,
         sysinteraction=request.sysinteraction,
     )
-    return {"response": result["text"], "usage": result["usage"]}
+    return {"response": result["text"], "usage": result["usage"], "tool_events": result.get("tool_events", [])}
 
 
 class TestRequest(BaseModel):
@@ -3614,6 +3614,8 @@ async def websocket_chat(websocket: WebSocket):
                 )
                 response_text = result["text"]
                 usage = result.get("usage", {})
+                for ev in result.get("tool_events", []):
+                    await websocket.send_json(ev)
                 for i in range(0, len(response_text), 4):
                     await websocket.send_json({"type": "chunk", "content": response_text[i:i+4]})
                     await asyncio.sleep(0.02)

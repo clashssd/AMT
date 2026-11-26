@@ -4110,16 +4110,17 @@ async function loadStorage() {
     if (!storageSections) return;
     storageStats.innerHTML = '';
     storageSections.innerHTML = '<div class="storage-empty">Загрузка…</div>';
-    let agents = [], skills = [], keys = [], sessions = [], files = [], memory = { facts: [], user_prefs: {} };
+    let agents = [], skills = [], keys = [], sessions = [], codingSessions = [], files = [], memory = { facts: [], user_prefs: {} };
     let localChats = [];
     let extensions = [];
     let customThemes = {};
     let sysinteraction = null;
     try {
-        const [agRes, keyRes, sesRes, filesRes, memRes, extRes, sysRes] = await Promise.all([
+        const [agRes, keyRes, sesRes, codingSesRes, filesRes, memRes, extRes, sysRes] = await Promise.all([
             fetch(`${API_BASE}/api/agents`).then(r => r.json()),
             fetch(`${API_BASE}/api/keys`).then(r => r.json()),
             fetch(`${API_BASE}/api/sessions`).then(r => r.json()),
+            fetch(`${API_BASE}/api/sessions/coding`).then(r => r.json()),
             fetch(`${API_BASE}/api/files`).then(r => r.json()),
             fetch(`${API_BASE}/api/memory`).then(r => r.json()),
             fetch(`${API_BASE}/api/extensions/list`).then(r => r.json()),
@@ -4129,6 +4130,7 @@ async function loadStorage() {
         skills = agRes.skills || [];
         keys = keyRes.keys || [];
         sessions = sesRes.sessions || [];
+        codingSessions = codingSesRes.coding_sessions || [];
         files = filesRes.files || [];
         memory = memRes;
         extensions = extRes.extensions || [];
@@ -4139,11 +4141,11 @@ async function loadStorage() {
     const scenarios = loadScenarios();
     try { customThemes = JSON.parse(localStorage.getItem('amt_custom_themes') || '{}'); } catch { customThemes = {}; }
 
-    renderStorageInteractive(agents, skills, keys, sessions, files, memory, localChats, scenarios, extensions, customThemes, sysinteraction);
+    renderStorageInteractive(agents, skills, keys, sessions, files, memory, localChats, scenarios, extensions, customThemes, sysinteraction, codingSessions);
 }
 
 // Рендер интерактивного хранилища
-function renderStorageInteractive(agents, skills, keys, sessions, files, memory, localChats, scenarios, extensions = [], customThemes = {}, sysinteraction = null) {
+function renderStorageInteractive(agents, skills, keys, sessions, files, memory, localChats, scenarios, extensions = [], customThemes = {}, sysinteraction = null, codingSessions = []) {
     const sections = [
         { key: 'chats', title: 'Чаты', icon: 'chat', c: 'c1',
             items: localChats.map(c => ({ id: c.id, t: c.title, s: `${c.messages?.length || 0} сообщ.` })),
@@ -4232,6 +4234,40 @@ function renderStorageInteractive(agents, skills, keys, sessions, files, memory,
                 { label: 'Удалить', cls: 'danger', act: () => amtConfirm({ title: 'Удалить тему?', text: 'Кастомная тема будет удалена.', yesLabel: 'Удалить' }).then(ok => { if (ok) deleteThemeFromStorage(t.id); }) },
                 { label: 'В папку', cls: 'folder-move', title: 'Переместить в папку', act: () => moveItemToFolder('themes', t) },
             ] },
+        { key: 'coding', title: 'Коддинг', icon: 'code', c: 'c5',
+            items: [
+                ...localChats.filter(c => c.chat_mode === 'coding').map(c => ({
+                    id: 'chat:' + c.id,
+                    t: c.title || c.id,
+                    s: c.projectRoot ? 'проект: ' + c.projectRoot : 'чаты без проекта',
+                    data: c,
+                    kind: 'chat',
+                })),
+                ...codingSessions.map(s => ({
+                    id: 'ses:' + s.id,
+                    t: s.name || s.id,
+                    s: s.root ? 'сессия: ' + s.root : 'кодинг-сессия',
+                    data: s,
+                    kind: 'session',
+                })),
+            ],
+            add: true, addFn: () => { startNewChat(); flashStatus('Новый кодинг-чат создан'); },
+            itemActions: it => {
+                if (it.kind === 'chat') {
+                    const chat = localChats.find(c => c.id === it.data.id);
+                    return [
+                        { label: 'Откры��ь', cls: 'on', act: () => { if (chat) openChat(chat); } },
+                        { label: 'Удалить', cls: 'danger', act: () => amtConfirm({ title: 'Удалить кодинг-чат?', text: 'Локальный кодинг-чат будет удалён.' }).then(ok => { if (ok) { deleteChat(it.data.id); saveChats().then(() => { renderChatsList(); loadStorage(); }); } }) },
+                    ];
+                }
+                const ses = it.data;
+                const currentCoding = localChats.find(c => c.chat_mode === 'coding' && c.id === currentChatId) || null;
+                return [
+                    { label: 'Продолжить', cls: 'on', act: () => window.AMTCommands?.codingSessionAction?.('continue', { id: ses.id, base_chat_id: currentCoding?.id || '' }).then(() => loadStorage()) },
+                    { label: 'Дублировать', cls: '', act: () => window.AMTCommands?.codingSessionAction?.('duplicate', { id: ses.id }).then(() => loadStorage()) },
+                    { label: 'Удалить', cls: 'danger', act: () => amtConfirm({ title: 'Удалить кодинг-сессию?', text: 'Сессия будет удалена из хранилища.' }).then(ok => { if (ok) window.AMTCommands?.codingSessionAction?.('delete', { id: ses.id }).then(() => loadStorage()); }) },
+                ];
+            } },
         ...(sysinteraction ? [{ key: 'sysinteraction', title: 'Взаимодействие с системой', icon: 'sysinteraction', c: 'c2',
             items: [
                 { id: 'orchestrator', t: 'Оркестратор', s: sysinteraction.enabled ? 'ак��ивен' : 'выключен', on: sysinteraction.enabled, data: sysinteraction.orchestrator || {} },

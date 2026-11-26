@@ -16,6 +16,8 @@ assert(main.includes('data-page="code"') || home.includes('data-page="code"'), '
 assert(home.includes('sec-coding'), 'home.html should include sec-coding settings section');
 assert(main.includes('codingPageVisibility'), 'main.js should wire coding settings visibility');
 assert(main.includes('codingSettingsSaveBtn'), 'main.js should wire coding settings save');
+assert(main.includes("key: 'coding'") && main.includes("title: 'Коддинг'"), 'main.js should render a coding storage section');
+assert(main.includes('codingSessions = []'), 'renderStorageInteractive should accept coding sessions');
 assert(main.includes('tool_approval_request'), 'main.js should handle coding approval requests');
 assert(main.includes('respondCodingApproval'), 'main.js should respond to coding approval decisions');
 const fallback = main.slice(main.indexOf('async function fallbackRest'));

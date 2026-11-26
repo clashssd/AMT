@@ -1691,21 +1691,34 @@ async function sendMessage() {
         commands = parsed.commands;
         finalText = parsed.text;
         
-        // Навигационные команды выполняются на фронтенде, НЕ отправляются в API
+        // Навигационные и help-команды выполняются на фронтенде, НЕ отправляются в API
         const navCmds = commands.filter(c => c.id && c.id.startsWith('nav_'));
+        const helpCmds = commands.filter(c => c.id === 'help');
+        
         if (navCmds.length > 0) {
             for (const nc of navCmds) {
                 const target = nc.id.replace('nav_', ''); // nav_home → home
                 if (window.showPage) window.showPage(target);
             }
-            // Если были ТОЛЬКО nav-команды без текста — не отправляем запрос
-            const remaining = commands.filter(c => !c.id.startsWith('nav_'));
-            commands = remaining;
-            if (remaining.length === 0 && !finalText) {
-                messageInput.value = '';
-                adjustTextareaHeight();
-                return;
+        }
+        
+        if (helpCmds.length > 0) {
+            if (window.AMTHelp) {
+                window.AMTHelp.show();
+            } else {
+                // Fallback: AMTHelp ещё не инициализирован — показываем alert
+                alert('Список команд: /nav_home, /nav_chat, /nav_settings, /nav_docs, /nav_storage, /nav_logs, /rag, /agent, /orchestrator, /jailbreak, /web_agent, /system, /memory, /gen, /help');
             }
+        }
+        
+        // Удаляем nav и help из списка команд для отправки
+        commands = commands.filter(c => !c.id.startsWith('nav_') && c.id !== 'help');
+        
+        // Если были ТОЛЬКО nav/help без текста — не отправляем запрос
+        if (commands.length === 0 && !finalText) {
+            messageInput.value = '';
+            adjustTextareaHeight();
+            return;
         }
         
         // Если остались только feature-команды без текста — используем описание
@@ -1719,11 +1732,12 @@ async function sendMessage() {
             const mcpAvailable = await isMcpWriterAvailable();
             if (mcpAvailable) {
                 const choice = await window.AMTFileGenChoice.show();
-                if (choice === null) return; // отмена — прерываем отpravку
-                // Выбор влияет на enabled_tools: mcp → mcp__writer__*, base → create_office и т.д.
-                // Backend сам решит по enabled_tools из команды, но мы можем уточнить:
+                if (choice === null) return; // отмена — прерываем отправку
+                // Передаём выбор в команду: mcp → writer, base → create_office
                 if (choice === 'mcp') {
-                    // Убедиться что в команде указан mcp-режим (backend подхватит по enabled_tools)
+                    genCmd.args.mode = 'mcp';
+                } else {
+                    genCmd.args.mode = 'base';
                 }
             }
         }

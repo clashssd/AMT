@@ -1832,8 +1832,17 @@ async def chat(request: ChatRequest):
     if request.commands:
         from command_engine import CommandParser, build_context
         parser = CommandParser(COMMAND_REGISTRY)
-        # Объединяем команды в строку для парсинга: "/cmd1 + /cmd2 ..."
-        cmd_string = " + ".join(request.commands) + " " + request.message
+        # Команды могут быть объектами {id, args} или строками — сериализуем
+        def _cmd_to_str(c):
+            if isinstance(c, dict):
+                base = "/" + str(c.get("id", ""))
+                args = c.get("args", {})
+                parts = [str(args.get("type", "")), str(args.get("filetype", "")),
+                         str(args.get("reference", "")), str(args.get("prompt", ""))]
+                parts = [p for p in parts if p]
+                return (base + " " + " ".join(parts)).strip() if parts else base
+            return str(c)
+        cmd_string = " + ".join(_cmd_to_str(c) for c in request.commands) + " " + request.message
         parsed_commands, remaining_text = parser.parse(cmd_string)
         
         if parsed_commands:
@@ -3815,8 +3824,17 @@ async def websocket_chat(websocket: WebSocket):
             if commands:
                 from command_engine import CommandParser, build_context
                 parser = CommandParser(COMMAND_REGISTRY)
-                # Объединяем: команды + остаток текста
-                cmd_string = " + ".join(commands) + " " + user_message
+                # Команды могут быть объектами {id, args} или строками — сериализуем
+                def _cmd_to_str(c):
+                    if isinstance(c, dict):
+                        base = "/" + str(c.get("id", ""))
+                        args = c.get("args", {})
+                        parts = [str(args.get("type", "")), str(args.get("filetype", "")),
+                                 str(args.get("reference", "")), str(args.get("prompt", ""))]
+                        parts = [p for p in parts if p]
+                        return (base + " " + " ".join(parts)).strip() if parts else base
+                    return str(c)
+                cmd_string = " + ".join(_cmd_to_str(c) for c in commands) + " " + user_message
                 parsed_commands, remaining_text = parser.parse(cmd_string)
                 
                 if parsed_commands:

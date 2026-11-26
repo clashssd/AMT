@@ -260,26 +260,32 @@ def _handle_gen_specific(args: Dict[str, Any], ctx: CommandContext):
         ctx.set_tool('generate_audio')
     
     elif gen_type == 'file':
-        ctx.add_mcp(['writer'])
-        tool_map = {
-            'xlsx': 'create_office',
-            'docx': 'create_office',
-            'pptx': 'create_office',
-            'pdf': 'create_pdf',
-            'csv': 'create_data',
-            'json': 'create_data',
-            'yaml': 'create_data',
-            'py': 'create_code',
-            'js': 'create_code',
-            'ts': 'create_code',
-            'html': 'create_code',
-            'css': 'create_code',
-            'sh': 'create_code',
-            'bat': 'create_code',
-            'md': 'create_text',
-            'txt': 'create_text'
-        }
-        ctx.set_tool(tool_map.get(filetype, 'create_text'))
+        mode = args.get('mode', 'mcp')  # 'mcp' (default) or 'base'
+        if mode == 'mcp':
+            ctx.add_mcp(['writer'])
+            tool_map = {
+                'xlsx': 'create_office',
+                'docx': 'create_office',
+                'pptx': 'create_office',
+                'pdf': 'create_pdf',
+                'csv': 'create_data',
+                'json': 'create_data',
+                'yaml': 'create_data',
+                'py': 'create_code',
+                'js': 'create_code',
+                'ts': 'create_code',
+                'html': 'create_code',
+                'css': 'create_code',
+                'sh': 'create_code',
+                'bat': 'create_code',
+                'md': 'create_text',
+                'txt': 'create_text'
+            }
+            ctx.set_tool(tool_map.get(filetype, 'create_text'))
+        else:
+            # Base mode: use built-in tools without MCP Writer
+            ctx.set_tool('create_text')
+            ctx.add_fragment(f"Generate a {filetype or 'text'} file using built-in tools.")
     
     elif gen_type == 'combo':
         # Активируем все нужные MCP

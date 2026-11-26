@@ -3590,6 +3590,20 @@ async function refreshCodingSymbols() {
     _codingSymbols = res.ok ? (res.symbols || []) : [];
     _renderCodingSymbols(_codingSymbols);
 }
+
+async function refreshCodingFindDefinitions() {
+    const queryEl = document.getElementById('codingFindQuery');
+    const query = (queryEl && queryEl.value || '').trim();
+    if (!query) {
+        refreshCodingSymbols();
+        return;
+    }
+    const res = await codingPanelCall('find_definitions', { query });
+    const defs = res.ok ? (res.definitions || []) : [];
+    _codingSymbols = defs.map(d => ({ path: d.path, line: d.line, text: d.text }));
+    _renderCodingSymbols(_codingSymbols);
+    if (defs.length) openCodingFile(defs[0].path);
+}
 async function refreshCodingPanels() {
     const c = currentCodingPanelChat();
     const panels = document.getElementById('codingPanels');
@@ -3615,10 +3629,12 @@ document.addEventListener('click', (e) => {
     }
     if (e.target.closest && e.target.closest('[data-coding-tree-refresh]')) { refreshCodingFileTree(); return; }
     if (e.target.closest && e.target.closest('[data-coding-symbols-refresh]')) { refreshCodingSymbols(); return; }
+    if (e.target.closest && e.target.closest('[data-coding-find]')) { refreshCodingFindDefinitions(); return; }
 });
 document.addEventListener('input', (e) => {
     if (e.target && e.target.id === 'codingTreeSearch') refreshCodingFileTree();
     if (e.target && e.target.id === 'codingSymbolSearch') _renderCodingSymbols(_codingSymbols);
+    if (e.target && e.target.id === 'codingFindQuery') refreshCodingFindDefinitions();
     if (e.target && e.target.id === 'codingDiffPath') {
         const v = e.target.value.trim();
         if (v) openCodingFile(v);

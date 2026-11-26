@@ -53,5 +53,7 @@ assert(main.includes('openCodingFile'), 'main.js should open files from tree, sy
 assert(main.includes('openCodingFile'), 'main.js should expose an openCodingFile helper');
 assert(home.includes('id="codingSymbolSearch"'), 'home.html should expose a symbol search input');
 assert(main.includes('refreshCodingSymbols'), 'main.js should refresh the symbols panel with search');
+assert(main.includes('find_definitions'), 'main.js should use find_definitions for go-to-definition search');
+assert(home.includes('id="codingFindQuery"'), 'home.html should expose a find-definitions input');
 
 console.log('test_coding_frontend.js: PASS');

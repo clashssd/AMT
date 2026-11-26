@@ -194,3 +194,24 @@ def test_git_diff_rejects_path_outside_root(tmp_path):
 
     result = toolset.git_diff(path="..")
     assert result["ok"] is False
+
+
+def test_find_definitions_returns_symbols(tmp_path):
+    from ai_engine.coding_tools import ProjectContext, CodingToolset
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "a.py").write_text("def alpha():\n    return 1\n", encoding="utf-8")
+    (root / "main.js").write_text("function beta() { return true; }\n", encoding="utf-8")
+
+    ctx = ProjectContext(root=str(root), allow_write=False, allow_commands=True, allow_git_commit=False, deny_globs=[])
+    toolset = CodingToolset(ctx)
+
+    res = toolset.find_definitions("alpha")
+    assert res["ok"] is True
+    defs = res.get("definitions") or []
+    assert any(d["path"].endswith("a.py") and "alpha" in d["text"] for d in defs)
+
+    res2 = toolset.find_definitions("beta", file_pattern="*.js")
+    assert res2["ok"] is True
+    assert any(d["path"].endswith("main.js") and "beta" in d["text"] for d in (res2.get("definitions") or []))

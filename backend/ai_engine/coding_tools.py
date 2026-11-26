@@ -494,6 +494,50 @@ class CodingToolset:
             cmd.extend(str(a) for a in extra_args)
         return self.run_command(cmd, timeout=300)
 
+    def find_definitions(self, query: str, file_pattern: Optional[str] = None, path: str = ".") -> dict:
+        """Find likely definitions for an identifier across supported source files."""
+        real, err = self._resolve_path(path)
+        if err:
+            return {"ok": False, "error": err}
+        query_norm = str(query or "").strip().lower()
+        if not query_norm:
+            return {"ok": False, "error": "Query is required"}
+        definitions: list[dict] = []
+        max_results = 100
+        exts = {
+            ".py": ("def ", "class "),
+            ".js": ("function ", "const ", "class "),
+            ".ts": ("function ", "class "),
+            ".go": ("func ", "type "),
+        }
+        files: list[str] = []
+        if os.path.isfile(real):
+            files.append(real)
+        else:
+            for cur, dirnames, filenames in os.walk(real):
+                dirnames[:] = [d for d in dirnames if d not in {".git", "node_modules", "__pycache__", ".venv"}]
+                for fn in filenames:
+                    if file_pattern and not fnmatch.fnmatch(fn, file_pattern):
+                        continue
+                    if os.path.splitext(fn)[1] in exts:
+                        files.append(os.path.join(cur, fn))
+        for file_path in files:
+            if len(definitions) >= max_results:
+                break
+            ext = os.path.splitext(file_path)[1]
+            markers = exts.get(ext, ("def ", "class ", "function ", "func "))
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line_no, line in enumerate(f, 1):
+                        if len(definitions) >= max_results:
+                            break
+                        if query_norm in line.lower() and any(line.lstrip().startswith(m) for m in markers):
+                            rel = os.path.relpath(file_path, self.ctx.root)
+                            definitions.append({"path": rel, "line": line_no, "text": line.strip()})
+            except Exception:
+                continue
+        return {"ok": True, "definitions": definitions}
+
     def list_symbols(self, path: str = ".", depth: int = 1) -> dict:
         """Best-effort symbol extraction for supported source files."""
         exts = {

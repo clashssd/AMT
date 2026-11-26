@@ -204,6 +204,22 @@ def test_coding_tool_endpoint_allows_list_symbols(tmp_backend, tmp_path):
     assert any("alpha" in (s.get("text") or "") for s in symbols)
 
 
+def test_coding_tool_endpoint_runs_find_definitions(tmp_backend, tmp_path):
+    import main
+    from fastapi.testclient import TestClient
+
+    root = tmp_path / "defs_proj"
+    root.mkdir()
+    (root / "a.py").write_text("def alpha():\n    return 1\n", encoding="utf-8")
+    client = TestClient(main.app)
+    resp = client.post("/api/coding/tool", json={"root": str(root), "tool": "find_definitions", "args": {"query": "alpha"}})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("ok") is True
+    definitions = body.get("definitions") or []
+    assert any(d.get("path", "").endswith("a.py") and "alpha" in (d.get("text") or "") for d in definitions)
+
+
 def test_coding_tool_endpoint_logs_coding_event(tmp_backend, tmp_path, monkeypatch):
     import main
     from fastapi.testclient import TestClient

@@ -4561,6 +4561,7 @@ async def coding_tool(req: CodingToolIn):
         "run_tests",
         "list_symbols",
         "diagnostics",
+        "find_definitions",
     }
     if req.tool not in direct_coding_tools:
         raise HTTPException(404, f"Coding tool {req.tool!r} is not available for direct execution")

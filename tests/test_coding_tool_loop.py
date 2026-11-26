@@ -273,3 +273,21 @@ def test_coding_extensions_endpoint_returns_coding_flag(tmp_backend, monkeypatch
     body = resp.json()
     assert body["status"] == "ok"
     assert [e["name"] for e in body["extensions"]] == ["coding-ext"]
+
+
+def test_coding_tool_endpoint_runs_diagnostics(tmp_backend, tmp_path):
+    import main
+    from fastapi.testclient import TestClient
+
+    root = tmp_path / "diag_proj"
+    root.mkdir()
+    (root / "good.py").write_text("x = 1\n")
+    (root / "bad.py").write_text("def broken(\n")
+    client = TestClient(main.app)
+    resp = client.post("/api/coding/tool", json={"root": str(root), "tool": "diagnostics", "args": {}})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("ok") is True
+    results = body.get("results", [])
+    assert any(item.get("path", "").endswith("good.py") and item.get("ok") for item in results)
+    assert any(item.get("path", "").endswith("bad.py") and not item.get("ok") for item in results)

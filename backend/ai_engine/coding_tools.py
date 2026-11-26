@@ -522,3 +522,44 @@ class CodingToolset:
                 except Exception:
                     continue
         return {"ok": True, "symbols": symbols}
+
+    def diagnostics(self, path: str = ".") -> dict:
+        """Run lightweight syntax / lint diagnostics on supported files.
+
+        - Python files: ``py_compile`` check.
+        - JS/TS files: ``node --check`` (when available).
+        - Returns a list of ``{path, ok, error}`` entries.
+        """
+        if not self.ctx.allow_commands:
+            return {"ok": False, "error": "Command execution is not enabled for this project context"}
+        results: list[dict] = []
+        real, err = self._resolve_path(path)
+        if err:
+            return {"ok": False, "error": err}
+        files_to_check: list[str] = []
+        if os.path.isfile(real):
+            files_to_check.append(real)
+        else:
+            for cur, dirnames, filenames in os.walk(real):
+                dirnames[:] = [d for d in dirnames if d not in {".git", "node_modules", "__pycache__", ".venv"}]
+                for fn in filenames:
+                    if fn.endswith((".py", ".js", ".ts")):
+                        files_to_check.append(os.path.join(cur, fn))
+        for fpath in files_to_check[:50]:
+            ext = os.path.splitext(fpath)[1]
+            rel = os.path.relpath(fpath, self.ctx.root)
+            if ext == ".py":
+                import py_compile
+                try:
+                    py_compile.compile(fpath, doraise=True)
+                    results.append({"path": rel, "ok": True})
+                except py_compile.PyCompileError as e:
+                    results.append({"path": rel, "ok": False, "error": str(e)})
+            elif ext in (".js", ".ts"):
+                cmd = ["node", "--check", fpath]
+                r = self.run_command(cmd, timeout=15)
+                if not r.get("ok") and "is not a valid" in str(r.get("error", "")):
+                    results.append({"path": rel, "ok": False, "error": r.get("error", "")})
+                else:
+                    results.append({"path": rel, "ok": r.get("ok", False), "error": r.get("error", "")})
+        return {"ok": True, "results": results}

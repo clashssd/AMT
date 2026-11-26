@@ -4554,6 +4554,7 @@ async def coding_tool(req: CodingToolIn):
         "git_status", "git_diff", "git_log", "git_branch",
         "run_tests",
         "list_symbols",
+        "diagnostics",
     }
     if req.tool not in direct_coding_tools:
         raise HTTPException(404, f"Coding tool {req.tool!r} is not available for direct execution")

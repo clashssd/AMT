@@ -38,10 +38,20 @@ extensions_state.json
 # Local secrets — never commit real API keys. Keep keys.json structure with an
 # empty apiKey placeholder only.
 # (Do NOT add an exception that re-includes a populated keys.json.)
+# Per-machine Fernet key used to encrypt MCP env vars (generated on first run).
+mcp_key.key
+*.key
+
+# Dev-artifact scratch dirs (runtime user files, never committed)
+backend/FILES_DIR/
 
 # Superpowers (local planning/SDD docs — not for the repo)
 .superpowers/
 docs/superpowers/
+
+# OpenCode local scaffolding (commands/plans — not for the repo)
+.opencode/
+PLANS/
 
 # OS
 Thumbs.db

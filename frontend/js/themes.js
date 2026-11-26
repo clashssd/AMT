@@ -18,18 +18,30 @@
     function esc(s){ return String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
     // === Применение темы: задаём CSS-переменные на :root ===
+    // v2: через theme-schema.js — normalize (v1/v2) + toCssVars (60+ vars).
+    // Совместимо с плоскими v1 темами (bg[], glass, accent, ...) — normalizeTheme их поднимает.
     function applyThemeVars(t) {
         const r = document.documentElement.style;
-        const bg = t.bg || ["#05050a", "#11131a", "#0b0f14"];
-        r.setProperty("--bg-grad-1", bg[0]); r.setProperty("--bg-grad-2", bg[1]); r.setProperty("--bg-grad-3", bg[2] || bg[1]);
-        r.setProperty("--glass-bg", t.glass || "rgba(255,255,255,0.02)");
-        r.setProperty("--glass-bg-2", t.glass2 || "rgba(255,255,255,0.04)");
-        r.setProperty("--glass-border", t.border || "rgba(255,255,255,0.06)");
-        r.setProperty("--accent", t.accent || "#8b86c9");
-        r.setProperty("--accent-2", t.accent2 || "#aba5c9");
-        r.setProperty("--text", t.text || "#d0d0d0");
-        r.setProperty("--text-dim", t.textDim || "#8a8a9a");
-        document.documentElement.setAttribute("data-theme", t.id || "ocean");
+        const theme = (typeof window.AMTThemeSchema !== "undefined")
+            ? window.AMTThemeSchema.normalizeTheme(t, (t && t.id) || "ocean")
+            : t; // fallback если схема не загрузилась
+        if (typeof window.AMTThemeSchema !== "undefined") {
+            const vars = window.AMTThemeSchema.toCssVars(theme);
+            for (const k in vars) r.setProperty(k, vars[k]);
+        } else {
+            // legacy fallback — старое поведение
+            const bg = t.bg || ["#05050a", "#11131a", "#0b0f14"];
+            r.setProperty("--bg-grad-1", bg[0]); r.setProperty("--bg-grad-2", bg[1]); r.setProperty("--bg-grad-3", bg[2] || bg[1]);
+            r.setProperty("--glass-bg", t.glass || "rgba(255,255,255,0.02)");
+            r.setProperty("--glass-bg-2", t.glass2 || "rgba(255,255,255,0.04)");
+            r.setProperty("--glass-border", t.border || "rgba(255,255,255,0.06)");
+            r.setProperty("--accent", t.accent || "#8b86c9");
+            r.setProperty("--accent-2", t.accent2 || "#aba5c9");
+            r.setProperty("--text", t.text || "#d0d0d0");
+            r.setProperty("--text-dim", t.textDim || "#8a8a9a");
+        }
+        document.documentElement.setAttribute("data-theme", (t && t.id) || "ocean");
+        document.documentElement.setAttribute("data-appearance", theme.appearance || "dark");
     }
     function applyFont(f) {
         const p = FONTS.find(x => x.id === f) || FONTS[0];
@@ -123,7 +135,8 @@
             const c = document.createElement("div");
             c.className = "theme-swatch" + (id === current.theme ? " active" : "");
             c.title = t.label || id;
-            c.style.background = `linear-gradient(135deg, ${t.bg ? t.bg[0] : "#0a0f1a"} 0%, ${t.bg ? t.bg[1] : "#1a2340"} 50%, ${t.bg ? (t.bg[2] || t.bg[1]) : "#0a1420"} 100%)`;
+            const bg = (t.colors && t.colors.bg) ? t.colors.bg : (t.bg || ["#0a0f1a", "#1a2340", "#0a1420"]);
+            c.style.background = `linear-gradient(135deg, ${bg[0]} 0%, ${bg[1]} 50%, ${bg[2] || bg[1]} 100%)`;
             c.onclick = () => {
                 current.theme = id;
                 applyThemeVars(all[id]);
@@ -167,8 +180,24 @@
 
     async function init() {
         try { themes = await fetch(THEMES_URL).then(r => r.json()); } catch { themes = { ocean: { label: "Океан (дефолт)" } }; }
-        // кастомные темы из localStorage
-        try { customThemes = JSON.parse(localStorage.getItem("amt_custom_themes") || "{}"); } catch { customThemes = {}; }
+        // кастомные темы: v2 (amt_custom_themes_v2) + миграция из v1 (amt_custom_themes)
+        let v2 = {};
+        try { v2 = JSON.parse(localStorage.getItem("amt_custom_themes_v2") || "{}"); } catch { v2 = {}; }
+        let v1 = {};
+        try { v1 = JSON.parse(localStorage.getItem("amt_custom_themes") || "{}"); } catch { v1 = {}; }
+        // Migrate v1 → v2 if v2 empty or missing entries
+        for (const id of Object.keys(v1)) {
+            if (!v2[id]) {
+                v2[id] = (typeof window.AMTThemeSchema !== "undefined")
+                    ? window.AMTThemeSchema.normalizeTheme(v1[id], id)
+                    : v1[id];
+            }
+        }
+        if (Object.keys(v1).length > 0) {
+            localStorage.setItem("amt_custom_themes_v2", JSON.stringify(v2));
+            // Не удаляем v1 — оставляем на случай отката. Миграция идемпо��ентна.
+        }
+        customThemes = v2;
 
         // события: язык (в настройках → темы и конфиги)
         const lp = document.getElementById("langSelect");
@@ -185,10 +214,17 @@
         if (ctBtn) ctBtn.onclick = () => {
             const name = (document.getElementById("ctName").value.trim() || "custom-" + Date.now().toString(36));
             const id = "custom_" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 24);
-            customThemes[id] = { id, label: name, bg: [document.getElementById("ctBg1").value, document.getElementById("ctBg2").value, document.getElementById("ctBg3").value],
+            const raw = {
+                label: name, id,
+                bg: [document.getElementById("ctBg1").value, document.getElementById("ctBg2").value, document.getElementById("ctBg3").value],
                 accent: document.getElementById("ctAccent").value, accent2: document.getElementById("ctAccent2").value,
-                glass: "rgba(0,0,0,0.15)", border: "rgba(255,255,255,0.08)", text: "#e0e0e0", textDim: "#8a8a9a", font: current.font };
-            localStorage.setItem("amt_custom_themes", JSON.stringify(customThemes));
+                glass: "rgba(0,0,0,0.15)", border: "rgba(255,255,255,0.08)", text: "#e0e0e0", textDim: "#8a8a9a",
+                font: current.font,
+            };
+            const normalized = (typeof window.AMTThemeSchema !== "undefined")
+                ? window.AMTThemeSchema.normalizeTheme(raw, id) : raw;
+            customThemes[id] = normalized;
+            localStorage.setItem("amt_custom_themes_v2", JSON.stringify(customThemes));
             current.theme = id; applyThemeVars(customThemes[id]); renderAll(); persist();
         };
         // фон

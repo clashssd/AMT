@@ -5,7 +5,7 @@ Branch: `design/system-v2` (created)
 | Phase | Title | Status | Commit |
 |-------|-------|--------|--------|
 | 0 | Baseline + white-plaque audit | ✅ | `docs(design): baseline screenshots and white plaque audit` |
-| 1 | Tokens + theme schema v2 | ⬜ | `feat(design): add design tokens and theme schema v2` |
+| 1 | Tokens + theme schema v2 | ✅ | `feat(design): add design tokens and theme schema v2` |
 | 2 | Full theme editor | ⬜ | `feat(design): add full theme editor with field and surface controls` |
 | 3 | Fields + white plaques (critical) | ⬜ | `fix(design): theme all fields and remove white plaques` |
 | 4 | Unified button system | ⬜ | `feat(design): unify button system` |

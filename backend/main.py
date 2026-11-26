@@ -30,6 +30,7 @@ from ai_engine import filegen
 from ai_engine import media as media_gen
 from ai_engine import extensions as ext_loader
 from ai_engine.async_utils import run_com_sync
+from ai_engine.tool_registry import tool_registry, MAX_TOOL_ITERATIONS
 
 app = FastAPI()
 
@@ -285,6 +286,11 @@ class Settings(BaseModel):
     background: str = ""   # URL/путь к фону (картинка или видео)
     # Default browser (detected on first run, overridable by user)
     defaultBrowser: str = ""
+    # Native LLM tool-calling (OpenAI tools/tool_calls). When True, the LLM
+    # receives tool schemas and can emit tool_calls; [[GEN]] tags are still
+    # parsed on the final text as a safety net. When False, the MEDIA_CAPABILITY
+    # block is included and the LLM uses [[GEN]] tags instead.
+    toolCalling: bool = True
 
     @property
     def effective_base_url(self) -> str:
@@ -1198,7 +1204,10 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
             "«Скриншот:» + [[SCREENSHOT:url]] + краткое описание."
         )
     )
-    combined_prompt = (combined_prompt + MEDIA_CAPABILITY) if combined_prompt else MEDIA_CAPABILITY.strip()
+    # When tool-calling is enabled, the LLM gets native tool schemas instead of
+    # [[GEN]] tag instructions — omitting MEDIA_CAPABILITY prevents double-triggering.
+    if not settings.toolCalling:
+        combined_prompt = (combined_prompt + MEDIA_CAPABILITY) if combined_prompt else MEDIA_CAPABILITY.strip()
 
     # Оркестратор: проверка на дрейф роли → добавляет напоминание
     combined_prompt = orchestrator.drift_reminder(combined_prompt)
@@ -1256,6 +1265,15 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
         request_body["stop"] = [s.strip() for s in settings.stopSequences.split(",") if s.strip()]
     if settings.responseFormat == "json":
         request_body["response_format"] = {"type": "json_object"}
+
+    # Native tool-calling: when enabled, send the unified tool schemas (native
+    # media/file tools + any connected MCP tools) so the LLM can emit tool_calls.
+    if settings.toolCalling:
+        request_body["tools"] = tool_registry.schemas()
+
+    # Intermediate tool-call events collected across the loop, returned to the
+    # frontend for rendering (see "tool_events" in the return below).
+    tool_events: list[dict] = []
 
     # Множественные ключи: список использованных ключей в этом запросе (для rotate)
     tried_key_ids: set = set()
@@ -1321,10 +1339,64 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                 text = data["choices"][0]["message"]["content"]
                 usage = data.get("usage", {})
                 finish_reason = data["choices"][0].get("finish_reason", "")
+                msg = data["choices"][0]["message"]
+
+                # --- Native tool-calling loop (only when toolCalling enabled) ---
+                # If the LLM returned tool_calls, execute them via the registry,
+                # append the results as `tool` messages, and re-call the LLM — up
+                # to MAX_TOOL_ITERATIONS times. Uses the open `client`/`url`/
+                # headers so 429 key-rotation and proxy config stay consistent.
+                if settings.toolCalling and msg.get("tool_calls"):
+                    for _iteration in range(MAX_TOOL_ITERATIONS):
+                        # Append the assistant message (with its tool_calls) to context
+                        assistant_msg = {"role": "assistant", "content": msg.get("content")}
+                        if msg.get("tool_calls"):
+                            assistant_msg["tool_calls"] = msg["tool_calls"]
+                        messages.append(assistant_msg)
+
+                        for tc in msg["tool_calls"]:
+                            tc_name = tc["function"]["name"]
+                            try:
+                                tc_args = json.loads(tc["function"].get("arguments", "{}"))
+                            except json.JSONDecodeError:
+                                tc_args = {}
+                            tool_events.append({"type": "tool_call_start", "tool": tc_name, "args": tc_args})
+
+                            try:
+                                tc_result = await tool_registry.execute(tc_name, tc_args)
+                            except Exception as e:
+                                tc_result = json.dumps({"error": str(e)}, ensure_ascii=False)
+
+                            tool_events.append({"type": "tool_call_result", "tool": tc_name, "result": tc_result})
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc.get("id", ""),
+                                "content": tc_result,
+                            })
+
+                        # Re-call the LLM with the updated message list.
+                        headers = {
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                        }
+                        resp2 = await client.post(url, headers=headers, json=request_body)
+                        if resp2.status_code == 400 and "tools" in resp2.text:
+                            log.warning("Provider rejected tools field; retrying without tools")
+                            request_body.pop("tools", None)
+                            resp2 = await client.post(url, headers=headers, json=request_body)
+                        data = resp2.json()
+                        usage = data.get("usage", usage)
+                        finish_reason = data["choices"][0].get("finish_reason", "")
+                        msg = data["choices"][0]["message"]
+                        text = msg.get("content") or text
+                        if not msg.get("tool_calls"):
+                            break
+
                 # Если ответ обрезан (length) — пробуй продолжить с увеличенным
                 # max_tokens (до 4 раз по 8k). Это спасает от «обрезанных»
                 # ответов, когда maxTokens не хватает.
-                if finish_reason == "length":
+                # (пропускаем, если только что обработали tool_calls)
+                if finish_reason == "length" and not (settings.toolCalling and msg.get("tool_calls")):
                     for ext in range(4):
                         ext_max = 4096 + 8192 * (ext + 1)
                         request_body_ext = dict(request_body)
@@ -1541,7 +1613,7 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                 # [[SYS:task_spec|...]] и [[SYS:plan|...]]
                 text = await resolve_sys_tokens(text, sys_gate)
 
-                return {"text": text, "usage": usage}
+                return {"text": text, "usage": usage, "tool_events": tool_events}
         except httpx.ConnectError as e:
             last_err = e
             await asyncio.sleep(2)

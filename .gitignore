@@ -39,6 +39,10 @@ extensions_state.json
 # empty apiKey placeholder only.
 # (Do NOT add an exception that re-includes a populated keys.json.)
 
+# Superpowers (local planning/SDD docs — not for the repo)
+.superpowers/
+docs/superpowers/
+
 # OS
 Thumbs.db
 .DS_Store

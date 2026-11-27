@@ -54,6 +54,7 @@ async function renderMcpSettings() {
             </div>
             <div class="mcp-card-body">${body}</div>
             <div class="mcp-card-actions">
+                <button onclick="mcpConnect('${escapeHtml(s.id)}')">Запустить</button>
                 <button onclick="mcpTest('${escapeHtml(s.id)}')">Тест</button>
                 <button onclick="mcpEdit('${escapeHtml(s.id)}')">Изменить</button>
                 <button class="danger" onclick="mcpDelete('${escapeHtml(s.id)}')">Удалить</button>
@@ -72,6 +73,35 @@ async function mcpToggle(id, enabled) {
         });
     } catch { /* ignore */ }
     flashStatus('MCP-сервер «' + id + '» ' + (enabled ? 'включён' : 'выключен'));
+    renderMcpSettings();
+}
+
+// «Запустить» — включить сервер и установить соединение (connect + list tools).
+async function mcpConnect(id) {
+    flashStatus('Подключение к «' + id + '»…');
+    try {
+        const resp = await fetch(`${API_BASE}/api/mcp/servers/${encodeURIComponent(id)}/enable`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: true }),
+        });
+        const data = await safeJson(resp);
+        if (data._networkError) {
+            flashStatus('Ошибка сети: «' + id + '» недоступен');
+            return;
+        }
+        if (data.error) {
+            flashStatus('Ошибка: ' + data.error);
+            return;
+        }
+        if (data.warning) {
+            flashStatus('Включён, но соединение не удалось: ' + data.warning);
+        } else {
+            flashStatus('MCP-сервер «' + id + '» запущен и подключён');
+        }
+    } catch (e) {
+        flashStatus('Ошибка сети: ' + e.message);
+    }
     renderMcpSettings();
 }
 
@@ -481,6 +511,7 @@ async function renderMcpStorage() {
             </div>
             <div class="si-actions">
                 <button data-mcp-act="toggle">${s.enabled ? 'Выключить' : 'Включить'}</button>
+                <button data-mcp-act="connect">Запустить</button>
                 <button data-mcp-act="edit">Изменить</button>
                 <button data-mcp-act="delete" class="danger">Удалить</button>
             </div>
@@ -495,6 +526,7 @@ async function renderMcpStorage() {
                 const id = row.dataset.id;
                 const act = btn.dataset.mcpAct;
                 if (act === 'toggle') mcpToggle(id, !row.querySelector('input')?.checked);
+                else if (act === 'connect') mcpConnect(id);
                 else if (act === 'edit') { showPage('settings'); showSettingsPage('sec-mcp'); mcpEdit(id); }
                 else if (act === 'delete') mcpDelete(id);
             });

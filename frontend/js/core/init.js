@@ -209,8 +209,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (chatTitle) chatTitle.addEventListener('blur', renameCurrentChat);
 
     // Логи
-    if (refreshLogsBtn) refreshLogsBtn.addEventListener('click', loadLogs);
-    if (clearLogsBtn) clearLogsBtn.addEventListener('click', clearLogs);
+    if (refreshLogsBtn) refreshLogsBtn.addEventListener('click', () => {
+        // Если на табе «Структура» — грузим структурированные
+        if (typeof logViewMode !== 'undefined' && logViewMode === 'structured' && typeof loadStructuredLogs === 'function') {
+            loadStructuredLogs();
+        } else {
+            loadLogs();
+        }
+    });
+    if (clearLogsBtn) clearLogsBtn.addEventListener('click', async () => {
+        await clearLogs();
+        // После очистки — обновляем структурированные если активны
+        if (typeof logViewMode !== 'undefined' && logViewMode === 'structured' && typeof loadStructuredLogs === 'function') {
+            loadStructuredLogs();
+        }
+    });
     logFilterBtns.forEach(b => b.addEventListener('click', () => setLogFilter(b.dataset.filter)));
     if (dashTabs) dashTabs.querySelectorAll('.dash-tab').forEach(b => b.addEventListener('click', () => setDashTab(b.dataset.mode)));
     if (dashFilterChips) dashFilterChips.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => setDashFilter(b.dataset.dashfilter)));

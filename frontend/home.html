@@ -542,7 +542,7 @@
                             <a href="#" data-sec="sec-keys" data-i18n="s_keys" data-i18n-ru="Ключи">Ключи</a>
                             <a href="#" data-sec="sec-tools" data-i18n="s_tools" data-i18n-ru="Инструменты">Инструменты</a>
                             <a href="#" data-sec="sec-projects" data-i18n="s_projects" data-i18n-ru="Проекты">Проекты</a>
-                            <a href="#" data-sec="sec-coding" data-i18n-ru="Код">Код</a>
+                            <a href="#" data-sec="sec-coding" data-i18n-en="Code" data-i18n-ru="Код">Код</a>
                             <a href="#" data-sec="sec-media" data-i18n="s_media" data-i18n-ru="Медиа-ключи">Медиа-ключи</a>
                             <a href="#" data-sec="sec-mcp" data-i18n="s_mcp" data-i18n-ru="MCP-серверы">MCP-серверы</a>
                             <a href="#" data-sec="sec-voice" data-i18n="s_voice" data-i18n-ru="Голос">Голос</a>
@@ -552,7 +552,7 @@
                             <a href="#" data-sec="sec-personality" class="subnav-special" data-i18n="s_personality" data-i18n-ru="Личность">Личность</a>
                             <a href="#" data-sec="sec-docs" class="subnav-special" data-i18n="s_docs" data-i18n-ru="Docs">Docs</a>
                             <a href="#" data-sec="sec-themes" class="subnav-special" data-i18n="s_themes" data-i18n-ru="Темы и конфиги">Темы и конфиги</a>
-                            <a href="#" data-sec="sec-hotkeys" class="subnav-special" data-i18n-ru="Хоткеи">Хоткеи</a>
+                            <a href="#" data-sec="sec-hotkeys" class="subnav-special" data-i18n-en="Hotkeys" data-i18n-ru="Хоткеи">Хоткеи</a>
                         </nav>
                     </aside>
 
@@ -561,28 +561,28 @@
                     <!-- Страница: Подключение -->
                     <div class="settings-page active" id="sec-connect" data-page-key="connect">
                         <div class="settings-block">
-                            <h3>Подключение</h3>
-                            <p class="block-desc">Адрес API и ключ. Проверьте доступные модели.</p>
+                            <h3 data-i18n-en="Connection">Подключение</h3>
+                            <p class="block-desc" data-i18n-en="API address and key. Check available models.">Адрес API и ключ. Проверьте доступные модели.</p>
 
                             <div class="form-group">
-                                <label for="baseUrl">Base URL</label>
-                                <input type="text" id="baseUrl" placeholder="https://api.ВАШ-ПРОВАЙДЕР.ком/v1 или http://localhost:8000/v1" value="">
-                                <small>Адрес API. Для локальных моделей: http://localhost:8080/v1</small>
+                                <label for="baseUrl" data-i18n-en="Base URL">Base URL</label>
+                                <input type="text" id="baseUrl" placeholder="https://api.ВАШ-ПРОВАЙДЕР.ком/v1 или http://localhost:8000/v1" data-i18n-en-ph="https://api.YOUR-PROVIDER.com/v1 or http://localhost:8000/v1" value="">
+                                <small data-i18n-en="API address. For local models: http://localhost:8080/v1">Адрес API. Для локальных моделей: http://localhost:8080/v1</small>
                             </div>
 
                             <div class="form-group">
-                                <label for="apiKey">API Key</label>
+                                <label for="apiKey" data-i18n-en="API Key">API Key</label>
                                 <div class="input-with-toggle">
-                                    <input type="password" id="apiKey" placeholder="ВАШ_API_KEY" autocomplete="off">
-                                    <button type="button" class="toggle-pass" id="togglePass" title="Показать/скрыть">Показать</button>
+                                    <input type="password" id="apiKey" placeholder="ВАШ_API_KEY" data-i18n-en-ph="YOUR_API_KEY" autocomplete="off">
+                                    <button type="button" class="toggle-pass" id="togglePass" title="Показать/скрыть" data-i18n-en-title="Show/hide">Показать</button>
                                 </div>
-                                <small>Ключ хранится зашифрованно и уходит только на указанный сервер</small>
+                                <small data-i18n-en="Key is stored encrypted and sent only to the specified server">Ключ хранится зашифрованно и уходит только на указанный сервер</small>
                             </div>
 
                             <div class="connection-check">
                                 <div class="btn-row">
-                                    <button class="test-btn primary" id="testConnectionBtn">Проверить подключение</button>
-                                    <button class="test-btn" id="testModelsBtn">Модели и возможности</button>
+                                    <button class="test-btn primary" id="testConnectionBtn" data-i18n-en="Test connection">Проверить подключение</button>
+                                    <button class="test-btn" id="testModelsBtn" data-i18n-en="Models &amp; capabilities">Модели и возможности</button>
                                 </div>
                                 <div id="testResult" class="test-result"></div>
                                 <div id="modelsList" class="models-list"></div>
@@ -593,67 +593,67 @@
                     <!-- Страница: Модель -->
                     <div class="settings-page" id="sec-model" data-page-key="model">
                         <div class="settings-block">
-                            <h3>Модель и параметры</h3>
-                            <p class="block-desc">Поведение модели и лимиты</p>
+                            <h3 data-i18n-en="Model &amp; parameters">Модель и параметры</h3>
+                            <p class="block-desc" data-i18n-en="Model behavior and limits">Поведение модели и лимиты</p>
 
                             <div class="form-group">
-                                <label for="model">Модель</label>
-                                <input type="text" id="model" placeholder="например: gpt-4o-mini, qwen2.5…" value="">
-                                <small>имя модели вашего провайдера</small>
+                                <label for="model" data-i18n-en="Model">Модель</label>
+                                <input type="text" id="model" placeholder="например: gpt-4o-mini, qwen2.5…" data-i18n-en-ph="e.g. gpt-4o-mini, qwen2.5…" value="">
+                                <small data-i18n-en="Your provider's model name">имя модели вашего провайдера</small>
                             </div>
 
                             <div class="param-grid">
                                 <div class="form-group">
-                                    <label for="maxTokens">Max Tokens</label>
+                                    <label for="maxTokens" data-i18n-en="Max Tokens">Max Tokens</label>
                                     <input type="number" id="maxTokens" min="1" max="200000" value="4096">
-                                    <small>Максимум токенов в ответе</small>
+                                    <small data-i18n-en="Max tokens in response">Максимум токенов в ответе</small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="contextWindow">Context Window</label>
+                                    <label for="contextWindow" data-i18n-en="Context Window">Context Window</label>
                                     <input type="number" id="contextWindow" min="1024" max="200000" value="128000">
-                                    <small>Сколько контекста видит модель</small>
+                                    <small data-i18n-en="How much context the model sees">Сколько контекста видит модель</small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="topP">Top P</label>
+                                    <label for="topP" data-i18n-en="Top P">Top P</label>
                                     <input type="number" id="topP" min="0" max="1" step="0.05" value="1">
-                                    <small>Ядерная выборка (0–1)</small>
+                                    <small data-i18n-en="Nucleus sampling (0–1)">Ядерная выборка (0–1)</small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="frequencyPenalty">Frequency Penalty</label>
+                                    <label for="frequencyPenalty" data-i18n-en="Frequency Penalty">Frequency Penalty</label>
                                     <input type="number" id="frequencyPenalty" min="-2" max="2" step="0.1" value="0">
-                                    <small>Штраф за повторение (−2..2)</small>
+                                    <small data-i18n-en="Penalty for repetition (−2..2)">Штраф за повторение (−2..2)</small>
                                 </div>
                             </div>
 
                             <div class="form-group">
                                 <label class="form-label-with-toggle">
-                                    <span>Temperature</span>
-                                    <label class="auto-switch"><input type="checkbox" id="autoTemp" checked> Авто</label>
+                                    <span data-i18n-en="Temperature">Temperature</span>
+                                    <label class="auto-switch"><input type="checkbox" id="autoTemp" checked> <span data-i18n-en="Auto">Авто</span></label>
                                 </label>
                                 <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7">
                                 <span class="range-value" id="tempValue">0.7</span>
-                                <small>0 — строго, 1 — разнообразно, 2 — свободно. «Авто» подбирает по типу вопроса.</small>
+                                <small data-i18n-en="0 — strict, 1 — varied, 2 — free. &laquo;Auto&raquo; picks by question type.">0 — строго, 1 — разнообразно, 2 — свободно. «Авто» подбирает по типу вопроса.</small>
                             </div>
 
                             <div class="form-group">
-                                <label for="stopSequences">Stop-последовательности</label>
-                                <input type="text" id="stopSequences" placeholder="например: END, |||">
-                                <small>Через запятую. Модель остановится, встретив их</small>
+                                <label for="stopSequences" data-i18n-en="Stop sequences">Stop-последовательности</label>
+                                <input type="text" id="stopSequences" placeholder="например: END, |||" data-i18n-en-ph="e.g. END, |||">
+                                <small data-i18n-en="Comma-separated. Model stops when it hits them">Через запятую. Модель остановится, встретив их</small>
                             </div>
 
                             <div class="form-group">
-                                <label for="responseFormat">Формат ответа</label>
+                                <label for="responseFormat" data-i18n-en="Response format">Формат ответа</label>
                                 <select id="responseFormat">
-                                    <option value="text">Обычный текст</option>
+                                    <option value="text" data-i18n-en="Plain text">Обычный текст</option>
                                     <option value="json">JSON</option>
                                 </select>
-                                <small>Для структурированных ответов</small>
+                                <small data-i18n-en="For structured responses">Для структурированных ответов</small>
                             </div>
 
                             <div class="form-group">
-                                <label for="systemPrompt">Системный промпт</label>
-                                <textarea id="systemPrompt" rows="3" placeholder="Ты — полезный ассистент..."></textarea>
-                                <small>Определяет роль и стиль ответов</small>
+                                <label for="systemPrompt" data-i18n-en="System prompt">Системный промпт</label>
+                                <textarea id="systemPrompt" rows="3" placeholder="Ты — полезный ассистент..." data-i18n-en-ph="You are a helpful assistant..."></textarea>
+                                <small data-i18n-en="Defines role and response style">Определяет роль и стиль ответов</small>
                             </div>
                         </div>
                     </div>

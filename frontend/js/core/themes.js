@@ -164,6 +164,10 @@
                 applyThemeVars(all[id]);
                 renderAll();
                 persist();
+                // Синхронизация: обновляем редактор тем (тема-editor.js)
+                if (window.AMTThemeEditor && window.AMTThemeEditor.onThemeChange) {
+                    window.AMTThemeEditor.onThemeChange(id, all[id]);
+                }
             };
             el.appendChild(c);
         }
@@ -227,7 +231,7 @@
 
         // страница "Темы и конфиги"
         const tp = document.getElementById("themePick");
-        if (tp) tp.onchange = () => { current.theme = tp.value; applyThemeVars({ ...customThemes, ...themes }[current.theme]); renderAll(); persist(); };
+        if (tp) tp.onchange = () => { current.theme = tp.value; applyThemeVars({ ...customThemes, ...themes }[current.theme]); renderAll(); persist(); if (window.AMTThemeEditor && window.AMTThemeEditor.onThemeChange) window.AMTThemeEditor.onThemeChange(tp.value, ({ ...customThemes, ...themes })[tp.value]); };
         const preview = document.getElementById("themePreviewBtn");
         if (preview) preview.onclick = () => { const t = ({ ...customThemes, ...themes })[tp.value]; if (t) applyThemeVars(t); };
         const fp = document.getElementById("fontPick");

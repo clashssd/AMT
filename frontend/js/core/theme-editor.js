@@ -268,12 +268,20 @@
     }
 
     function resetTheme() {
-        // вернуть значения выбранной темы
-        if (!selectedId) return;
+        // Вернуть значения к исходной теме (builtin — как в themes.json, custom — из localStorage)
+        const T = window.AMTThemes;
+        const curId = T && T.current ? T.current().theme : null;
         const all = loadAllThemes();
-        const t = all[selectedId];
-        if (!t) { loadToControls(S().DEFAULT_THEME, "ocean"); return; }
-        loadToControls(t, selectedId);
+        const sourceId = curId || "ocean";
+        // Для builtin-темы — берём из __AMT_BUILTIN_THEMES__ (неизменённая копия)
+        let t = null;
+        if (window.__AMT_BUILTIN_IDS__ && window.__AMT_BUILTIN_IDS__.includes(sourceId)) {
+            t = (window.__AMT_BUILTIN_THEMES__ || {})[sourceId];
+        } else {
+            t = all[sourceId];
+        }
+        if (!t) { t = S().DEFAULT_THEME; sourceId = "ocean"; }
+        loadToControls(t, sourceId);
         applyAndPersist();
     }
 
@@ -315,12 +323,13 @@
         $("teImport").onclick = importTheme;
         $("teReset").onclick = resetTheme;
 
-        // При выборе темы в селекторе themePick — подхватываем её в редактор
+        // При выборе темы в селекторе themePick — подхватываем её в редактор + применяем CSS vars
         const tp = $("themePick");
         if (tp) tp.addEventListener("change", () => {
             const all = loadAllThemes();
             const t = all[tp.value] || S().DEFAULT_THEME;
             loadToControls(t, tp.value);
+            applyAndPersist();
         });
 
         // Custom font show/hide: when teFont/teHeadingFont = "custom", reveal the text input
@@ -343,6 +352,20 @@
         loadToControls(t, cur.theme || "ocean");
     }
 
-    if (document.readyState !== "loading") init();
-    else document.addEventListener("DOMContentLoaded", init);
+    // Публичный хук: themes.js вызывает при клике на свотч
+    window.AMTThemeEditor = {
+        onThemeChange(id, themeObj) {
+            if (!init._done) return;
+            loadToControls(themeObj || S().DEFAULT_THEME, id);
+        },
+        _done: false,
+    };
+
+    function _origInit() {
+        init();
+        window.AMTThemeEditor._done = true;
+    }
+
+    if (document.readyState !== "loading") _origInit();
+    else document.addEventListener("DOMContentLoaded", _origInit);
 })();

@@ -54,7 +54,7 @@ async function renderMcpSettings() {
             </div>
             <div class="mcp-card-body">${body}</div>
             <div class="mcp-card-actions">
-                <button onclick="mcpConnect('${escapeHtml(s.id)}')">Запустить</button>
+                <button onclick="mcpConnect('${escapeHtml(s.id)}', ${!!s.connected})">${s.connected ? 'Остановить' : 'Запустить'}</button>
                 <button onclick="mcpTest('${escapeHtml(s.id)}')">Тест</button>
                 <button onclick="mcpEdit('${escapeHtml(s.id)}')">Изменить</button>
                 <button class="danger" onclick="mcpDelete('${escapeHtml(s.id)}')">Удалить</button>
@@ -76,14 +76,17 @@ async function mcpToggle(id, enabled) {
     renderMcpSettings();
 }
 
-// «Запустить» — включить сервер и установить соединение (connect + list tools).
-async function mcpConnect(id) {
-    flashStatus('Подключение к «' + id + '»…');
+// «Запустить/Остановить» — тумблер соединения.
+// started=true → Остановить (enabled:false, disconnect).
+// started=false → Запустить (enabled:true, connect + list tools).
+async function mcpConnect(id, started) {
+    const target = !started;            // куда идём: вкл/выкл
+    flashStatus((target ? 'Подключение к «' : 'Остановка «') + id + '»…');
     try {
         const resp = await fetch(`${API_BASE}/api/mcp/servers/${encodeURIComponent(id)}/enable`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled: true }),
+            body: JSON.stringify({ enabled: target }),
         });
         const data = await safeJson(resp);
         if (data._networkError) {
@@ -94,10 +97,11 @@ async function mcpConnect(id) {
             flashStatus('Ошибка: ' + data.error);
             return;
         }
-        if (data.warning) {
-            flashStatus('Включён, но соединение не удалось: ' + data.warning);
+        if (target) {
+            if (data.warning) flashStatus('Включён, но соединение не удалось: ' + data.warning);
+            else flashStatus('MCP-сервер «' + id + '» запущен и подключён');
         } else {
-            flashStatus('MCP-сервер «' + id + '» запущен и подключён');
+            flashStatus('MCP-сервер «' + id + '» остановлен');
         }
     } catch (e) {
         flashStatus('Ошибка сети: ' + e.message);
@@ -511,11 +515,12 @@ async function renderMcpStorage() {
             </div>
             <div class="si-actions">
                 <button data-mcp-act="toggle">${s.enabled ? 'Выключить' : 'Включить'}</button>
-                <button data-mcp-act="connect">Запустить</button>
+                <button data-mcp-act="connect">${s.connected ? 'Остановить' : 'Запустить'}</button>
                 <button data-mcp-act="edit">Изменить</button>
                 <button data-mcp-act="delete" class="danger">Удалить</button>
             </div>
         `;
+        row.querySelector('[data-mcp-act="connect"]').dataset.started = s.connected ? '1' : '0';
         list.appendChild(row);
     }
     // Привязываем действия
@@ -526,7 +531,7 @@ async function renderMcpStorage() {
                 const id = row.dataset.id;
                 const act = btn.dataset.mcpAct;
                 if (act === 'toggle') mcpToggle(id, !row.querySelector('input')?.checked);
-                else if (act === 'connect') mcpConnect(id);
+                else if (act === 'connect') mcpConnect(id, btn.dataset.started === '1');
                 else if (act === 'edit') { showPage('settings'); showSettingsPage('sec-mcp'); mcpEdit(id); }
                 else if (act === 'delete') mcpDelete(id);
             });

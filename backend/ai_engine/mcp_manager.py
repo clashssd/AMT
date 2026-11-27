@@ -285,6 +285,19 @@ class MCPManager:
         """
         await self.connect(server_id)
 
+    def is_connected(self, server_id: str) -> bool:
+        """True when a live session exists for this server (sync, read-only).
+
+        Used by the /api/mcp/servers list endpoint so the UI can show
+        "Остановить" vs "Запустить" and reflect real connection state.
+        """
+        holder = self._clients.get(server_id)
+        if holder is None:
+            return False
+        session = self._get_session(server_id)
+        # A holder with a None session is a half-connected/failed state.
+        return session is not None
+
     async def disconnect(self, server_id: str) -> None:
         holder = self._clients.pop(server_id, None)
         if holder is None:

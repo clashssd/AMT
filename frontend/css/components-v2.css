@@ -107,8 +107,13 @@
     width: 100%;
     height: 30px;
     padding: 2px;
-    background: var(--field-bg);
-    border: 1px solid var(--field-border);
+    /* Нейтральный (не тематический) фон: если оставить var(--field-bg), то в
+       тёмных темах коробка за swatch-виджетом будет чёрной и «поле» визуально
+       выглядит чёрным, даже если сам пикер показывает реальный цвет. Светло-
+       серый фон + контрастная рамка делают swatch (реальный цвет) читаемым
+       в любой теме. */
+    background: #e9edf2;
+    border: 1px solid #b9c1cc;
     border-radius: var(--radius-sm, 10px);
     cursor: pointer;
     /* Критично: переопределяем глобальный :root { color-scheme: dark },
@@ -194,9 +199,13 @@ input, textarea, select {
 }
 /* Исключение для color-пикера: без light-палитры браузер рендерит цветовую
    область (swatch) в тёмной теме → всегда чёрный. color-scheme: light заставляет
-   нативный виджет показывать реальный выбранный цвет. */
+   нативный виджет показывать реальный выбранный цвет.
+   Нейтральный фон (не var(--field-bg)): иначе в тёмной теме коробка за
+   swatch'ом будет чёрной и поле визуально «чёрное» независимо от цвета. */
 input[type="color"] {
     color-scheme: light;
+    background: #e9edf2;
+    border: 1px solid #b9c1cc;
 }
 input:hover, textarea:hover, select:hover { background: var(--field-bg-hover); }
 input:focus, textarea:focus, select:focus {

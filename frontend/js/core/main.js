@@ -928,49 +928,71 @@ function attachPinButton(msgEl, idx, isPinned, role) {
         if (ed) ed.remove();
     }
 
-    // Навигация по сообщениям (< 1/5 >)
-    const navChat = getCurrentChat();
-    if (navChat && navChat.messages.length > 1) {
-        let nav = msgEl.querySelector(':scope > .msg-nav');
-        if (!nav) {
-            nav = document.createElement('div');
-            nav.className = 'msg-nav';
-            msgEl.appendChild(nav);
+}
+
+// ===== Message Ribbon (лента сообщений) =====
+const msgRibbon = document.getElementById('msgRibbon');
+
+function renderMsgRibbon() {
+    if (!msgRibbon) return;
+    const chat = getCurrentChat();
+    msgRibbon.innerHTML = '';
+    if (!chat || chat.messages.length === 0) return;
+
+    chat.messages.forEach((m, idx) => {
+        const item = document.createElement('div');
+        item.className = 'msg-ribbon-item ' + m.role;
+        item.dataset.idx = String(idx);
+
+        const dot = document.createElement('span');
+        dot.className = 'msg-ribbon-dot';
+        item.appendChild(dot);
+
+        const label = document.createElement('span');
+        label.className = 'msg-ribbon-label';
+        // Короткая строка из сообщения
+        const raw = (m.content || '').trim().replace(/\s+/g, ' ');
+        label.textContent = raw.slice(0, 40) + (raw.length > 40 ? '…' : '');
+        label.title = raw || (m.role === 'user' ? 'Сообщение' : 'Ответ ИИ');
+        item.appendChild(label);
+
+        // Активное = текущий просмотримый
+        if (document.querySelector('.message.user[data-msg-idx="' + idx + '"]')?.classList.contains('msg-nav-flash')) {
+            item.classList.add('active');
         }
-        const msgs = navChat.messages;
-        let pos = -1;
-        for (let i = msgs.length - 1; i >= 0; i--) {
-            if (msgs[i] === getMsg()) { pos = i; break; }
-        }
-        if (pos < 0) pos = idx;
-        nav.innerHTML = '';
-        const prevBtn = document.createElement('button');
-        prevBtn.className = 'msg-nav-btn';
-        prevBtn.textContent = '\u2039';
-        prevBtn.title = 'Предыдущее сообщение';
-        prevBtn.disabled = pos === 0;
-        prevBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const prevEl = chatMessages.querySelector(`.message[data-msg-idx="${pos - 1}"]`);
-            if (prevEl) { prevEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); prevEl.classList.add('msg-nav-flash'); setTimeout(() => prevEl.classList.remove('msg-nav-flash'), 1200); }
+
+        item.addEventListener('click', () => {
+            const el = chatMessages.querySelector(`.message[data-msg-idx="${idx}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.add('msg-nav-flash');
+                setTimeout(() => el.classList.remove('msg-nav-flash'), 1200);
+            }
+            // Подсветить в ленте
+            msgRibbon.querySelectorAll('.msg-ribbon-item.active').forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
         });
-        const count = document.createElement('span');
-        count.className = 'msg-nav-count';
-        count.textContent = `${pos + 1}/${msgs.length}`;
-        const nextBtn = document.createElement('button');
-        nextBtn.className = 'msg-nav-btn';
-        nextBtn.textContent = '\u203a';
-        nextBtn.title = 'Следующее сообщение';
-        nextBtn.disabled = pos === msgs.length - 1;
-        nextBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const nextEl = chatMessages.querySelector(`.message[data-msg-idx="${pos + 1}"]`);
-            if (nextEl) { nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); nextEl.classList.add('msg-nav-flash'); setTimeout(() => nextEl.classList.remove('msg-nav-flash'), 1200); }
-        });
-        nav.appendChild(prevBtn);
-        nav.appendChild(count);
-        nav.appendChild(nextBtn);
-    }
+
+        msgRibbon.appendChild(item);
+    });
+
+    // Автопрокрутка ленты к активному
+    const active = msgRibbon.querySelector('.msg-ribbon-item.active');
+    if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+// Обновляем ленту при смене чата / добавлении сообщений
+new MutationObserver(() => {
+    if (chatMessages.children.length > 0) renderMsgRibbon();
+}).observe(chatMessages, { childList: true, subtree: true });
+
+// Клик по чату в сайдбаре — подсветить первое сообщение в ленте
+const _renderChatsList = window.renderChatsList;
+if (typeof _renderChatsList === 'function') {
+    window.renderChatsList = function() {
+        _renderChatsList();
+        setTimeout(renderMsgRibbon, 100);
+    };
 }
 
 // ===== Перегенерация ответа ИИ =====

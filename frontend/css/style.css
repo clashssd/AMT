@@ -956,6 +956,12 @@ main.page.active {
 }
 
 /* Область сообщений */
+.chat-messages-wrap {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+}
 .chat-messages {
     flex: 1;
     overflow-y: auto;
@@ -963,6 +969,99 @@ main.page.active {
     display: flex;
     flex-direction: column;
     gap: 16px;
+}
+
+/* ===== Message Ribbon (лента сообщений) ===== */
+.msg-ribbon {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--surface-0, rgba(0,0,0,0.25));
+    border-left: 1px solid var(--border, rgba(255,255,255,0.08));
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px 0;
+    transition: width 0.2s ease, background 0.2s ease;
+    z-index: 10;
+}
+.msg-ribbon:hover {
+    width: 180px;
+    align-items: stretch;
+    padding: 8px;
+    background: var(--surface-0, rgba(0,0,0,0.35));
+}
+.msg-ribbon::-webkit-scrollbar {
+    width: 4px;
+}
+.msg-ribbon::-webkit-scrollbar-thumb {
+    background: var(--border, rgba(255,255,255,0.1));
+    border-radius: 4px;
+}
+.msg-ribbon-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 18px;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 2px 4px;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+.msg-ribbon-item:hover {
+    background: var(--surface-1, rgba(255,255,255,0.08));
+}
+.msg-ribbon-item .msg-ribbon-dot {
+    width: 6px;
+    height: 6px;
+    min-width: 6px;
+    border-radius: 50%;
+    background: var(--text-dim, #666);
+    transition: background 0.15s, transform 0.15s;
+}
+.msg-ribbon:hover .msg-ribbon-item .msg-ribbon-dot {
+    transform: scale(1);
+}
+.msg-ribbon-item.active .msg-ribbon-dot {
+    background: var(--accent, #60a5fa);
+}
+.msg-ribbon-item.user .msg-ribbon-dot {
+    background: var(--accent, #60a5fa);
+}
+.msg-ribbon-item.bot .msg-ribbon-dot {
+    background: var(--text-dim, #888);
+}
+.msg-ribbon-item .msg-ribbon-label {
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--text, #c5c5d8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 0;
+    opacity: 0;
+    transition: max-width 0.2s ease, opacity 0.2s ease;
+    flex: 1;
+}
+.msg-ribbon:hover .msg-ribbon-item .msg-ribbon-label {
+    max-width: 150px;
+    opacity: 1;
+}
+.msg-ribbon-item.active .msg-ribbon-label {
+    font-weight: 600;
+    color: var(--text, #fff);
+}
+/* При свёрнутом состоянии (не hover) — только точки */
+.msg-ribbon:not(:hover) .msg-ribbon-label {
+    max-width: 0;
+    opacity: 0;
 }
 
 /* Экран приветствия */

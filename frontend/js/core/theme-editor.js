@@ -111,14 +111,16 @@
 
         const set = (id2, v) => { const el = $(id2); if (el) el.value = v; };
         const hexFromRgba = (rgba) => {
-            // RGBA → hex. Если альфа < 1 — композитим на bg1 (тёмный фон).
-            const m = /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?\)/.exec(rgba || "");
+            // RGBA → hex. Если альфа < 1 — композитим RGB-значение на bg1 (тёмный фон).
+            // mixWithWhite возвращает rgba(смешанный_rgb, 1) — просто берём RGB.
+            // rgba(255,255,255,0.06) → композит: 255*0.06 + bg*0.94 → светлый оттенок на тёмном фоне.
+            const m = /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]\s*([\d.]+))?\)/.exec(rgba || "");
             if (!m) return "";
             const toHex = n => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, "0");
             const r = +m[1], g = +m[2], b = +m[3];
             const a = m[4] !== undefined ? Math.max(0, Math.min(1, parseFloat(m[4]))) : 1;
             if (a >= 0.999) return "#" + toHex(r) + toHex(g) + toHex(b);
-            // Композит на bg1 (тёмный фон) — результат в виде hex
+            // Композит реальных RGB на bg1 (тёмный фон) — правильный визуальный цвет
             const bgRgb = S().hexToRgb ? S().hexToRgb(c.bg[0] || "#05050a") : [5, 5, 10];
             const comp = (fg, bg) => Math.round(fg * a + bg * (1 - a));
             return "#" + toHex(comp(r, bgRgb[0])) + toHex(comp(g, bgRgb[1])) + toHex(comp(b, bgRgb[2]));

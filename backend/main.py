@@ -6383,7 +6383,7 @@ async def mcp_install_coding_recommended(server_id: str):
 @app.post("/api/mcp/servers/{server_id}/test")
 async def mcp_test_server(server_id: str):
     if mcp_manager is None:
-        return {"error": "MCP manager not initialized"}
+        return {"status": "error", "message": "MCP manager not initialized"}
     # For the media/writer servers, refresh creds before connecting so they have fresh keys
     if server_id in ("media", "writer"):
         _write_media_creds()

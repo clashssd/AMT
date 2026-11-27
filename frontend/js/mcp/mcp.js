@@ -2,6 +2,23 @@
 // MCP-серверы: страница настроек + секция хранилища
 // Загружается после main.js (использует API_BASE из main.js).
 
+// Безопасный JSON parse: если тело не JSON (например, HTML-страница 500),
+// возвращает { ok: false, status: HTTP-код, raw: тело } вместо бросания.
+async function safeJson(resp) {
+    try {
+        const ct = (resp.headers.get('content-type') || '');
+        if (resp.ok && ct.includes('application/json')) {
+            return await resp.json();
+        }
+        // Пытаемся разобрать как JSON независимо от status (бэкенд может вернуть JSON при ошибке)
+        const text = await resp.text();
+        try { return JSON.parse(text); } catch { /* not JSON */ }
+        return { ok: false, status: resp.status, raw: text.slice(0, 500), _notJson: true };
+    } catch (e) {
+        return { ok: false, status: resp?.status || 0, raw: String(e), _networkError: true };
+    }
+}
+
 // ===== Страница настроек: секция «MCP-серверы» =====
 async function renderMcpSettings() {
     const list = document.getElementById('mcp-server-list');
@@ -99,14 +116,18 @@ async function mcpTest(id) {
     const cfg = mcpServerName(id);
     try {
         const resp = await fetch(`${API_BASE}/api/mcp/servers/${encodeURIComponent(id)}/test`, { method: 'POST' });
-        const data = await resp.json();
-        if (data.status === 'connected') {
+        const data = await safeJson(resp);
+        if (data._notJson || data._networkError) {
+            // Бэкенд вернул не-JSON (500 HTML-страница, таймаут и т.д.)
+            const detail = data.raw ? data.raw.replace(/<[^>]*>/g, '').trim().slice(0, 200) : 'HTTP ' + (data.status || '?');
+            showMcpToolsModal(cfg || id, [], 'Сервер вернул ошибку (HTTP ' + (data.status || '?') + '). Проверьте, что MCP-сервер запущен и доступен.' + (detail ? '\n\nДетали: ' + detail : ''));
+        } else if (data.status === 'connected') {
             showMcpToolsModal(cfg || id, data.tools || [], null);
         } else {
             showMcpToolsModal(cfg || id, [], 'Ошибка: ' + (data.message || data.status || 'неизвестно'));
         }
     } catch (e) {
-        showMcpToolsModal(cfg || id, [], 'Ошибка сети: ' + e);
+        showMcpToolsModal(cfg || id, [], 'Ошибка сети: ' + e.message);
     }
 }
 

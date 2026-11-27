@@ -35,6 +35,9 @@ class LogEvent:
 class StructuredLogger:
     """Структурированный логгер с записью в JSON-файлы."""
     
+    # Шумовые категории — скрываются из UI по умолчанию
+    _NOISE_CATEGORIES = frozenset({'request_start', 'general'})
+    
     def __init__(self, log_dir: Path = LOG_DIR):
         self.log_dir = log_dir
         self.log_dir.mkdir(exist_ok=True)
@@ -83,7 +86,7 @@ class StructuredLogger:
                 f.write(event.to_json() + '\n')
     
     def log_mcp_call(self, server: str, tool: str, params: Dict, result: Any = None, 
-                      duration_ms: float = 0, trace_id: Optional[str] = None) -> None:
+                     duration_ms: float = 0, trace_id: Optional[str] = None) -> None:
         """Логирует вызов MCP-инструмента."""
         self.log('INFO', 'mcp_call', f'MCP: {server}.{tool}', 
                  trace_id=trace_id,
@@ -126,17 +129,19 @@ class StructuredLogger:
     def get_recent_logs(self, limit: int = 100, 
                        category: Optional[str] = None,
                        level: Optional[str] = None,
-                       trace_id: Optional[str] = None) -> list:
-        """Читает последние лог-события."""
+                       trace_id: Optional[str] = None,
+                       include_noise: bool = False) -> list:
+        """Читает последние лог-события. По умолчанию скрывает шумовые категории."""
         events = []
         files = sorted(self.log_dir.glob('logs_*.jsonl'), reverse=True)
+        scan_limit = limit * 5 if not include_noise else limit
         
         for log_file in files:
-            if len(events) >= limit:
+            if len(events) >= scan_limit:
                 break
             with open(log_file, 'r', encoding='utf-8') as f:
                 for line in f:
-                    if len(events) >= limit:
+                    if len(events) >= scan_limit:
                         break
                     try:
                         event = json.loads(line)
@@ -147,6 +152,9 @@ class StructuredLogger:
                             continue
                         if trace_id and event.get('trace_id') != trace_id:
                             continue
+                        # По умолчанию скрываем шумовые категории
+                        if not include_noise and event.get('category') in self._NOISE_CATEGORIES:
+                            continue
                         events.append(event)
                     except json.JSONDecodeError:
                         continue
@@ -155,10 +163,10 @@ class StructuredLogger:
     
     def get_trace(self, trace_id: str) -> list:
         """Возвращает все события по trace_id."""
-        return self.get_recent_logs(limit=1000, trace_id=trace_id)
+        return self.get_recent_logs(limit=1000, trace_id=trace_id, include_noise=True)
     
     def get_dashboard_data(self, time_window_minutes: int = 60) -> Dict[str, Any]:
-        """Возвращает данные для дашборда."""
+        """Возвращает данные для дашборда (без шумовых категорий)."""
         events = self.get_recent_logs(limit=1000)
         
         # Формируем статистику
@@ -182,6 +190,18 @@ class StructuredLogger:
             'unique_traces': len(traces),
             'recent_events': events[:50]
         }
+    
+    def clear_logs(self) -> Dict[str, Any]:
+        """Удаляет все JSONL файлы структурных логов."""
+        import os
+        deleted = []
+        for f in self.log_dir.glob('logs_*.jsonl'):
+            try:
+                f.unlink()
+                deleted.append(f.name)
+            except OSError:
+                pass
+        return {'deleted': len(deleted), 'files': deleted}
 
 # Глобальный инстанс
 logger = StructuredLogger()

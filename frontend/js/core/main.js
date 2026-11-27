@@ -2740,15 +2740,19 @@ function setDashFilter(f) {
 }
 
 async function clearLogs() {
-    if (!(await amtConfirm({ text: 'Очистить все логи за сегодня? Действие необратимо.', yesLabel: 'Очистить' }))) return;
+    if (!(await amtConfirm({ text: 'Очистить все логи (текстовые + структурированные)? Действие необратимо.', yesLabel: 'Очистить' }))) return;
     try {
+        // Чистим текстовые логи
         const res = await fetch(`${API_BASE}/api/logs/clear`, { method: 'POST' });
         if (!res.ok) throw new Error('HTTP ' + res.status);
+        // Чистим структурированные JSONL логи
+        await fetch(`${API_BASE}/api/logs/structured/clear`, { method: 'POST' }).catch(() => {});
         if (logViewMode === 'structured') {
             structuredLogsContainer.innerHTML = '<div class="log-empty">Логи очищены</div>';
         } else {
             loadLogs();
         }
+        flashStatus('Логи очищены');
     } catch (e) {
         if (logViewer) logViewer.innerHTML = '<div class="log-empty">Ошибка очистки логов: ' + e.message + '</div>';
     }

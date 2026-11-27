@@ -5052,6 +5052,13 @@ async def clear_logs():
     return {"deleted": deleted, "message": "Лог за сегодня очищен" if deleted else "Лог уже был пуст"}
 
 
+@app.post("/api/logs/structured/clear")
+async def clear_structured_logs():
+    """Удаляет все JSONL файлы структурных логов."""
+    result = structured_logger.clear_logs()
+    return result
+
+
 # ===== СОХРАНЕНИЕ ЧАТОВ =====
 CHATS_DIR = os.environ.get("AMT_CHATS_DIR") or os.path.join(os.path.dirname(__file__), "chats")
 os.makedirs(CHATS_DIR, exist_ok=True)

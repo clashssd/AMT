@@ -642,9 +642,10 @@ async function renderMessages(chat) {
         if (m.role === 'user') {
             el = appendMessageEl(m.content, 'user');
             _setMsgIdx(el, idx);
-            // Рендерим компактные карточки файлов в пуле пользователя
+            // Файлы — НИЗКОМ, в отдельной строке под пузырём
             if (m.files && m.files.length) {
-                const contentEl = el.querySelector('.message-content');
+                const row = document.createElement('div');
+                row.className = 'msg-files-row';
                 m.files.forEach(fname => {
                     const ext = fname.split('.').pop().toUpperCase();
                     const isImg = /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(fname);
@@ -660,8 +661,9 @@ async function renderMessages(chat) {
                         a.download = fname;
                         a.click();
                     });
-                    contentEl.appendChild(card);
+                    row.appendChild(card);
                 });
+                el.appendChild(row);
             }
         } else {
             el = addBotPlaceholder();
@@ -867,15 +869,12 @@ function appendMessageEl(text, role) {
 function attachPinButton(msgEl, idx, isPinned, role) {
     if (!msgEl) return;
     if (!role) role = msgEl.classList.contains('user') ? 'user' : 'assistant';
-    const contentEl = msgEl.querySelector('.message-content');
-    if (!contentEl) return;
-
-    // Контейнер действий (виден всегда, позиционируется в углу сообщения)
-    let actions = contentEl.querySelector('.msg-actions');
+    // Контейнер действий (виден всегда, под пузырём сообщения)
+    let actions = msgEl.querySelector(':scope > .msg-actions');
     if (!actions) {
         actions = document.createElement('div');
         actions.className = 'msg-actions';
-        contentEl.appendChild(actions);
+        msgEl.appendChild(actions);
     }
 
     const isUser = role === 'user';
@@ -932,11 +931,11 @@ function attachPinButton(msgEl, idx, isPinned, role) {
     // Навигация по сообщениям (< 1/5 >)
     const navChat = getCurrentChat();
     if (navChat && navChat.messages.length > 1) {
-        let nav = contentEl.querySelector('.msg-nav');
+        let nav = msgEl.querySelector(':scope > .msg-nav');
         if (!nav) {
             nav = document.createElement('div');
             nav.className = 'msg-nav';
-            contentEl.appendChild(nav);
+            msgEl.appendChild(nav);
         }
         const msgs = navChat.messages;
         let pos = -1;
@@ -1042,16 +1041,30 @@ function openMessageEdit(idx) {
     const fileArea = msgEditEl.querySelector('.msg-edit-files');
     const fileInput = msgEditEl.querySelector('.msg-edit-fileinput');
     ta.value = m.content || '';
-    // показать уже прикрепленные файлы (если были)
-    let editingFiles = [];
+    // Показать уже прикреплённые файлы (с кнопкой X для удаления)
     if (fileArea) {
         fileArea.innerHTML = '';
-        (m.files || []).forEach(f => {
+        (m.files || []).forEach((f, i) => {
             const d = document.createElement('div');
-            d.className = 'attachment-item';
-            d.textContent = f.name || f;
+            d.className = 'attachment-item msg-edit-file-chip';
+            const name = f.name || f;
+            const label = document.createElement('span');
+            label.textContent = name;
+            const rmBtn = document.createElement('button');
+            rmBtn.className = 'msg-edit-file-remove';
+            rmBtn.type = 'button';
+            rmBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+            rmBtn.title = 'Удалить файл';
+            rmBtn.addEventListener('click', () => {
+                if (m.files && m.files.splice) m.files.splice(i, 1);
+                d.remove();
+            });
+            d.appendChild(label);
+            d.appendChild(rmBtn);
             fileArea.appendChild(d);
         });
+        // Также показываем добавленные в этой сессии (не сохранённые)
+        msgEditEl._newFiles = [];
     }
     if (fileInput) {
         fileInput.dataset.msgIdx = idx;
@@ -1061,7 +1074,6 @@ function openMessageEdit(idx) {
     if (roleLabel) roleLabel.textContent = m.role === 'user' ? 'Ваше сообщение' : 'Ответ ассистента';
     msgEditEl.classList.remove('hidden');
     msgEditEl.dataset.idx = idx;
-    // обработчики: сохранить/отмена уже привязаны, но сбросим файлы
 }
 function closeMessageEdit() {
     if (msgEditEl) msgEditEl.classList.add('hidden');
@@ -1072,6 +1084,12 @@ function saveMessageEdit() {
     if (!chat || !chat.messages[idx]) return;
     const ta = msgEditEl.querySelector('.msg-edit-text');
     chat.messages[idx].content = (ta?.value || '').trim();
+    // Сохранить список файлов (учитывая удалённые и добавленные в этой сессии)
+    const m = chat.messages[idx];
+    if (!m.files) m.files = [];
+    if (msgEditEl._newFiles && msgEditEl._newFiles.length) {
+        msgEditEl._newFiles.forEach(nf => { if (!m.files.includes(nf)) m.files.push(nf); });
+    }
     chat.updated_at = Date.now();
     saveChats().then(() => { renderMessages(chat); });
     closeMessageEdit();
@@ -1084,11 +1102,31 @@ function attachFileToEditingMessage(file) {
     if (!chat || !chat.messages[idx]) return;
     if (!chat.messages[idx].files) chat.messages[idx].files = [];
     chat.messages[idx].files.push(file.name);
+    if (!msgEditEl._newFiles) msgEditEl._newFiles = [];
+    msgEditEl._newFiles.push(file.name);
     const fileArea = msgEditEl.querySelector('.msg-edit-files');
     if (fileArea) {
         const d = document.createElement('div');
-        d.className = 'attachment-item';
-        d.textContent = file.name;
+        d.className = 'attachment-item msg-edit-file-chip';
+        const label = document.createElement('span');
+        label.textContent = file.name;
+        const rmBtn = document.createElement('button');
+        rmBtn.className = 'msg-edit-file-remove';
+        rmBtn.type = 'button';
+        rmBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+        rmBtn.title = 'Удалить файл';
+        rmBtn.addEventListener('click', () => {
+            const msg = chat.messages[idx];
+            if (msg && msg.files) {
+                const fi = msg.files.indexOf(file.name);
+                if (fi >= 0) msg.files.splice(fi, 1);
+            }
+            const ni = msgEditEl._newFiles ? msgEditEl._newFiles.indexOf(file.name) : -1;
+            if (ni >= 0 && msgEditEl._newFiles) msgEditEl._newFiles.splice(ni, 1);
+            d.remove();
+        });
+        d.appendChild(label);
+        d.appendChild(rmBtn);
         fileArea.appendChild(d);
     }
 }
@@ -1429,9 +1467,10 @@ function addUserMessage(text, save = true, files = null, fileItems = null) {
     const div = document.createElement('div');
     div.className = 'message user';
     div.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
-    // Превью изображений из вложений
+    // Файлы/превью — НИЗКОМ, в отдельной строке под пузырём сообщения
     if (fileItems && fileItems.length) {
-        const contentEl = div.querySelector('.message-content');
+        const row = document.createElement('div');
+        row.className = 'msg-files-row';
         fileItems.forEach(item => {
             if (item.thumb) {
                 const img = document.createElement('img');
@@ -1439,9 +1478,8 @@ function addUserMessage(text, save = true, files = null, fileItems = null) {
                 img.className = 'msg-img-preview';
                 img.title = item.name;
                 img.addEventListener('click', () => window.open(item.thumb, '_blank'));
-                contentEl.appendChild(img);
+                row.appendChild(img);
             } else {
-                // Не-изображение: компактная карточка-чип
                 const chip = document.createElement('div');
                 chip.className = 'msg-file-card';
                 const ext = (item.name || '').split('.').pop().toUpperCase();
@@ -1452,9 +1490,10 @@ function addUserMessage(text, save = true, files = null, fileItems = null) {
                     a.download = item.name || '';
                     a.click();
                 });
-                contentEl.appendChild(chip);
+                row.appendChild(chip);
             }
         });
+        div.appendChild(row);
     }
     chatMessages.appendChild(div);
     scrollToBottom();

@@ -1042,11 +1042,17 @@ main.page.active {
 }
 
 /* Карточка файла в пуле пользователя (иконка + имя, клик = скачать) */
+.msg-files-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+    margin-bottom: 2px;
+}
 .msg-file-card {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-top: 8px;
     padding: 5px 10px;
     background: var(--surface-1, rgba(255,255,255,0.04));
     border: 1px solid var(--border, rgba(255,255,255,0.09));
@@ -1115,7 +1121,6 @@ main.page.active {
     max-height: 120px;
     object-fit: cover;
     border-radius: 8px;
-    margin-top: 6px;
     cursor: pointer;
     border: 1px solid var(--border, rgba(255,255,255,0.09));
 }
@@ -1153,7 +1158,33 @@ main.page.active {
     100% { outline: 2px solid transparent; outline-offset: 2px; }
 }
 .msg-nav-flash { animation: msgNavFlash 1.2s ease; }
+/* Edit modal file chips */
+.msg-edit-file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: var(--surface-1, rgba(255,255,255,0.04));
+    border: 1px solid var(--border, rgba(255,255,255,0.09));
+    border-radius: 5px;
+    font-size: 12px;
+    color: var(--text, #c5c5d8);
+    max-width: 240px;
 }
+.msg-edit-file-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    background: transparent;
+    border: none;
+    color: var(--text-dim, #888);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.msg-edit-file-remove:hover { color: var(--danger, #f87171); background: rgba(248,113,113,0.12); }
 
 .message.bot .message-content {
     background: rgba(255, 255, 255, 0.04);
@@ -2773,7 +2804,7 @@ input[type="file"]:hover { border-color: rgba(171,165,197,0.35); }
     justify-content: flex-start;
     flex-wrap: wrap;
     gap: 5px;
-    margin-top: 8px;
+    margin-top: 6px;
 }
 .msg-pin-btn,
 .msg-edit-btn,

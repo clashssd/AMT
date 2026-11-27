@@ -1344,22 +1344,27 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
 
     # Если в user_message есть base64 изображения (data:image/...;base64,...) —
     # преобразуем в multipart content format для vision-моделей (OpenAI-compatible).
-    # Это нужно, чтобы LLM видела реальные пиксели, а не строку-плейсхолдер.
+    # Поддерживает несколько изображений (кадры из видео) и одиночные вложения.
     import re as _re_img
-    _img_match = _re_img.search(r'\[Изображение: ([^\]]+)\]\s*!\[[^\]]*\]\(data:image/(\w+);base64,([A-Za-z0-9+/=]+)\)', user_message)
-    if _img_match:
-        _text_before = user_message[:_img_match.start()]
-        _text_after = user_message[_img_match.end():]
+    # Matches: ![alt](data:image/jpeg;base64,XXX)  or  ![name](data:image/png;base64,YYY)
+    _img_pattern = r'!\[[^\]]*\]\(data:image/(\w+);base64,([A-Za-z0-9+/=]+)\)'
+    _img_matches = list(_re_img.finditer(_img_pattern, user_message))
+    if _img_matches:
         _content_parts = []
-        # Текст до изображения
-        if _text_before.strip():
-            _content_parts.append({"type": "text", "text": _text_before.strip()})
-        # Изображение как base64 data-URL
-        _content_parts.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/{_img_match.group(2)};base64,{_img_match.group(3)}"}
-        })
-        # Текст после изображения
+        _last_end = 0
+        for _m in _img_matches:
+            # Text before this image
+            _text_before = user_message[_last_end:_m.start()]
+            if _text_before.strip():
+                _content_parts.append({"type": "text", "text": _text_before.strip()})
+            # Image
+            _content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/{_m.group(1)};base64,{_m.group(2)}"}
+            })
+            _last_end = _m.end()
+        # Text after last image
+        _text_after = user_message[_last_end:]
         if _text_after.strip():
             _content_parts.append({"type": "text", "text": _text_after.strip()})
         messages.append({"role": "user", "content": _content_parts})
@@ -6582,7 +6587,7 @@ def parse_file_for_ai(file_path: str, mime_type: str) -> str:
                 return "\n\n".join(slides_text) if slides_text else f"[Пустой PPTX: {name}]"
             except Exception:
                 return f"[PPTX: {name} — не удалось разобрать содержимое]"
-        # --- Медиа: изображения встраиваются как base64, остальное — плейсхолдеры ---
+        # --- Медиа: изображения встраиваются как base64, аудио/видео — через STT + keyframes ---
         elif mime_type.startswith("image/"):
             # Встраиваем изображение как base64 data-URL, чтобы LLM видела содержимое
             try:
@@ -6596,10 +6601,13 @@ def parse_file_for_ai(file_path: str, mime_type: str) -> str:
                 return f"[Изображение: {name}]\n![{name}](data:image/{mime_ext};base64,{b64_str})"
             except Exception:
                 return f"[Изображение: {name}]"
-        elif mime_type.startswith("audio/"):
-            return f"[Аудио: {name}] (файл: {file_path})"
-        elif mime_type.startswith("video/"):
-            return f"[Видео: {name}] (файл: {file_path})"
+        elif mime_type.startswith("audio/") or mime_type.startswith("video/"):
+            # Аудио/видео: транскрипт (STT) + кадры (видео) через media_understanding
+            try:
+                import media_understanding
+                return media_understanding.understand_media(file_path, mime_type)
+            except Exception as _media_exc:
+                return f"[Медиа: {name} — не удалось обработать: {str(_media_exc)[:150]}"
         else:
             return f"[Файл: {name}]"
     except Exception:

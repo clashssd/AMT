@@ -330,11 +330,21 @@
             loadToControls(t, tp.value);
         });
 
+        // Публичный хук: themes.js вызывает при клике на свотч / смене themePick
+        window.AMTThemeEditor = {
+            onThemeChange(id, themeObj) {
+                if (!window.AMTThemeEditor._done) return;
+                loadToControls(themeObj || S().DEFAULT_THEME, id);
+            },
+            _done: false,
+        };
+
         // Начальное состояние: текущая тема
         const cur = T().current ? T().current() : { theme: "ocean" };
         const all = loadAllThemes();
         const t = all[cur.theme] || all["ocean"] || S().DEFAULT_THEME;
         loadToControls(t, cur.theme || "ocean");
+        window.AMTThemeEditor._done = true;
     }
 
     if (document.readyState !== "loading") init();

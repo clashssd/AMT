@@ -99,6 +99,11 @@
         applyFont(current.font); applyBg(); setLang(current.lang);
         if (c.mediaKeys && typeof loadSettings === "function") { /* ключи сохраняются через обычный save */ }
         renderAll();
+        persist();
+        if (window.AMTThemeEditor && window.AMTThemeEditor.onThemeChange) {
+            const themeObj = known[current.theme] || themes[current.theme];
+            if (themeObj) window.AMTThemeEditor.onThemeChange(current.theme, themeObj);
+        }
     }
     async function listConfigs() {
         const el = document.getElementById("cfgList"); if (!el) return;

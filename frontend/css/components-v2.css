@@ -111,6 +111,12 @@
     border: 1px solid var(--field-border);
     border-radius: var(--radius-sm, 10px);
     cursor: pointer;
+    /* Критично: переопределяем глобальный :root { color-scheme: dark },
+       иначе нативный swatch-виджет (цветовая область) рендерится в тёмной
+       палитре → всегда чёрный независимо от выбранного цвета.
+       color-scheme: light заставляет браузер рисовать swatch в светлой палитре,
+       и отображаемый цвет соответствует реальному значению. */
+    color-scheme: light;
 }
 .te-cell input[type="range"] {
     width: 100%;
@@ -185,6 +191,12 @@ input, textarea, select {
     color: var(--field-text);
     border: 1px solid var(--field-border);
     border-radius: var(--radius-sm, 10px);
+}
+/* Исключение для color-пикера: без light-палитры браузер рендерит цветовую
+   область (swatch) в тёмной теме → всегда чёрный. color-scheme: light заставляет
+   нативный виджет показывать реальный выбранный цвет. */
+input[type="color"] {
+    color-scheme: light;
 }
 input:hover, textarea:hover, select:hover { background: var(--field-bg-hover); }
 input:focus, textarea:focus, select:focus {

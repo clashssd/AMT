@@ -252,23 +252,7 @@
                 });
             }
         }
-        const ctBtn = document.getElementById("ctCreateBtn");
-        if (ctBtn) ctBtn.onclick = () => {
-            const name = (document.getElementById("ctName").value.trim() || "custom-" + Date.now().toString(36));
-            const id = "custom_" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 24);
-            const raw = {
-                label: name, id,
-                bg: [document.getElementById("ctBg1").value, document.getElementById("ctBg2").value, document.getElementById("ctBg3").value],
-                accent: document.getElementById("ctAccent").value, accent2: document.getElementById("ctAccent2").value,
-                glass: "rgba(0,0,0,0.15)", border: "rgba(255,255,255,0.08)", text: "#e0e0e0", textDim: "#8a8a9a",
-                font: current.font,
-            };
-            const normalized = (typeof window.AMTThemeSchema !== "undefined")
-                ? window.AMTThemeSchema.normalizeTheme(raw, id) : raw;
-            customThemes[id] = normalized;
-            localStorage.setItem("amt_custom_themes_v2", JSON.stringify(customThemes));
-            current.theme = id; applyThemeVars(customThemes[id]); renderAll(); persist();
-        };
+        // ct* контролы удалены — их заменил v2 редактор (te* в theme-editor.js)
         // фон
         const bgFile = document.getElementById("bgFile");
         if (bgFile) bgFile.onchange = () => {
@@ -386,6 +370,7 @@
     // Для theme-editor.js: публикуем встроенные темы и их id (чтобы редактор знал, что кастомная, что нет)
     Object.defineProperty(window.AMTThemes, "builtinThemes", { get: () => themes, configurable: true });
     Object.defineProperty(window.AMTThemes, "customThemes", { get: () => customThemes, configurable: true });
+    Object.defineProperty(window.AMTThemes, "fonts", { get: () => FONTS, configurable: true });
     Object.defineProperty(window, "__AMT_BUILTIN_THEMES__", { get: () => themes, configurable: true });
     Object.defineProperty(window, "__AMT_BUILTIN_IDS__", { get: () => Object.keys(themes), configurable: true });
     Object.defineProperty(window, "__AMT_CUSTOM_IDS__", { get: () => Object.keys(customThemes), configurable: true });

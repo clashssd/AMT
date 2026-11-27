@@ -1351,23 +1351,93 @@
                                 </div>
                             </div>
 
-                            <!-- Блок 2: Своя тема -->
+                            <!-- Блок 2: Редактор темы v2 -->
                             <div class="themes-section">
-                                <div class="themes-section-head">Своя тема (градиент)</div>
-                                <div class="form-group">
-                                    <div class="param-grid" style="grid-template-columns:repeat(3,1fr)">
-                                        <div><label class="home-sublabel">Фон 1</label><input type="color" id="ctBg1" value="#0a0f1a"></div>
-                                        <div><label class="home-sublabel">Фон 2</label><input type="color" id="ctBg2" value="#1a2340"></div>
-                                        <div><label class="home-sublabel">Фон 3</label><input type="color" id="ctBg3" value="#0a1420"></div>
-                                        <div><label class="home-sublabel">Акцент</label><input type="color" id="ctAccent" value="#8b86c9"></div>
-                                        <div><label class="home-sublabel">Акцент 2</label><input type="color" id="ctAccent2" value="#aba5c9"></div>
-                                        <div><label class="home-sublabel">Название</label><input type="text" id="ctName" class="opt-input" placeholder="Моя тема"></div>
+                                <div class="themes-section-head">Редактор темы (v2)</div>
+                                <div id="themeEditor">
+                                    <div class="te-preview">
+                                        <div class="te-preview-card">
+                                            <div class="te-preview-title">Предпросмотр</div>
+                                            <div class="te-preview-text">Быстрый текст для проверки контрастности.</div>
+                                            <div class="te-preview-field"><input placeholder="Поле ввода" readonly></div>
+                                            <div class="te-preview-btns">
+                                                <button class="te-preview-btn-primary">Кнопка</button>
+                                                <button class="te-preview-btn-ghost">Гост</button>
+                                            </div>
+                                        </div>
+                                        <div id="teContrast" class="te-contrast"></div>
                                     </div>
-                                    <button class="test-btn primary" id="ctCreateBtn">Создать тему</button>
+                                    <details class="te-group" open>
+                                        <summary>Цвета</summary>
+                                        <div class="te-grid">
+                                            <div class="te-cell"><label>Акцент</label><input type="color" id="teAccent" value="#8b86c9"></div>
+                                            <div class="te-cell"><label>Акцент 2</label><input type="color" id="teAccent2" value="#aba5c9"></div>
+                                            <div class="te-cell"><label>Фон 1</label><input type="color" id="teBg1" value="#05050a"></div>
+                                            <div class="te-cell"><label>Фон 2</label><input type="color" id="teBg2" value="#11131a"></div>
+                                            <div class="te-cell"><label>Фон 3</label><input type="color" id="teBg3" value="#0b0f14"></div>
+                                            <div class="te-cell"><label>Текст</label><input type="color" id="teText" value="#d0d0d0"></div>
+                                            <div class="te-cell"><label>Текст (dim)</label><input type="color" id="teTextDim" value="#8a8a9a"></div>
+                                            <div class="te-cell"><label>Успех</label><input type="color" id="teSuccess" value="#4ade80"></div>
+                                            <div class="te-cell"><label>Предупр.</label><input type="color" id="teWarning" value="#facc15"></div>
+                                            <div class="te-cell"><label>Опасно</label><input type="color" id="teDanger" value="#f87171"></div>
+                                            <div class="te-cell"><label>Инфо</label><input type="color" id="teInfo" value="#8ab4ff"></div>
+                                        </div>
+                                    </details>
+                                    <details class="te-group" open>
+                                        <summary>Поверхности (прозрачность)</summary>
+                                        <div class="te-grid">
+                                            <div class="te-cell"><label>Стекло</label><input type="range" id="teGlass" min="0" max="40" value="2"><span class="te-cell-val" id="teGlassVal">2%</span></div>
+                                            <div class="te-cell"><label>Граница</label><input type="range" id="teBorder" min="0" max="40" value="6"><span class="te-cell-val" id="teBorderVal">6%</span></div>
+                                            <div class="te-cell"><label>Оверлей</label><input type="range" id="teOverlay" min="0" max="90" value="70"><span class="te-cell-val" id="teOverlayVal">70%</span></div>
+                                        </div>
+                                    </details>
+                                    <details class="te-group" open>
+                                        <summary>Форма и эффекты</summary>
+                                        <div class="te-grid">
+                                            <div class="te-cell"><label>Скругление</label><input type="range" id="teRadius" min="4" max="40" value="18"><span class="te-cell-val" id="teRadiusVal">18px</span></div>
+                                            <div class="te-cell"><label>Размытие</label><input type="range" id="teBlur" min="0" max="60" value="18"><span class="te-cell-val" id="teBlurVal">18px</span></div>
+                                            <div class="te-cell"><label>Свечение</label><input type="range" id="teGlow" min="0" max="100" value="35"><span class="te-cell-val" id="teGlowVal">35%</span></div>
+                                            <div class="te-cell"><label>Масштаб шрифта</label><input type="range" id="teScale" min="85" max="130" value="100"><span class="te-cell-val" id="teScaleVal">100%</span></div>
+                                        </div>
+                                        <div class="te-grid" style="margin-top:10px">
+                                            <div class="te-cell"><label>Тень</label><select id="teShadow"><option value="sm">См.</option><option value="md" selected>Сред.</option><option value="lg">Крупная</option></select></div>
+                                            <div class="te-cell"><label>Скорость аним.</label><select id="teMotion"><option value="fast">Быстро</option><option value="normal" selected>Норма</option><option value="slow">Медленно</option></select></div>
+                                            <div class="te-cell"><label>Шрифт</label><select id="teFont"></select></div>
+                                            <div class="te-cell"><label>Шрифт заголовков</label><select id="teHeadingFont"></select></div>
+                                        </div>
+                                    </details>
+                                    <details class="te-group">
+                                        <summary>Поля и контролы</summary>
+                                        <div class="te-grid">
+                                            <div class="te-cell"><label>Фон поля</label><input type="color" id="teFieldBg"></div>
+                                            <div class="te-cell"><label>Граница поля</label><input type="color" id="teFieldBorder"></div>
+                                            <div class="te-cell"><label>Текст поля</label><input type="color" id="teFieldText"></div>
+                                            <div class="te-cell"><label>Placeholder</label><input type="color" id="teFieldPlaceholder"></div>
+                                            <div class="te-cell"><label>Фон карточки</label><input type="color" id="teCardBg"></div>
+                                            <div class="te-cell"><label>Фон карточки 2</label><input type="color" id="teCardBg2"></div>
+                                            <div class="te-cell"><label>Фон модалки</label><input type="color" id="teModalBg"></div>
+                                            <div class="te-cell"><label>Скроллбар</label><input type="color" id="teScrollbarThumb"></div>
+                                            <div class="te-cell"><label>Скроллбар (фон)</label><input type="color" id="teScrollbarTrack"></div>
+                                            <div class="te-cell"><label>Фон кода</label><input type="color" id="teCodeBg"></div>
+                                        </div>
+                                    </details>
+                                    <div class="te-actions">
+                                        <div class="te-name-row"><input type="text" id="teName" placeholder="Имя темы"></div>
+                                        <div style="display:flex;gap:8px;flex-wrap:wrap">
+                                            <button class="test-btn primary" id="teSaveNew">Сохранить новую</button>
+                                            <button class="test-btn" id="teUpdate">Обновить</button>
+                                            <button class="test-btn" id="teDuplicate">Дублировать</button>
+                                            <button class="test-btn" id="teExport">Экспорт</button>
+                                            <button class="test-btn" id="teImport">Импорт</button>
+                                            <button class="test-btn" id="teReset">Сброс</button>
+                                            <button class="test-btn danger" id="teDelete">Удалить</button>
+                                        </div>
+                                        <input type="file" id="teImportFile" accept=".json" style="display:none">
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- Блок 3: Шрифт и фон -->
+<!-- Блок 3: Шрифт и фон -->
                             <div class="themes-section">
                                 <div class="themes-section-head">Шрифт и фон</div>
                                 <div class="form-group">

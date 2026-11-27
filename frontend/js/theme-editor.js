@@ -286,6 +286,21 @@
     // События
     function init() {
         if (!$("teAccent")) return;
+
+        // Заполнить селекты шрифтов (teFont, teHeadingFont) из AMTThemes.fonts
+        const fonts = (T() && T().fonts) ? T().fonts : [];
+        ["teFont", "teHeadingFont"].forEach(fid => {
+            const sel = $(fid);
+            if (!sel) return;
+            sel.innerHTML = "";
+            for (const f of fonts) {
+                const opt = document.createElement("option");
+                opt.value = f.id;
+                opt.textContent = f.label;
+                sel.appendChild(opt);
+            }
+        });
+
         // range/select/color/text → живой предпросмотр
         IDS.forEach(id => {
             const el = $(id);

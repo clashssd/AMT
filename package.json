@@ -11,8 +11,9 @@
     "test:js": "node tests/run_js_tests.js",
     "test": "pytest tests/ && node tests/run_js_tests.js",
     "build:py": "python -m PyInstaller backend/amt-backend.spec --noconfirm",
+    "sync-frontend": "node -e \"const fs=require('fs'),p=require('path'),s=p.resolve('frontend'),d=p.resolve('dist/amt-backend/_internal/frontend');fs.mkdirSync(d,{recursive:true});fs.rmSync(d,{recursive:true,force:true});fs.cpSync(s,d,{recursive:true});console.log('frontend → dist/amt-backend/_internal/frontend')\"",
     "build": "electron-builder",
-    "build:win": "electron-builder --win",
+    "build:win": "npm run sync-frontend && electron-builder --win",
     "build:all": "node scripts/build.js all"
   },
   "dependencies": {

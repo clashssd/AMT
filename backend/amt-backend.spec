@@ -90,8 +90,10 @@ a = Analysis(
         'rag_server', 'rag_server.server', 'rag_server.engine', 'rag_server.parsers',
         # Локальный media MCP-сервер (backend/media_server)
         'media_server', 'media_server.server',
+        # Локальный writer MCP-сервер (backend/writer_server)
+        'writer_server', 'writer_server.server', 'writer_server.core', 'writer_server.families',
     ],
-    collect_all=['mcp', 'ai_engine', 'rag_server', 'media_server'],
+    collect_all=['mcp', 'ai_engine', 'rag_server', 'media_server', 'writer_server'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

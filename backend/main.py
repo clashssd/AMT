@@ -6877,11 +6877,21 @@ if __name__ == "__main__":
         from rag_server.server import main as _rag_main
         _sys.exit(_rag_main())
     elif _mode == "media":
-        from media_server.server import main as _media_main
-        _sys.exit(_media_main())
+        try:
+            from media_server.server import main as _media_main
+            _sys.exit(_media_main())
+        except Exception as e:
+            import sys as _s
+            print(f"[AMT] Media MCP server failed to start: {e}", file=_s.stderr)
+            _s.exit(1)
     elif _mode == "writer":
-        from writer_server.server import main as _writer_main
-        _sys.exit(_writer_main())
+        try:
+            from writer_server.server import main as _writer_main
+            _sys.exit(_writer_main())
+        except Exception as e:
+            import sys as _s
+            print(f"[AMT] Writer MCP server failed to start: {e}", file=_s.stderr)
+            _s.exit(1)
     import uvicorn
     _port = int(os.environ.get("PORT", "8000"))
     uvicorn.run(app, host="127.0.0.1", port=_port, log_level="warning")

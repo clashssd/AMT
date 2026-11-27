@@ -480,3 +480,22 @@ async function renderMcpStorage() {
         });
     });
 }
+
+// ===== Лимит итераций tool-calling =====
+function saveMcpToolLimit() {
+    const el = document.getElementById('mcpToolLimit');
+    if (!el) return;
+    const v = Math.max(0, Math.min(50, parseInt(el.value, 10) || 0));
+    el.value = v;
+    localStorage.setItem('amt_mcp_tool_limit', String(v));
+    flashStatus('Лимит итераций tool-calling: ' + (v === 0 ? 'дефолт (5)' : v));
+}
+
+// Загрузка сохранённого лимита при инициализации
+document.addEventListener('DOMContentLoaded', function () {
+    const el = document.getElementById('mcpToolLimit');
+    if (el) {
+        const saved = localStorage.getItem('amt_mcp_tool_limit');
+        if (saved !== null) el.value = saved;
+    }
+});

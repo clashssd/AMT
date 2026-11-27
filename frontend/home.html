@@ -930,11 +930,59 @@
                     <div class="settings-page" id="sec-mcp" data-page-key="mcp">
                         <div class="settings-block">
                             <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M6.5 6.5a3.5 3.5 0 1 1 7 0v3a3.5 3.5 0 1 1-7 0z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17.5" cy="9" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="18" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span> MCP-серверы</h3>
-                            <p class="block-desc">Подключите внешние MCP-серверы (STDIO-процессы или HTTP-эндпоинты). Их инструменты автоматически появятся в доступных инструментах м��дели (при включённом tool-calling).</p>
+                            <p class="block-desc">Подключите внешние MCP-серверы (STDIO-процессы или HTTP-эндпоинты). Их инструменты автоматически появятся в доступных инструментах модели (при включённом tool-calling).</p>
                             <div id="mcp-server-list" class="mcp-list"><div class="mcp-empty">Загрузка…</div></div>
-                            <button class="test-btn" onclick="mcpInstallAmtCodingPreset()">＋ AMT Coding (advanced)</button>
+
+                            <!-- Preset-кнопки -->
+                            <div class="mcp-presets">
+                                <button class="test-btn" onclick="mcpInstallRagPreset()">&#128218; База знаний (RAG)</button>
+                                <button class="test-btn" onclick="mcpInstallMediaPreset()">&#127902; Медиа-генерация</button>
+                                <button class="test-btn" onclick="mcpInstallWriterPreset()">&#128196; Генератор файлов</button>
+                                <button class="test-btn" onclick="mcpInstallAmtCodingPreset()">&gt;_ AMT Coding (advanced)</button>
+                            </div>
+
                             <button class="test-btn primary" id="mcp-add-btn" onclick="mcpShowAddForm()">＋ Добавить MCP-сервер</button>
                             <div id="mcp-add-form" class="mcp-form" style="display:none"></div>
+
+                            <!-- Лимит итераций tool-calling -->
+                            <div class="form-group" style="margin-top:16px">
+                                <label>Лимит итераций tool-calling</label>
+                                <input type="number" id="mcpToolLimit" class="opt-input" min="0" max="50" value="5">
+                                <small>Макс. число циклов «модель &rarr; инструмент &rarr; модель» за запрос. 0 = дефолт (5). Значение выше 50 обрезается до 50.</small>
+                                <button class="test-btn" id="mcpToolLimitSave" onclick="saveMcpToolLimit()" style="margin-top:8px">Сохранить</button>
+                            </div>
+                        </div>
+
+                        <!-- Панель генератора файлов (Writer) -->
+                        <div class="settings-block">
+                            <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M14 2v6h6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span> Генерация файла</h3>
+                            <p class="block-desc">Явная форма для генерации файла через Writer MCP. Укажите тип, содержимое и файл-основу (опционально).</p>
+
+                            <div class="form-group">
+                                <label>Тип файла</label>
+                                <select id="writerFamily" class="opt-select">
+                                    <option value="docx">Word (.docx)</option>
+                                    <option value="xlsx">Excel (.xlsx)</option>
+                                    <option value="pdf">PDF</option>
+                                    <option value="html">HTML</option>
+                                    <option value="markdown">Markdown</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Название</label>
+                                <input type="text" id="writerTitle" class="opt-input" placeholder="Мой документ">
+                            </div>
+                            <div class="form-group">
+                                <label>Спецификация / Содержимое</label>
+                                <textarea id="writerSpec" class="opt-input" rows="4" placeholder='JSON-спец для Office: {"title":"...","paragraphs":[...],"tables":[...]} Для текста — просто текст. Для PDF/HTML — разметка.'></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Файл-основа (опционально)</label>
+                                <input type="file" id="writerSourceFile">
+                            </div>
+                            <button class="test-btn primary" id="writerGenerateBtn" onclick="writerGenerate()">Сгенерировать</button>
+                            <div id="writerResult" style="display:none;margin-top:8px"></div>
+                            <button class="test-btn" id="writerResultBtn" style="display:none;margin-top:4px" onclick="writerDownload()">&#11015; Скачать</button>
                         </div>
                     </div><!-- /settings-page mcp -->
 

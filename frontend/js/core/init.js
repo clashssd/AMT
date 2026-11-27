@@ -244,6 +244,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (sec === 'sec-mcp' && typeof renderMcpSettings === 'function') {
                 renderMcpSettings();
             }
+            if (sec === 'sec-coding' && window.initCodingHelp) {
+                window.initCodingHelp();
+            }
         });
     });
 
@@ -712,6 +715,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (projSelectBtn) projSelectBtn.addEventListener('click', selectProjectDir);
     if (projClearBtn) projClearBtn.addEventListener('click', clearProject);
     loadProjectCurrent();
+
+    // sec-coding: folder picker for codingProjectRoot
+    const codingProjectSelectBtn = document.getElementById('codingProjectSelectBtn');
+    if (codingProjectSelectBtn) {
+        codingProjectSelectBtn.addEventListener('click', async () => {
+            const input = document.getElementById('codingProjectRoot');
+            if (!input) return;
+            let dir = null;
+            if (window.api && window.api.dialog && window.api.dialog.openDirectory) {
+                const res = await window.api.dialog.openDirectory();
+                if (res && typeof res === 'object') dir = res.canceled ? null : (res.path || null);
+                else dir = res || null;
+            } else if (window.amtPrompt) {
+                dir = await window.amtPrompt('Путь к папке проекта:', input.value || '');
+            }
+            if (dir) {
+                input.value = dir;
+                const s = JSON.parse(localStorage.getItem('amt_coding_settings') || '{}');
+                s.projectRoot = dir;
+                localStorage.setItem('amt_coding_settings', JSON.stringify(s));
+                const chat = window.getCurrentChat ? window.getCurrentChat() : null;
+                if (chat) { chat.projectRoot = dir; window.saveChats?.(); }
+                if (window.flashStatus) window.flashStatus('Рабочая папка: ' + dir);
+            }
+        });
+    }
+
+    // sec-coding: toggle help list visibility
+    const codingHelpToggleBtn = document.getElementById('codingHelpToggleBtn');
+    if (codingHelpToggleBtn) {
+        codingHelpToggleBtn.addEventListener('click', () => {
+            const list = document.getElementById('codingHelpList');
+            const desc = codingHelpToggleBtn.closest('.coding-help-block')?.querySelector('.block-desc');
+            const visible = list ? !list.style.display || list.style.display === 'none' : true;
+            if (list) list.style.display = visible ? 'none' : '';
+            if (desc) desc.style.display = visible ? 'none' : '';
+            codingHelpToggleBtn.textContent = visible ? 'Показать' : 'Скрыть';
+        });
+    }
 
     if (document.getElementById('toolConfirmApprove')) document.getElementById('toolConfirmApprove').addEventListener('click', approveToolConfirm);
     if (document.getElementById('toolConfirmDeny')) document.getElementById('toolConfirmDeny').addEventListener('click', denyToolConfirm);

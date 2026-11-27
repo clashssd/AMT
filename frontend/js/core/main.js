@@ -1661,7 +1661,7 @@ function deleteCurrentChat() {
 
 async function startNewChat() {
     const surface = currentChatSurface();
-    const chat = createNewChat(surface === 'coding' ? 'coding' : 'general');
+    const chat = createNewChat(surface === 'code' ? 'coding' : 'general');
     currentChatId = chat.id;
     chatTitle.value = chat.title;
     renderGroupSelect();
@@ -2282,6 +2282,8 @@ function toggleChatActions() {
 async function loadLogs() {
     if (logViewMode === 'raw') {
         loadRawLogs();
+    } else if (logViewMode === 'structured') {
+        loadStructuredLogs();
     } else {
         loadDashboard();
     }
@@ -3465,10 +3467,11 @@ loadCodingSettingsUI();
 async function initCodingHelp() {
     const listEl = document.getElementById('codingHelpList');
     if (!listEl) return;
+    listEl.innerHTML = '<p class="coding-help-loading">Загрузка реестра команд…</p>';
     try {
         const registry = await window.AMTCmds?.loadCommandRegistry?.();
         if (!registry) {
-            listEl.textContent = 'Не удалось загрузить реестр команд.';
+            listEl.innerHTML = '<p>Не удалось загрузить реестр команд. Проверьте, что бэкенд запущен.</p>';
             return;
         }
         const codingCmds = registry.commands.filter(c => c.type === 'coding');
@@ -3488,6 +3491,7 @@ async function initCodingHelp() {
         listEl.innerHTML = '<p>Ошибка загрузки: ' + e.message + '</p>';
     }
 }
+window.initCodingHelp = initCodingHelp;
 initCodingHelp();
 
 function currentCodingPanelChat() {

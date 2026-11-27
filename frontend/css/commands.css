@@ -34,7 +34,7 @@
 
 .command-help-modal .modal-header {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color, #333);
+  border-bottom: 1px solid var(--border, #333);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -43,7 +43,7 @@
 .command-help-modal h2 {
   margin: 0;
   font-size: 18px;
-  color: var(--text-primary, #fff);
+  color: var(--text, #fff);
 }
 
 .command-help-modal .close-btn {
@@ -51,7 +51,7 @@
   border: none;
   font-size: 24px;
   cursor: pointer;
-  color: var(--text-secondary, #888);
+  color: var(--text-dim, #888);
 }
 
 .command-help-modal .modal-body {
@@ -69,7 +69,7 @@
 .command-item {
   padding: 12px;
   border-radius: 8px;
-  background: var(--bg-secondary, #2a2a2a);
+  background: var(--surface-0, #2a2a2a);
 }
 
 .command-item .cmd-header {
@@ -80,7 +80,7 @@
 }
 
 .command-item code {
-  background: var(--bg-tertiary, #333);
+  background: var(--surface-1, #333);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 14px;
@@ -88,26 +88,26 @@
 }
 
 .command-item small {
-  color: var(--text-tertiary, #666);
+  color: var(--text-dim, #666);
   font-size: 12px;
 }
 
 .command-item .desc {
   font-size: 14px;
-  color: var(--text-primary, #ccc);
+  color: var(--text, #ccc);
   margin: 4px 0;
 }
 
 .command-item .examples {
   font-size: 12px;
-  color: var(--text-tertiary, #888);
+  color: var(--text-dim, #888);
   font-family: monospace;
   white-space: pre-wrap;
 }
 
 .command-help-modal .modal-footer {
   padding: 16px 20px;
-  border-top: 1px solid var(--border-color, #333);
+  border-top: 1px solid var(--border, #333);
   display: flex;
   gap: 12px;
   justify-content: flex-end;
@@ -142,7 +142,7 @@
 
 .filegen-choice-modal h3 {
   margin: 0 0 16px;
-  color: var(--text-primary, #fff);
+  color: var(--text, #fff);
   font-size: 18px;
 }
 
@@ -155,9 +155,9 @@
 
 .filegen-choice-modal .choice-btn {
   padding: 16px;
-  border: 2px solid var(--border-color, #333);
+  border: 2px solid var(--border, #333);
   border-radius: 8px;
-  background: var(--bg-secondary, #2a2a2a);
+  background: var(--surface-0, #2a2a2a);
   cursor: pointer;
   text-align: left;
   transition: all 0.2s;
@@ -165,19 +165,19 @@
 
 .filegen-choice-modal .choice-btn:hover {
   border-color: var(--accent, #4a9eff);
-  background: var(--bg-tertiary, #333);
+  background: var(--surface-1, #333);
 }
 
 .filegen-choice-modal .choice-btn strong {
   display: block;
   font-size: 16px;
-  color: var(--text-primary, #fff);
+  color: var(--text, #fff);
   margin-bottom: 4px;
 }
 
 .filegen-choice-modal .choice-btn small {
   font-size: 13px;
-  color: var(--text-secondary, #888);
+  color: var(--text-dim, #888);
 }
 
 .filegen-choice-modal .modal-actions {
@@ -193,7 +193,7 @@
   left: 0;
   right: 0;
   background: var(--bg-primary, #1a1a1a);
-  border: 1px solid var(--border-color, #333);
+  border: 1px solid var(--border, #333);
   border-radius: 8px;
   margin-bottom: 4px;
   max-height: 300px;
@@ -209,7 +209,7 @@
 .command-suggestion-item {
   padding: 12px;
   cursor: pointer;
-  border-bottom: 1px solid var(--border-color, #333);
+  border-bottom: 1px solid var(--border, #333);
 }
 
 .command-suggestion-item:last-child {
@@ -217,7 +217,7 @@
 }
 
 .command-suggestion-item:hover {
-  background: var(--bg-secondary, #2a2a2a);
+  background: var(--surface-0, #2a2a2a);
 }
 
 .command-suggestion-item .suggestion-label {
@@ -228,7 +228,7 @@
 
 .command-suggestion-item .suggestion-desc {
   font-size: 13px;
-  color: var(--text-secondary, #888);
+  color: var(--text-dim, #888);
   margin-top: 4px;
 }
 
@@ -238,7 +238,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: var(--bg-secondary, #2a2a2a);
+  background: var(--surface-0, #2a2a2a);
   border-radius: 8px;
   margin-bottom: 8px;
 }
@@ -251,13 +251,13 @@
 
 .hotkey-row .hotkey-info strong {
   font-size: 14px;
-  color: var(--text-primary, #fff);
+  color: var(--text, #fff);
 }
 
 .hotkey-row .hotkey-info code {
   font-size: 12px;
   color: var(--accent, #4a9eff);
-  background: var(--bg-tertiary, #333);
+  background: var(--surface-1, #333);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -292,7 +292,7 @@ body.recording-hotkey .hotkey-row .hotkey-info code {
 }
 
 .structured-logs-loading {
-  color: var(--text-secondary, #888);
+  color: var(--text-dim, #888);
   text-align: center;
   padding: 40px;
 }
@@ -305,7 +305,7 @@ body.recording-hotkey .hotkey-row .hotkey-info code {
 }
 
 .structured-widgets .widget {
-  background: var(--bg-secondary, #2a2a2a);
+  background: var(--surface-0, #2a2a2a);
   border-radius: 8px;
   padding: 16px;
   text-align: center;
@@ -315,13 +315,13 @@ body.recording-hotkey .hotkey-row .hotkey-info code {
   display: block;
   font-size: 28px;
   font-weight: 700;
-  color: var(--text-primary, #fff);
+  color: var(--text, #fff);
   margin-bottom: 4px;
 }
 
 .structured-widgets .widget-label {
   font-size: 12px;
-  color: var(--text-tertiary, #888);
+  color: var(--text-dim, #888);
 }
 
 .structured-table {
@@ -333,20 +333,20 @@ body.recording-hotkey .hotkey-row .hotkey-info code {
 .structured-table th {
   text-align: left;
   padding: 8px 12px;
-  background: var(--bg-tertiary, #333);
-  color: var(--text-secondary, #aaa);
+  background: var(--surface-1, #333);
+  color: var(--text-dim, #aaa);
   font-weight: 600;
-  border-bottom: 1px solid var(--border-color, #444);
+  border-bottom: 1px solid var(--border, #444);
 }
 
 .structured-table td {
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border-color, #333);
-  color: var(--text-primary, #ccc);
+  border-bottom: 1px solid var(--border, #333);
+  color: var(--text, #ccc);
 }
 
 .structured-table tr:hover td {
-  background: var(--bg-secondary, #2a2a2a);
+  background: var(--surface-0, #2a2a2a);
 }
 
 .structured-msg {
@@ -380,10 +380,10 @@ body.recording-hotkey .hotkey-row .hotkey-info code {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--text-tertiary, #888);
+    color: var(--text-dim, #888);
     margin: 0 0 12px 0;
     padding-bottom: 8px;
-    border-bottom: 1px solid var(--border-color, #333);
+    border-bottom: 1px solid var(--border, #333);
 }
 
 .command-group .command-item {
@@ -398,7 +398,7 @@ body.recording-hotkey .hotkey-row .hotkey-info code {
 .coding-help-block {
     margin-top: 24px;
     padding-top: 16px;
-    border-top: 1px solid var(--border-color, #333);
+    border-top: 1px solid var(--border, #333);
 }
 
 .coding-help-header {
@@ -411,7 +411,7 @@ body.recording-hotkey .hotkey-row .hotkey-info code {
 .coding-help-header h3 {
     margin: 0;
     font-size: 16px;
-    color: var(--text-primary, #fff);
+    color: var(--text, #fff);
 }
 
 .coding-help-list {
@@ -426,14 +426,14 @@ body.recording-hotkey .hotkey-row .hotkey-info code {
     flex-direction: column;
     gap: 4px;
     padding: 12px;
-    background: var(--bg-secondary, #2a2a2a);
+    background: var(--surface-0, #2a2a2a);
     border-radius: 8px;
 }
 
 .coding-help-item code {
     font-size: 14px;
     color: var(--accent, #4a9eff);
-    background: var(--bg-tertiary, #333);
+    background: var(--surface-1, #333);
     padding: 2px 8px;
     border-radius: 4px;
     width: fit-content;
@@ -441,17 +441,17 @@ body.recording-hotkey .hotkey-row .hotkey-info code {
 
 .coding-help-item span {
     font-size: 13px;
-    color: var(--text-primary, #ccc);
+    color: var(--text, #ccc);
 }
 
 .coding-help-item .arg-hint {
     font-size: 12px;
-    color: var(--text-tertiary, #888);
+    color: var(--text-dim, #888);
     font-style: italic;
 }
 
 .coding-help-block .block-desc {
     margin-bottom: 12px;
-    color: var(--text-secondary, #888);
+    color: var(--text-dim, #888);
     font-size: 13px;
 }

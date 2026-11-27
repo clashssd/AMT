@@ -653,17 +653,17 @@ main.page.active {
 .icon-btn.small:hover { color: #fff; }
 /* Селекты в панели опций (без белых плашек) */
 .opt-select {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.09);
+    background: var(--field-bg, rgba(255,255,255,0.03));
+    border: 1px solid var(--field-border, rgba(255,255,255,0.09));
     border-radius: 6px;
-    color: #c5c5d8;
+    color: var(--field-text, #c5c5d8);
     font-size: 13px;
     padding: 6px 9px;
     cursor: pointer;
     max-width: 100%;
     width: 100%;
 }
-.opt-select option { background: #1a1a24; color: #d0d0d0; }
+.opt-select option { background: var(--surface-1, #1a1a24); color: var(--text, #d0d0d0); }
 #chatMoreBtn.open { background: rgba(255,255,255,0.08); color: #fff; }
 
 /* ── Мульти-селект (чекбокс-поповер) в шапке чата ── */
@@ -1390,20 +1390,20 @@ main.page.active {
 .pers-part-row .pers-part { min-width: 150px; }
 .opt-input {
     width: 100%;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.09);
+    background: var(--field-bg, rgba(255,255,255,0.03));
+    border: 1px solid var(--field-border, rgba(255,255,255,0.09));
     border-radius: 6px;
-    color: #c5c5d8;
+    color: var(--field-text, #c5c5d8);
     font-size: 13px;
     padding: 7px 9px;
     box-sizing: border-box;
 }
 /* Многовыбор (агенты/скиллы) — тёмная плашка */
 select.opt-select[multiple] {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.09);
+    background: var(--field-bg, rgba(255,255,255,0.03));
+    border: 1px solid var(--field-border, rgba(255,255,255,0.09));
     border-radius: 8px;
-    color: #c5c5d8;
+    color: var(--field-text, #c5c5d8);
 }
 select.opt-select[multiple] option {
     background: #14141c;

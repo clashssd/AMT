@@ -936,10 +936,18 @@
 
                             <!-- Preset-кнопки -->
                             <div class="mcp-presets">
-                                <button class="test-btn" onclick="mcpInstallRagPreset()">&#128218; База знаний (RAG)</button>
-                                <button class="test-btn" onclick="mcpInstallMediaPreset()">&#127902; Медиа-генерация</button>
-                                <button class="test-btn" onclick="mcpInstallWriterPreset()">&#128196; Генератор файлов</button>
-                                <button class="test-btn" onclick="mcpInstallAmtCodingPreset()">&gt;_ AMT Coding (advanced)</button>
+                                <button class="test-btn" onclick="mcpInstallRagPreset()">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> База знаний (RAG)
+                                </button>
+                                <button class="test-btn" onclick="mcpInstallMediaPreset()">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg> Медиа-генерация
+                                </button>
+                                <button class="test-btn" onclick="mcpInstallWriterPreset()">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Генератор файлов
+                                </button>
+                                <button class="test-btn" onclick="mcpInstallAmtCodingPreset()">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg> AMT Coding (advanced)
+                                </button>
                             </div>
 
                             <button class="test-btn primary" id="mcp-add-btn" onclick="mcpShowAddForm()">＋ Добавить MCP-сервер</button>
@@ -1543,7 +1551,12 @@
                             </div>
                             <div class="form-group">
                                 <label>Рабочая папка кодинг-чата</label>
-                                <input type="text" id="codingProjectRoot" class="opt-input" placeholder="C:\Users\...\project">
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <input type="text" id="codingProjectRoot" class="opt-input" placeholder="C:\Users\...\project" style="flex:1;">
+                                    <button class="test-btn" id="codingProjectSelectBtn" title="Выбрать папку">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                    </button>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>Политика прав</label>
@@ -1566,6 +1579,7 @@
                             <div id="codingHelpList" class="coding-help-list">
                                 <!-- заполняется динамически из реестра команд -->
                             </div>
+                            <button class="test-btn" id="codingHelpRefreshBtn" onclick="window.initCodingHelp()">Обновить реестр</button>
                         </div>
                     </div><!-- /settings-page coding -->
 

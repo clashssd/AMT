@@ -168,26 +168,28 @@
         const accent = c.accent || "#8b86c9";
 
         // Если поле пустое — выводим из базового через mixWithWhite (fallback).
-        // В браузере CSS color-mix сядет точнее, но для предпросмотра/контраста
-        // нужен JS-эквивалент.
-        s.fieldBg = s.fieldBg || mixWithWhite(bg2, 0.06);
-        s.fieldBgHover = s.fieldBgHover || mixWithWhite(bg3, 0.08);
+        // Значения pct согласованы с CSS color-mix в tokens.css:
+        //   --surface-1: color-mix(bg-grad-2 86%, white) → 14% white
+        //   --surface-2: color-mix(bg-grad-3 84%, white) → 16% white
+        //   --surface-3: color-mix(bg-grad-3 76%, white) → 24% white
+        s.fieldBg = s.fieldBg || mixWithWhite(bg2, 14);
+        s.fieldBgHover = s.fieldBgHover || mixWithWhite(bg3, 16);
         s.fieldBorder = s.fieldBorder || c.border;
         s.fieldBorderFocus = s.fieldBorderFocus || accent;
         s.fieldText = s.fieldText || text;
-        s.fieldPlaceholder = s.fieldPlaceholder || mixWithWhite(textDim, 0.3);
-        s.cardBg = s.cardBg || mixWithWhite(bg2, 0.04);
-        s.cardBg2 = s.cardBg2 || mixWithWhite(bg3, 0.06);
-        s.modalBg = s.modalBg || mixWithWhite(bg2, 0.04);
+        s.fieldPlaceholder = s.fieldPlaceholder || mixWithWhite(textDim, 30);
+        s.cardBg = s.cardBg || mixWithWhite(bg2, 12);
+        s.cardBg2 = s.cardBg2 || mixWithWhite(bg3, 18);
+        s.modalBg = s.modalBg || mixWithWhite(bg2, 14);
         s.overlayBg = s.overlayBg || "rgba(0,0,0,0.62)";
-        s.dropdownBg = s.dropdownBg || mixWithWhite(bg3, 0.06);
-        s.tooltipBg = s.tooltipBg || mixWithWhite(bg3, 0.10);
-        s.codeBg = s.codeBg || mixWithWhite(bg1, 0.04);
-        s.tableBg = s.tableBg || mixWithWhite(bg2, 0.04);
-        s.tableRowHover = s.tableRowHover || mixWithWhite(text, 0.08);
-        s.scrollbarThumb = s.scrollbarThumb || mixWithWhite(text, 0.22);
+        s.dropdownBg = s.dropdownBg || mixWithWhite(bg3, 16);
+        s.tooltipBg = s.tooltipBg || mixWithWhite(bg3, 24);
+        s.codeBg = s.codeBg || mixWithWhite(bg1, 12);
+        s.tableBg = s.tableBg || mixWithWhite(bg2, 12);
+        s.tableRowHover = s.tableRowHover || mixWithWhite(text, 8);
+        s.scrollbarThumb = s.scrollbarThumb || mixWithWhite(text, 30);
         s.scrollbarTrack = s.scrollbarTrack || "transparent";
-        s.controlBg = s.controlBg || mixWithWhite(bg2, 0.06);
+        s.controlBg = s.controlBg || mixWithWhite(bg2, 14);
         s.controlBorder = s.controlBorder || c.border;
         s.controlChecked = s.controlChecked || accent;
         return s;

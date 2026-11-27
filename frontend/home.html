@@ -656,44 +656,44 @@
                     <!-- Страница: Сеть -->
                     <div class="settings-page" id="sec-net" data-page-key="net">
                         <div class="settings-block">
-                            <h3>Сеть и прокси</h3>
-                            <p class="block-desc">Опционально. Пусто — прямое соединение. Поддерживаются HTTP, HTTPS, SOCKS5 и WireGuard-туннель (как локальный прокси-порт).</p>
+                            <h3 data-i18n-en="Network &amp; Proxy">Сеть и прокси</h3>
+                            <p class="block-desc" data-i18n-en="Optional. Empty = direct connection. Supports HTTP, HTTPS, SOCKS5, and WireGuard tunnel (as a local proxy port).">Опционально. Пусто — прямое соединение. Поддерживаются HTTP, HTTPS, SOCKS5 и WireGuard-туннель (как локальный прокси-порт).</p>
                             <div class="form-group">
-                                <label for="proxyType">Тип прокси</label>
+                                <label for="proxyType" data-i18n-en="Proxy type">Тип прокси</label>
                                 <select id="proxyType" class="opt-select">
-                                    <option value="">Без прокси (прямое)</option>
+                                    <option value="" data-i18n-en="No proxy (direct)">Без прокси (прямое)</option>
                                     <option value="http">HTTP</option>
                                     <option value="https">HTTPS</option>
                                     <option value="socks5">SOCKS5</option>
-                                    <option value="wireguard">WireGuard (туннель)</option>
+                                    <option value="wireguard" data-i18n-en="WireGuard (tunnel)">WireGuard (туннель)</option>
                                 </select>
-                                <small>Выберите тип, затем впишите адрес ниже</small>
+                                <small data-i18n-en="Choose a type, then enter the address below">Выберите тип, затем впишите адрес ниже</small>
                             </div>
                             <div class="form-group">
-                                <label for="proxyUrl">Адрес прокси</label>
+                                <label for="proxyUrl" data-i18n-en="Proxy address">Адрес прокси</label>
                                 <input type="text" id="proxyUrl" placeholder="socks5://127.0.0.1:1080">
-                                <small>Примеры: http://proxy:8080 · socks5://127.0.0.1:1080 · для WireGuard — локальный порт туннеля (http://127.0.0.1:port)</small>
+                                <small data-i18n-en="Examples: http://proxy:8080 · socks5://127.0.0.1:1080 · for WireGuard — local tunnel port (http://127.0.0.1:port)">Примеры: http://proxy:8080 · socks5://127.0.0.1:1080 · для WireGuard — локальный порт туннеля (http://127.0.0.1:port)</small>
                             </div>
                             <div class="param-grid">
                                 <div class="form-group">
-                                    <label for="httpProxy">HTTP Proxy (просто)</label>
+                                    <label for="httpProxy" data-i18n-en="HTTP Proxy (simple)">HTTP Proxy (просто)</label>
                                     <input type="text" id="httpProxy" placeholder="http://proxy:8080">
-                                    <small>Альтернатива — отдельный HTTP-прокси</small>
+                                    <small data-i18n-en="Alternative — separate HTTP proxy">Альтернатива — отдельный HTTP-прокси</small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="httpsProxy">HTTPS Proxy (просто)</label>
+                                    <label for="httpsProxy" data-i18n-en="HTTPS Proxy (simple)">HTTPS Proxy (просто)</label>
                                     <input type="text" id="httpsProxy" placeholder="https://proxy:8080">
-                                    <small>Альтернатива — отдельный HTTPS-прокси</small>
+                                    <small data-i18n-en="Alternative — separate HTTPS proxy">Альтернатива — отдельный HTTPS-прокси</small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="timeout">Timeout (с)</label>
+                                    <label for="timeout" data-i18n-en="Timeout (sec)">Timeout (с)</label>
                                     <input type="number" id="timeout" min="5" max="600" value="120">
-                                    <small>Предел ожидания ответа</small>
+                                    <small data-i18n-en="Response wait limit">Предел ожидания ответа</small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="retries">Повторные попытки</label>
+                                    <label for="retries" data-i18n-en="Retry attempts">Повторные попытки</label>
                                     <input type="number" id="retries" min="0" max="10" value="4">
-                                    <small>Сколько повторять при сбое</small>
+                                    <small data-i18n-en="How many retries on failure">Сколько повторять при сбое</small>
                                 </div>
                             </div>
                         </div>
@@ -702,67 +702,67 @@
                     <!-- Страница: Агенты и скиллы -->
                     <div class="settings-page" id="sec-agents" data-page-key="agents">
                     <div class="settings-block">
-                        <h3>Агенты и скиллы</h3>
-                        <p class="block-desc">Создавайте агентов (роль + модель + промпт) и скиллы (готовые инструкции). Агенты применяют свои промпты и скиллы к чату — для общения и для работы.</p>
+                        <h3 data-i18n-en="Agents &amp; Skills">Агенты и скиллы</h3>
+                        <p class="block-desc" data-i18n-en="Create agents (role + model + prompt) and skills (ready-made instructions). Agents apply their prompts and skills to chat — for conversation and work.">Создавайте агентов (роль + модель + промпт) и скиллы (готовые инструкции). Агенты применяют свои промпты и скиллы к чату — для общения и для работы.</p>
 
                         <div class="import-row">
-                            <button class="test-btn" id="importAgentsBtn">Импортировать агенты/скиллы из файла</button>
+                            <button class="test-btn" id="importAgentsBtn" data-i18n-en="Import agents/skills from file">Импортировать агенты/скиллы из файла</button>
                             <input type="file" id="importAgentsFile" accept=".json,.jsonl,.ndjson" hidden multiple>
-                            <small>JSON: {"agents":[...], "skills":[...]}  или JSONL (по одному в строке)</small>
+                            <small data-i18n-en='JSON: {"agents":[...], "skills":[...]} or JSONL (one per line)'>JSON: {"agents":[...], "skills":[...]}  или JSONL (по одному в строке)</small>
                         </div>
 
                         <div class="agent-editor">
                             <div class="form-group">
-                                <label>Имя агента</label>
-                                <input type="text" id="agentName" placeholder="Например: Архитектор">
+                                <label data-i18n-en="Agent name">Имя агента</label>
+                                <input type="text" id="agentName" placeholder="Например: Архитектор" data-i18n-en-ph="e.g. Architect">
                             </div>
                             <div class="form-group">
-                                <label>Описание</label>
-                                <input type="text" id="agentDesc" placeholder="Зачем этот агент">
+                                <label data-i18n-en="Description">Описание</label>
+                                <input type="text" id="agentDesc" placeholder="Зачем этот агент" data-i18n-en-ph="What is this agent for">
                             </div>
                             <div class="form-group">
-                                <label>Системный промпт</label>
-                                <textarea id="agentPrompt" rows="2" placeholder="Ты — ..."></textarea>
+                                <label data-i18n-en="System prompt">Системный промпт</label>
+                                <textarea id="agentPrompt" rows="2" placeholder="Ты — ..." data-i18n-en-ph="You are ..."></textarea>
                             </div>
                             <div class="param-grid">
                                 <div class="form-group">
-                                    <label>Модель (опц.)</label>
-                                    <input type="text" id="agentModel" placeholder="по умолчанию">
+                                    <label data-i18n-en="Model (opt.)">Модель (опц.)</label>
+                                    <input type="text" id="agentModel" placeholder="по умолчанию" data-i18n-en-ph="default">
                                 </div>
                                 <div class="form-group">
-                                    <label>Temperature (опц.)</label>
-                                    <input type="number" id="agentTemp" min="0" max="2" step="0.1" placeholder="по умолчанию">
+                                    <label data-i18n-en="Temperature (opt.)">Temperature (опц.)</label>
+                                    <input type="number" id="agentTemp" min="0" max="2" step="0.1" placeholder="по умолчанию" data-i18n-en-ph="default">
                                 </div>
                                 <div class="form-group">
-                                    <label>Группа (папка)</label>
-                                    <input type="text" id="agentGroup" placeholder="например: разработка">
+                                    <label data-i18n-en="Group (folder)">Группа (папка)</label>
+                                    <input type="text" id="agentGroup" placeholder="например: разработка" data-i18n-en-ph="e.g. development">
                                 </div>
                             </div>
-                            <button class="test-btn" id="addAgentBtn">Добавить агента</button>
+                            <button class="test-btn" id="addAgentBtn" data-i18n-en="Add agent">Добавить агента</button>
                         </div>
 
                         <div class="agent-list" id="agentList"></div>
 
                         <div class="skill-editor">
-                            <div class="section-subtitle">Скиллы</div>
+                            <div class="section-subtitle" data-i18n-en="Skills">Скиллы</div>
                             <div class="form-group">
-                                <label>Имя скилла</label>
-                                <input type="text" id="skillName" placeholder="Например: Код-ревью">
+                                <label data-i18n-en="Skill name">Имя скилла</label>
+                                <input type="text" id="skillName" placeholder="Например: Код-ревью" data-i18n-en-ph="e.g. Code review">
                             </div>
                             <div class="form-group">
-                                <label>Промпт скилла (инструкция)</label>
-                                <textarea id="skillPrompt" rows="2" placeholder="Опиши, что должен делать этот скилл..."></textarea>
+                                <label data-i18n-en="Skill prompt (instruction)">Промпт скилла (инструкция)</label>
+                                <textarea id="skillPrompt" rows="2" placeholder="Опиши, что должен делать этот скилл..." data-i18n-en-ph="Describe what this skill should do..."></textarea>
                             </div>
                             <div class="form-group">
-                                <label>Группа (папка)</label>
-                                <input type="text" id="skillGroup" placeholder="например: разработка">
+                                <label data-i18n-en="Group (folder)">Группа (папка)</label>
+                                <input type="text" id="skillGroup" placeholder="например: разработка" data-i18n-en-ph="e.g. development">
                             </div>
-                            <button class="test-btn" id="addSkillBtn">Добавить скилл</button>
+                            <button class="test-btn" id="addSkillBtn" data-i18n-en="Add skill">Добавить скилл</button>
                         </div>
 
                         <div class="group-filter-row">
-                            <label class="filter-label">Группа (фильтр списка):</label>
-                            <input type="text" id="entityGroupFilter" placeholder="имя группы" class="opt-input" style="max-width:220px">
+                            <label class="filter-label" data-i18n-en="Group (list filter):">Группа (фильтр списка):</label>
+                            <input type="text" id="entityGroupFilter" placeholder="имя группы" data-i18n-en-ph="group name" class="opt-input" style="max-width:220px">
                         </div>
 
                         <div class="skill-list" id="skillList"></div>
@@ -772,28 +772,28 @@
                     <!-- Блок: Мульти-API-ключи -->
                     <div class="settings-page" id="sec-keys" data-page-key="keys">
                     <div class="settings-block">
-                        <h3>API Ключи (мультисессия)</h3>
-                        <p class="block-desc">Держите несколько ключей. При лимите (429) система автоматически переключится на следующий. Можно вручную активировать ключ для новой сессии.</p>
+                        <h3 data-i18n-en="API Keys (multi-session)">API Ключи (мультисессия)</h3>
+                        <p class="block-desc" data-i18n-en="Keep multiple keys. On rate limit (429), the system automatically switches to the next one. You can manually activate a key for a new session.">Держите несколько ключей. При лимите (429) система автоматически переключится на следующий. Можно вручную активировать ключ для новой сессии.</p>
 
                         <div class="key-editor">
                             <div class="param-grid">
                                 <div class="form-group">
-                                    <label>Метка</label>
-                                    <input type="text" id="keyLabel" placeholder="OpenAI основной">
+                                    <label data-i18n-en="Label">Метка</label>
+                                    <input type="text" id="keyLabel" placeholder="OpenAI основной" data-i18n-en-ph="OpenAI main">
                                 </div>
                                 <div class="form-group">
                                     <label>Base URL</label>
-                                    <input type="text" id="keyBaseUrl" placeholder="https://api.ВАШ-ПРОВАЙДЕР.ком/v1">
+                                    <input type="text" id="keyBaseUrl" placeholder="https://api.YOUR-PROVIDER.com/v1" data-i18n-en-ph="https://api.YOUR-PROVIDER.com/v1">
                                 </div>
                             </div>
                             <div class="form-group">
                                 <label>API Key</label>
-                                <input type="password" id="keyApi" placeholder="ВАШ_API_KEY">
+                                <input type="password" id="keyApi" placeholder="ВАШ_API_KEY" data-i18n-en-ph="YOUR_API_KEY">
                             </div>
                             <div class="param-grid">
                                 <div class="form-group">
-                                    <label>Модель</label>
-                                    <input type="text" id="keyModel" placeholder="имя модели провайдера">
+                                    <label data-i18n-en="Model">Модель</label>
+                                    <input type="text" id="keyModel" placeholder="имя модели провайдера" data-i18n-en-ph="provider model name">
                                 </div>
                                 <div class="form-group">
                                     <label>Temperature</label>
@@ -801,10 +801,10 @@
                                 </div>
                             </div>
                             <div class="btn-row">
-                                <button class="test-btn" id="addKeyBtn">Добавить ключ</button>
+                                <button class="test-btn" id="addKeyBtn" data-i18n-en="Add key">Добавить ключ</button>
                                 <label class="orch-toggle">
                                     <input type="checkbox" id="keyRoundRobin">
-                                    <span>Круговое переключение (round-robin)</span>
+                                    <span data-i18n-en="Round-robin switching">Круговое переключение (round-robin)</span>
                                 </label>
                             </div>
                         </div>
@@ -842,7 +842,7 @@
                             </div>
                             <div class="param-grid">
                                 <div class="form-group">
-                                    <label>Таймаут команды (сек)</label>
+                                    <label data-i18n-en="Command timeout (sec)">Таймаут команды (сек)</label>
                                     <input type="number" id="toolsCmdTimeout" min="5" max="120" value="30">
                                 </div>
                             </div>
@@ -850,7 +850,7 @@
                                 <button class="test-btn primary" id="toolsSaveBtn">Сохранить</button>
                                 <button class="test-btn" id="toolsTestRead">Тест: прочитай файл</button>
                                 <button class="test-btn" id="toolsTestWrite">Тест: запиши файл</button>
-                                <button class="test-btn" id="toolsTestCmd">Тест: команда</button>
+                                <button class="test-btn" id="toolsTestCmd" data-i18n-en="Test: command">Тест: команда</button>
                             </div>
                         </div>
                         <div class="settings-block">
@@ -896,7 +896,7 @@
                                 <input type="text" id="mediaPathText" class="opt-input" placeholder="Путь: текст → медиа (например, v1/images/generations; пусто = дефолт)">
                             </div>
                             <div class="form-group">
-                                <label>Видео</label>
+                                <label data-i18n-en="Video">Видео</label>
                                 <input type="text" id="videoKey" class="opt-input" placeholder="ключ для видео (пусто = общий)">
                                 <input type="text" id="videoBaseUrl" class="opt-input" style="margin-top:8px" placeholder="Base URL (пусто = общий)">
                                 <input type="text" id="videoModel" class="opt-input" style="margin-top:8px" placeholder="Модель видео">
@@ -911,7 +911,7 @@
                                 <input type="text" id="mediaPathVoice" class="opt-input" style="margin-top:8px" placeholder="Путь: голос/TTS (например, v1/audio/speech; пусто = дефолт)">
                             </div>
                             <div class="form-group">
-                                <label>Коддинг</label>
+                                <label data-i18n-en="Coding">Коддинг</label>
                                 <input type="text" id="codingKey" class="opt-input" placeholder="API-ключ для кода (пусто = общий ключ)">
                                 <input type="text" id="codingBaseUrl" class="opt-input" style="margin-top:8px" placeholder="Base URL (пусто = общий)">
                                 <input type="text" id="codingModel" class="opt-input" style="margin-top:8px" placeholder="Модель для кода (например, claude-sonnet, gpt-4o)">
@@ -926,8 +926,8 @@
                     <div class="settings-page" id="sec-mcp" data-page-key="mcp">
                         <div class="settings-block">
                             <h3><span class="block-icon"><svg class="ic" viewBox="0 0 24 24" width="17" height="17"><path d="M6.5 6.5a3.5 3.5 0 1 1 7 0v3a3.5 3.5 0 1 1-7 0z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17.5" cy="9" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="18" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span> MCP-серверы</h3>
-                            <p class="block-desc">Подключите внешние MCP-серверы (STDIO-процессы или HTTP-эндпоинты). Их инструменты автоматически появятся в доступных инструментах модели (при включённом tool-calling).</p>
-                            <div id="mcp-server-list" class="mcp-list"><div class="mcp-empty">Загрузка…</div></div>
+                            <p class="block-desc" data-i18n-en="Connect external MCP servers (STDIO processes or HTTP endpoints). Their tools automatically appear in the model's available tools (when tool-calling is enabled).">Подключите внешние MCP-серверы (STDIO-процессы или HTTP-эндпоинты). Их инструменты автоматически появятся в доступных инструментах модели (при включённом tool-calling).</p>
+                            <div id="mcp-server-list" class="mcp-list"><div class="mcp-empty" data-i18n-en="Loading…">Загрузка…</div></div>
 
                             <!-- Preset-кнопки -->
                             <div class="mcp-presets">
@@ -945,12 +945,12 @@
                                 </button>
                             </div>
 
-                            <button class="test-btn primary" id="mcp-add-btn" onclick="mcpShowAddForm()">＋ Добавить MCP-сервер</button>
+                            <button class="test-btn primary" id="mcp-add-btn" onclick="mcpShowAddForm()" data-i18n-en="+ Add MCP server">＋ Добавить MCP-сервер</button>
                             <div id="mcp-add-form" class="mcp-form" style="display:none"></div>
 
                             <!-- Лимит итераций tool-calling -->
                             <div class="form-group" style="margin-top:16px">
-                                <label>Лимит итераций tool-calling</label>
+                                <label data-i18n-en="Tool-calling iteration limit">Лимит итераций tool-calling</label>
                                 <input type="number" id="mcpToolLimit" class="opt-input" min="0" max="50" value="5">
                                 <small>Макс. число циклов «модель &rarr; инструмент &rarr; модель» за запрос. 0 = дефолт (5). Значение выше 50 обрезается до 50.</small>
                                 <button class="test-btn" id="mcpToolLimitSave" onclick="saveMcpToolLimit()" style="margin-top:8px">Сохранить</button>
@@ -967,8 +967,8 @@
                                 <select id="writerFamily" class="opt-select">
                                     <option value="docx">Word (.docx)</option>
                                     <option value="xlsx">Excel (.xlsx)</option>
-                                    <option value="pdf">PDF</option>
-                                    <option value="html">HTML</option>
+                                    <option value="pdf" data-i18n-en="PDF">PDF</option>
+                                    <option value="html" data-i18n-en="HTML">HTML</option>
                                     <option value="markdown">Markdown</option>
                                 </select>
                             </div>
@@ -1005,7 +1005,7 @@
                                 <input type="range" id="vadSilenceSlider" min="500" max="10000" step="100" value="2000">
                             </div>
                             <div class="form-group">
-                                <label>Чувствительность VAD: <span id="vadSensitivityOut">1.8</span></label>
+                                <label>Чувствительность VAD: <span id="vadSensitivityOut" data-i18n-en="1.8">1.8</span></label>
                                 <input type="range" id="vadSensitivitySlider" min="1.2" max="3.0" step="0.1" value="1.8">
                             </div>
                             <button class="test-btn primary" id="voiceSaveBtn">Сохранить голосовые настройки</button>
@@ -1215,7 +1215,7 @@
 
                             <div class="btn-row">
                                 <button class="test-btn primary" id="createPersonalityBtn">Создать личность</button>
-                                <button class="test-btn" id="previewPersonalityBtn">Предпросмотр</button>
+                                <button class="test-btn" id="previewPersonalityBtn" data-i18n-en="Preview">Предпросмотр</button>
                             </div>
                             <div id="personalityPreview" class="personality-preview"></div>
                         </div>
@@ -1360,11 +1360,11 @@
                                     <div id="themeSwatches" class="theme-swatches"></div>
                                     <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
                                         <select id="themePick" class="opt-select" style="flex:1"></select>
-                                        <button class="test-btn" id="themePreviewBtn">Предпросмотр</button>
+                                        <button class="test-btn" id="themePreviewBtn" data-i18n-en="Preview">Предпросмотр</button>
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label>Язык интерфейса</label>
+                                    <label data-i18n-en="UI language">Язык интерфейса</label>
                                     <select id="langSelect" class="opt-select">
                                         <option value="ru">Русский</option>
                                         <option value="en">English</option>
@@ -1427,7 +1427,7 @@
                                             <div class="te-cell"><label>Фон 1</label><input type="color" id="teBg1" value="#05050a"></div>
                                             <div class="te-cell"><label>Фон 2</label><input type="color" id="teBg2" value="#11131a"></div>
                                             <div class="te-cell"><label>Фон 3</label><input type="color" id="teBg3" value="#0b0f14"></div>
-                                            <div class="te-cell"><label>Текст</label><input type="color" id="teText" value="#d0d0d0"></div>
+                                            <div class="te-cell"><label data-i18n-en="Text">Текст</label><input type="color" id="teText" value="#d0d0d0"></div>
                                             <div class="te-cell"><label>Текст (dim)</label><input type="color" id="teTextDim" value="#8a8a9a"></div>
                                             <div class="te-cell"><label>Успех</label><input type="color" id="teSuccess" value="#4ade80"></div>
                                             <div class="te-cell"><label>Предупр.</label><input type="color" id="teWarning" value="#facc15"></div>
@@ -1454,7 +1454,7 @@
                                         <div class="te-grid" style="margin-top:10px">
                                             <div class="te-cell"><label>Тень</label><select id="teShadow"><option value="sm">См.</option><option value="md" selected>Сред.</option><option value="lg">Крупная</option></select></div>
                                             <div class="te-cell"><label>Скорость аним.</label><select id="teMotion"><option value="fast">Быстро</option><option value="normal" selected>Норма</option><option value="slow">Медленно</option></select></div>
-                                            <div class="te-cell"><label>Шрифт</label><select id="teFont"></select></div>
+                                            <div class="te-cell"><label data-i18n-en="Font">Шрифт</label><select id="teFont"></select></div>
                                             <div class="te-cell"><label>Шрифт заголовков</label><select id="teHeadingFont"></select></div>
                                         </div>
                                     </details>
@@ -1505,7 +1505,7 @@
                                     <label>Фон приложения (картинка или видео, адаптивно)</label>
                                     <input type="file" id="bgFile" accept="image/*,video/*">
                                     <div class="bg-controls">
-                                        <button class="test-btn" id="bgClearBtn">Убрать фон</button>
+                                        <button class="test-btn" id="bgClearBtn" data-i18n-en="Remove background">Убрать фон</button>
                                         <div class="bg-dim">
                                             <span class="home-sublabel">Затемнение: <span id="bgDimVal">55%</span></span>
                                             <input type="range" id="bgDim" min="0" max="90" value="55">
@@ -1541,11 +1541,11 @@
                             <h3>Код</h3>
                             <p class="block-desc">Отдельная страница «Код», кодинг-ключи, рабочие папки и права инструментов.</p>
                             <div class="form-group">
-                                <label>Показывать страницу «Код» в меню</label>
+                                <label data-i18n-en="Show &quot;Code&quot; page in menu">Показывать страницу «Код» в меню</label>
                                 <input type="checkbox" id="codingPageVisibility" checked>
                             </div>
                             <div class="form-group">
-                                <label>Рабочая папка кодинг-чата</label>
+                                <label data-i18n-en="Coding chat working folder">Рабочая папка кодинг-чата</label>
                                 <div style="display:flex;gap:8px;align-items:center;">
                                     <input type="text" id="codingProjectRoot" class="opt-input" placeholder="C:\Users\...\project" style="flex:1;">
                                     <button class="test-btn" id="codingProjectSelectBtn" title="Выбрать папку">
@@ -1554,34 +1554,34 @@
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label>Политика прав</label>
+                                <label data-i18n-en="Permission policy">Политика прав</label>
                                 <select id="codingPolicyPreset" class="opt-select">
-                                    <option value="balanced">Сбалансированная</option>
-                                    <option value="safe">Безопасная</option>
-                                    <option value="strict">Строгая</option>
+                                    <option value="balanced" data-i18n-en="Balanced">Сбалансированная</option>
+                                    <option value="safe" data-i18n-en="Safe">Безопасная</option>
+                                    <option value="strict" data-i18n-en="Strict">Строгая</option>
                                 </select>
                             </div>
-                            <button class="test-btn primary" id="codingSettingsSaveBtn">Сохранить настройки кода</button>
+                            <button class="test-btn primary" id="codingSettingsSaveBtn" data-i18n-en="Save coding settings">Сохранить настройки кода</button>
                         </div>
 
                         <!-- Справка по кодинг-командам -->
                         <div class="settings-block coding-help-block">
                             <div class="coding-help-header">
-                                <h3>Справка по командам кода</h3>
-                                <button class="test-btn" id="codingHelpToggleBtn">Скрыть</button>
+                                <h3 data-i18n-en="Coding Command Help">Справка по командам кода</h3>
+                                <button class="test-btn" id="codingHelpToggleBtn" data-i18n-en="Hide">Скрыть</button>
                             </div>
-                            <p class="block-desc">Команды для кодинг-чата: <code>/code</code>, <code>/code_project</code>, <code>/code_session</code>, <code>/code_git</code>, <code>/code_test</code>, <code>/code_mcp</code>, <code>/code_permissions</code>, <code>/code_orchestrator</code>. Введите <code>?</code> в композере для быстрого списка или нажмите <code>/help</code>.</p>
+                            <p class="block-desc" data-i18n-en="Commands for coding chat: <code>/code</code>, <code>/code_project</code>, <code>/code_session</code>, <code>/code_git</code>, <code>/code_test</code>, <code>/code_mcp</code>, <code>/code_permissions</code>, <code>/code_orchestrator</code>. Type <code>?</code> in the composer for a quick list or press <code>/help</code>.">Команды для кодинг-чата: <code>/code</code>, <code>/code_project</code>, <code>/code_session</code>, <code>/code_git</code>, <code>/code_test</code>, <code>/code_mcp</code>, <code>/code_permissions</code>, <code>/code_orchestrator</code>. Введите <code>?</code> в композере для быстрого списка или нажмите <code>/help</code>.</p>
                             <div id="codingHelpList" class="coding-help-list">
                                 <!-- заполняется динамически из реестра команд -->
                             </div>
-                            <button class="test-btn" id="codingHelpRefreshBtn" onclick="window.initCodingHelp()">Обновить реестр</button>
+                            <button class="test-btn" id="codingHelpRefreshBtn" onclick="window.initCodingHelp()" data-i18n-en="Refresh registry">Обновить реестр</button>
                         </div>
                     </div><!-- /settings-page coding -->
 
                     <!-- Страница: Хоткеи -->
                     <div class="settings-page" id="sec-hotkeys" data-page-key="hotkeys">
                         <div class="settings-block">
-                            <h3>Хоткеи</h3>
+                            <h3 data-i18n-en="Hotkeys">Хоткеи</h3>
                             <p class="block-desc">Нажмите «Назначить» и затем клавишу. По умолчанию все не назначены.</p>
                             <div id="hotkeySettingsContainer" class="hotkey-settings-container"></div>
                         </div>

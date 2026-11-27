@@ -1722,6 +1722,20 @@ async function sendMessage() {
     const hasFiles = attachedFiles.length > 0;
     if ((!rawText && !hasFiles) || isStreaming) return;
 
+    // Если на странице "Код" и активный чат не кодинг-чат — автоматически создаём кодинг-чат
+    if (currentChatSurface() === 'code') {
+        const active = getCurrentChat();
+        if (!active || active.chat_mode !== 'coding') {
+            const codingChat = createNewChat('coding');
+            currentChatId = codingChat.id;
+            chatTitle.value = codingChat.title;
+            await saveChats();
+            await saveCurrentChatId();
+            chatMessages.innerHTML = '<div class="welcome-screen" id="welcomeScreen"><div class="welcome-icon">AMT</div><h3>Коддинг-чат</h3><p>Пиши кодинг-команды или описывай задачу.</p></div>';
+            renderChatsList();
+        }
+    }
+
     messageInput.value = '';
     adjustTextareaHeight();
     hideWelcome();

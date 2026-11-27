@@ -328,13 +328,13 @@
         $("teImport").onclick = importTheme;
         $("teReset").onclick = resetTheme;
 
-        // При выборе темы в селекторе themePick — подхватываем её в редактор + применяем CSS vars
+        // При выборе темы в селекторе themePick — подхватываем её в редактор
+        // CSS vars уже применены handler'ом themes.js — не дублируем applyAndPersist
         const tp = $("themePick");
         if (tp) tp.addEventListener("change", () => {
             const all = loadAllThemes();
             const t = all[tp.value] || S().DEFAULT_THEME;
             loadToControls(t, tp.value);
-            applyAndPersist();
         });
 
         // Custom font show/hide: when teFont/teHeadingFont = "custom", reveal the text input
@@ -357,12 +357,13 @@
         loadToControls(t, cur.theme || "ocean");
     }
 
-    // Публичный хук: themes.js вызывает при клике на свотч
+    // Публичный хук: themes.js вызывает при клике на свотч / смене themePick
     window.AMTThemeEditor = {
         onThemeChange(id, themeObj) {
             if (!window.AMTThemeEditor._done) return;
+            // loadToControls обновляет все контролы редактора значениями новой темы.
+            // CSS vars уже применены caller'ом (applyThemeVars) — не дублируем.
             loadToControls(themeObj || S().DEFAULT_THEME, id);
-            applyAndPersist();
         },
         _done: false,
     };

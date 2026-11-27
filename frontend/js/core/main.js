@@ -928,44 +928,50 @@ function attachPinButton(msgEl, idx, isPinned, role) {
         if (ed) ed.remove();
     }
 
-    // Навигация < n/m > (пред/след) — под действиями
+    // Навигация < n/m > — только под версиями (отредактированные / перегенерированные)
+    const msg = getMsg();
+    const hasVersions = msg && ((msg._versions && msg._versions.length > 0) || msg._regen);
     let nav = msgEl.querySelector(':scope > .msg-nav');
-    if (!nav) {
-        nav = document.createElement('div');
-        nav.className = 'msg-nav';
-        msgEl.appendChild(nav);
-    }
-    nav.innerHTML = '';
-    const total = getCurrentChat()?.messages?.length || 0;
-    if (total > 1) {
-        const prevBtn = document.createElement('button');
-        prevBtn.className = 'msg-nav-btn';
-        prevBtn.innerHTML = '&#8249;';
-        prevBtn.disabled = idx <= 0;
-        prevBtn.title = 'Предыдущее сообщение';
-        prevBtn.addEventListener('click', () => {
-            if (idx > 0) {
-                const el = chatMessages.querySelector(`.message[data-msg-idx="${idx - 1}"]`);
-                if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('msg-nav-flash'); setTimeout(() => el.classList.remove('msg-nav-flash'), 1200); }
-            }
-        });
-        const count = document.createElement('span');
-        count.className = 'msg-nav-count';
-        count.textContent = (idx + 1) + '/' + total;
-        const nextBtn = document.createElement('button');
-        nextBtn.className = 'msg-nav-btn';
-        nextBtn.innerHTML = '&#8250;';
-        nextBtn.disabled = idx >= total - 1;
-        nextBtn.title = 'Следующее сообщение';
-        nextBtn.addEventListener('click', () => {
-            if (idx < total - 1) {
-                const el = chatMessages.querySelector(`.message[data-msg-idx="${idx + 1}"]`);
-                if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('msg-nav-flash'); setTimeout(() => el.classList.remove('msg-nav-flash'), 1200); }
-            }
-        });
-        nav.appendChild(prevBtn);
-        nav.appendChild(count);
-        nav.appendChild(nextBtn);
+    if (!hasVersions) {
+        if (nav) nav.remove();
+    } else {
+        if (!nav) {
+            nav = document.createElement('div');
+            nav.className = 'msg-nav';
+            msgEl.appendChild(nav);
+        }
+        nav.innerHTML = '';
+        const total = getCurrentChat()?.messages?.length || 0;
+        if (total > 1) {
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'msg-nav-btn';
+            prevBtn.innerHTML = '&#8249;';
+            prevBtn.disabled = idx <= 0;
+            prevBtn.title = 'Предыдущее сообщение';
+            prevBtn.addEventListener('click', () => {
+                if (idx > 0) {
+                    const el = chatMessages.querySelector(`.message[data-msg-idx="${idx - 1}"]`);
+                    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('msg-nav-flash'); setTimeout(() => el.classList.remove('msg-nav-flash'), 1200); }
+                }
+            });
+            const count = document.createElement('span');
+            count.className = 'msg-nav-count';
+            count.textContent = (idx + 1) + '/' + total;
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'msg-nav-btn';
+            nextBtn.innerHTML = '&#8250;';
+            nextBtn.disabled = idx >= total - 1;
+            nextBtn.title = 'Следующее сообщение';
+            nextBtn.addEventListener('click', () => {
+                if (idx < total - 1) {
+                    const el = chatMessages.querySelector(`.message[data-msg-idx="${idx + 1}"]`);
+                    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('msg-nav-flash'); setTimeout(() => el.classList.remove('msg-nav-flash'), 1200); }
+                }
+            });
+            nav.appendChild(prevBtn);
+            nav.appendChild(count);
+            nav.appendChild(nextBtn);
+        }
     }
 }
 
@@ -1070,6 +1076,7 @@ async function regenerateMessage(idx) {
     setStatus('idle');
     target.content = (typeof reply === 'string' && reply && reply !== 'Ошибка соединения') ? reply : target.content;
     target.pending = false;
+    if (reply && reply !== 'Ошибка соединения') target._regen = true;
     renderMessages(chat);
     saveChats();
 }
@@ -1144,9 +1151,12 @@ function saveMessageEdit() {
     const chat = getCurrentChat();
     if (!chat || !chat.messages[idx]) return;
     const ta = msgEditEl.querySelector('.msg-edit-text');
-    chat.messages[idx].content = (ta?.value || '').trim();
-    // Сохранить список файлов (учитывая удалённые и добавленные в этой сессии)
     const m = chat.messages[idx];
+    // Track version history
+    if (!m._versions) m._versions = [];
+    m._versions.push(m.content);
+    m.content = (ta?.value || '').trim();
+    // Сохранить список файлов (учитывая удалённые и добавленные в этой сессии)
     if (!m.files) m.files = [];
     if (msgEditEl._newFiles && msgEditEl._newFiles.length) {
         msgEditEl._newFiles.forEach(nf => { if (!m.files.includes(nf)) m.files.push(nf); });

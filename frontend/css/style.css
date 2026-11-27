@@ -817,6 +817,7 @@ main.page.active {
     border-radius: 20px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255,255,255,0.08);
     overflow: hidden;
+    position: relative;
 }
 
 .chat-header h2 {
@@ -956,46 +957,44 @@ main.page.active {
 }
 
 /* Область сообщений */
-.chat-messages-wrap {
-    flex: 1;
-    display: flex;
-    min-height: 0;
-    position: relative;
-}
 .chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 24px;
+    padding: 24px 56px 24px 24px;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    position: relative;
 }
 
 /* ===== Message Ribbon (лента сообщений) ===== */
 .msg-ribbon {
     position: absolute;
-    top: 0;
+    top: 56px;
     right: 0;
-    bottom: 0;
+    bottom: 80px;
     width: 28px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    background: var(--surface-0, rgba(0,0,0,0.25));
-    border-left: 1px solid var(--border, rgba(255,255,255,0.08));
+    background: transparent;
+    border: none;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 12px 0;
-    transition: width 0.2s ease, background 0.2s ease;
+    transition: width 0.25s cubic-bezier(0.32,0.72,0,1), background 0.25s ease;
     z-index: 10;
+    border-radius: 12px 0 0 12px;
 }
 .msg-ribbon:hover {
     width: 180px;
     align-items: stretch;
     padding: 8px;
     background: var(--surface-0, rgba(0,0,0,0.35));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 .msg-ribbon::-webkit-scrollbar {
     width: 4px;
@@ -1019,15 +1018,18 @@ main.page.active {
     background: var(--surface-1, rgba(255,255,255,0.08));
 }
 .msg-ribbon-item .msg-ribbon-dot {
-    width: 6px;
-    height: 6px;
-    min-width: 6px;
-    border-radius: 50%;
+    width: 8px;
+    height: 8px;
+    min-width: 8px;
+    border-radius: 4px;
     background: var(--text-dim, #666);
-    transition: background 0.15s, transform 0.15s;
+    transition: background 0.15s, transform 0.15s, border-radius 0.15s;
 }
 .msg-ribbon:hover .msg-ribbon-item .msg-ribbon-dot {
-    transform: scale(1);
+    border-radius: 50%;
+}
+.msg-ribbon:hover .msg-ribbon-item .msg-ribbon-dot {
+    transform: scale(1.2);
 }
 .msg-ribbon-item.active .msg-ribbon-dot {
     background: var(--accent, #60a5fa);

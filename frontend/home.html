@@ -390,16 +390,16 @@
                     <div class="pinned-list" id="pinnedList"></div>
                 </div>
                 <!-- Композер нового чата убран: создание чата теперь на странице «Главная» -->
-                <div class="chat-messages-wrap">
-                <div class="msg-ribbon" id="msgRibbon" title="Все сообщения чата">
-                    <!-- заполняется динамически: точки (свернуто) / заголовки (развернуто) -->
-                </div>
                 <div class="chat-messages" id="chatMessages">
                     <div class="welcome-screen" id="welcomeScreen">
                         <div class="welcome-icon">AMT</div>
                         <h3>Чем я могу помочь?</h3>
                         <p>Задай вопрос — я отвечу на основе подключённой модели.</p>
                     </div>
+                </div>
+
+                <div class="msg-ribbon" id="msgRibbon" title="Все сообщения чата">
+                    <!-- заполняется динамически: точки (свернуто) / заголовки (развернуто) -->
                 </div>
 
                 <div class="chat-input-box">
@@ -429,7 +429,6 @@
                     <button class="input-btn stop-btn hidden" id="stopBtn" title="Остановить" data-i18n-en-title="Stop">⏹</button>
                     <button class="input-btn send-btn" id="sendBtn" title="Отправить" data-i18n-en-title="Send">➤</button>
                 </div>
-                </div><!-- /chat-messages-wrap -->
                 <!-- Быстрый выбор инструмента -->
                 <div class="tool-picker hidden" id="toolPicker">
                     <button class="tool-picker-item" data-tool="read_file"><svg class="ic" viewBox="0 0 24 24" width="16" height="16"><path d="M7 3h7l4 4v14H7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3v4h4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg> Прочитать файл</button>

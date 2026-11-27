@@ -934,9 +934,10 @@ function attachPinButton(msgEl, idx, isPinned, role) {
 
     // Навигация по версиям < n/m > — только под версионными сообщениями
     const msg = getMsg();
-    const versions = (msg && msg._versions ? msg._versions.length : 0) + (msg && msg._regen ? 1 : 0);
+    // версий = 1 (оригинал) + _versions.length (отредактированные) + _regen
+    const totalVersions = 1 + (msg && msg._versions ? msg._versions.length : 0) + (msg && msg._regen ? 1 : 0);
     let nav = msgEl.querySelector(':scope > .msg-nav');
-    if (versions < 2) {
+    if (totalVersions < 2) {
         if (nav) nav.remove();
     } else {
         if (!nav) {
@@ -945,7 +946,6 @@ function attachPinButton(msgEl, idx, isPinned, role) {
             msgEl.appendChild(nav);
         }
         nav.innerHTML = '';
-        const totalVersions = versions;
         const curVersion = msg._vIdx || 0;
         const prevBtn = document.createElement('button');
         prevBtn.className = 'msg-nav-btn';
@@ -1494,6 +1494,21 @@ function showPage(page) {
         toggleComposerVisibility();
         renderChatsList();
         if (typeof refreshCodingPanels === 'function') refreshCodingPanels();
+        // Автооткрыть последний чат этой поверхности (без рекурсии showPage)
+        const surface = page === 'code' ? 'code' : 'chat';
+        const activeChat = chats.find(c => c.id === currentChatId);
+        if (!activeChat || !chatMatchesSurface(activeChat, surface)) {
+            const visible = chats.filter(c => chatMatchesSurface(c, surface));
+            if (visible.length > 0) {
+                const target = visible[visible.length - 1];
+                currentChatId = target.id;
+                chatTitle.value = target.title;
+                renderGroupSelect(target);
+                saveCurrentChatId();
+                renderMessages(target);
+                setStatus('idle');
+            }
+        }
     }
     if (page === 'settings') showSettingsPage('sec-connect');
     if (page === 'docs') showDocsPage('docs-about');

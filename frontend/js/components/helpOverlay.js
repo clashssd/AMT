@@ -45,6 +45,14 @@
       });
     });
     
+    // Esc closes the modal
+    overlayEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlayEl.classList.contains('visible')) close();
+    });
+    
     return overlayEl;
   }
   
@@ -89,25 +97,45 @@
       commands = [];
     }
     
-    // Рендерим список
+    // Рендерим список (группируем по type)
     const listEl = overlay.querySelector('.command-list');
     let html = '';
     
+    const TYPE_LABELS = {
+        navigation: 'Навигация',
+        feature: 'Генерация / Режимы',
+        coding: 'Кодинг',
+        help: 'Помощь'
+    };
+    
+    // Сгруппируем
+    const groups = {};
     for (const cmd of commands) {
-      const examplesBlock = cmd.examples && cmd.examples.length > 0
-        ? `<div class="examples">${cmd.examples.map(ex => '• ' + ex).join('<br>')}</div>`
-        : '';
-      
-      html += `
-        <div class="command-item" data-cmd="${cmd.id}">
-          <div class="cmd-header">
-            <code>${cmd.label || '/' + cmd.id}</code>
-            ${(cmd.aliases && cmd.aliases.length > 0) ? `<small>алиасы: ${cmd.aliases.map(a => '/' + a).join(', ')}</small>` : ''}
-          </div>
-          <div class="desc">${cmd.description}</div>
-          ${examplesBlock}
-        </div>
-      `;
+        const t = cmd.type || 'feature';
+        if (!groups[t]) groups[t] = [];
+        groups[t].push(cmd);
+    }
+    
+    for (const [type, cmds] of Object.entries(groups)) {
+        const label = TYPE_LABELS[type] || type;
+        html += `<div class="command-group" data-group="${type}"><h3 class="command-group-title">${label}</h3>`;
+        for (const cmd of cmds) {
+            const examplesBlock = cmd.examples && cmd.examples.length > 0
+                ? `<div class="examples">${cmd.examples.map(ex => '• ' + ex).join('<br>')}</div>`
+                : '';
+            
+            html += `
+              <div class="command-item" data-cmd="${cmd.id}">
+                <div class="cmd-header">
+                    <code>${cmd.label || '/' + cmd.id}</code>
+                    ${(cmd.aliases && cmd.aliases.length > 0) ? `<small>алиасы: ${cmd.aliases.map(a => '/' + a).join(', ')}</small>` : ''}
+                </div>
+                <div class="desc">${cmd.description}</div>
+                ${examplesBlock}
+              </div>
+            `;
+        }
+        html += '</div>';
     }
     
     listEl.innerHTML = html;

@@ -47,6 +47,11 @@
       });
     });
     
+    // Esc closes the modal
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modalEl.classList.contains('visible')) cancel();
+    });
+    
     return modalEl;
   }
   

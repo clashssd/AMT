@@ -13,8 +13,7 @@
     "build:py": "python -m PyInstaller backend/amt-backend.spec --noconfirm",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
-    "build:all": "node scripts/build.js all",
-    "check:design": "node scripts/check-design-tokens.mjs"
+    "build:all": "node scripts/build.js all"
   },
   "dependencies": {
     "electron-updater": "^6.3.9"

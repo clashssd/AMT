@@ -62,28 +62,4 @@ contextBridge.exposeInMainWorld('api', {
     clear: (opts) => ipcRenderer.invoke('secrets:clear', opts),
     status: () => ipcRenderer.invoke('secrets:status'),
   },
-
-  /** Auto-updates (electron-updater + GitHub Releases) */
-  updates: {
-    /** Current version + source info */
-    status: () => ipcRenderer.invoke('updates:status'),
-    /** Trigger a check now. Returns { ok, version?, error? } */
-    check: () => ipcRenderer.invoke('updates:check'),
-    /** Download the available update. Returns { ok, error? } */
-    download: () => ipcRenderer.invoke('updates:download'),
-    /** Quit and install the downloaded update (app terminates). */
-    install: () => ipcRenderer.invoke('updates:install'),
-    /** Open the GitHub Releases page in the default browser. */
-    openReleases: () => ipcRenderer.invoke('updates:openReleases'),
-    /**
-     * Subscribe to live update status changes.
-     * @param {(payload:{event:string,data?:object}) => void} cb
-     * @returns {() => void} unsubscribe
-     */
-    onStatus: (cb) => {
-      const handler = (_e, payload) => cb(payload);
-      ipcRenderer.on('updates:status-changed', handler);
-      return () => ipcRenderer.removeListener('updates:status-changed', handler);
-    },
-  },
 });

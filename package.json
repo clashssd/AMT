@@ -16,9 +16,7 @@
     "build:win": "npm run sync-frontend && electron-builder --win",
     "build:all": "node scripts/build.js all"
   },
-  "dependencies": {
-    "electron-updater": "^6.3.9"
-  },
+  "dependencies": {},
   "devDependencies": {
     "electron": "^45.4.1",
     "electron-builder": "^25.1.8"

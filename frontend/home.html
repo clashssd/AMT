@@ -28,14 +28,6 @@
         </div>
     </div>
 
-    <!-- Update banner: thin strip under the titlebar, shown when an update is available or on error -->
-    <div id="updateBanner" class="update-banner hidden">
-        <span class="update-banner-icon">🔔</span>
-        <span class="update-banner-text"></span>
-        <button class="update-banner-link" title="Подробнее">Подробнее</button>
-        <button class="update-banner-dismiss" title="Скрыть">&times;</button>
-    </div>
-
     <div class="bg-media" id="bgMedia"></div>
     <div class="bg-image"></div>
 
@@ -2045,28 +2037,6 @@
     <!-- Контекстное меню чатов (ПКМ) -->
     <div class="ctx-menu hidden" id="ctxMenu"></div>
 
-    <!-- Модалка: обновление -->
-    <div class="modal-overlay hidden" id="updateDialog">
-        <div class="modal-glass update-dialog">
-            <div class="update-dialog-head">
-                <h3 id="updateDialogTitle">Доступно обновление</h3>
-                <button id="updateDialogClose" title="Закрыть">&#10005;</button>
-            </div>
-            <p class="block-desc">Новая версия: <b id="updateDialogVersion"></b></p>
-            <div id="updateDialogChangelog" class="update-changelog-list"></div>
-            <div class="update-progress-wrap hidden">
-                <div class="update-progress-bar"><div class="update-progress"></div></div>
-                <span class="update-progress-text"></span>
-            </div>
-            <div id="updateDialogError" class="update-dialog-error hidden"></div>
-            <div class="btn-row">
-                <button class="test-btn" id="updateLaterBtn">Позже</button>
-                <button class="test-btn primary" id="updateDownloadBtn">&#11015; Скачать обновление</button>
-                <button class="test-btn primary hidden" id="updateInstallBtn">&#8635; Перезапустить и обновить</button>
-                <button class="test-btn hidden" id="updateOpenReleasesBtn">Открыть GitHub Releases</button>
-            </div>
-        </div>
-    </div>
 
     <script src="./js/core/token-estimator.js"></script>
     <script src="./js/core/secure-store.js"></script>
@@ -2151,7 +2121,6 @@
     </div>
     <script src="./js/media/player-browser.js"></script>
     <script src="./js/media/voice.js"></script>
-    <script src="./js/core/update-ui.js"></script>
     <script src="./js/core/main.js"></script>
     <script src="./js/core/commands.js"></script>
     <script src="./js/pages/logsDashboard.js"></script>
@@ -2161,9 +2130,5 @@
     <script src="./js/core/init.js"></script>
     <script src="./js/media/media-overlay.js"></script>
     <script src="./js/mcp/mcp.js"></script>
-    <script>
-        // Инициализация UI обновлений (баннер + диалог)
-        if (window.AMTUpdates) window.AMTUpdates.init();
-    </script>
 </body>
 </html>

@@ -255,10 +255,15 @@ input[type="checkbox"], input[type="radio"], input[type="range"], input[type="co
 }
 input[type="color"] {
     width: 32px; height: 32px; padding: 2px;
-    background: var(--field-bg);
-    border: 1px solid var(--field-border);
+    /* Нейтральный фон: --field-bg на тёмной теме почти чёрный, и нативный
+       swatch-виджет (цветовая область) рендерится в тёмной палитре → всегда
+       выглядит чёрным независимо от выбранного цвета. Нейтральный светлый
+       фон + color-scheme: light показывают реальный выбранный цвет. */
+    background: #e9edf2;
+    border: 1px solid #b9c1cc;
     border-radius: var(--radius-sm, 10px);
     cursor: pointer;
+    color-scheme: light;
 }
 
 /* Файловый инпут — базовая тема (классные правила в style.css уточняют) */

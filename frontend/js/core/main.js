@@ -639,8 +639,12 @@ async function renderMessages(chat) {
     }
     chat.messages.forEach((m, idx) => {
         let el;
+        const vIdx = m._vIdx || 0;
+        const displayContent = (m._versions && m._versions.length)
+            ? (vIdx === 0 ? m.content : (m._versions[vIdx - 1] || m.content))
+            : m.content;
         if (m.role === 'user') {
-            el = appendMessageEl(m.content, 'user');
+            el = appendMessageEl(displayContent, 'user');
             _setMsgIdx(el, idx);
             // Файлы — НИЗКОМ, в отдельной строке под пузырём
             if (m.files && m.files.length) {
@@ -668,7 +672,7 @@ async function renderMessages(chat) {
         } else {
             el = addBotPlaceholder();
             _setMsgIdx(el, idx);
-            setBotContent(el, m.content);
+            setBotContent(el, displayContent);
         }
         attachPinButton(el, idx, m.pinned, m.role);
     });
@@ -928,11 +932,11 @@ function attachPinButton(msgEl, idx, isPinned, role) {
         if (ed) ed.remove();
     }
 
-    // Навигация < n/m > — только под версиями (отредактированные / перегенерированные)
+    // Навигация по версиям < n/m > — только под версионными сообщениями
     const msg = getMsg();
-    const hasVersions = msg && ((msg._versions && msg._versions.length > 0) || msg._regen);
+    const versions = (msg && msg._versions ? msg._versions.length : 0) + (msg && msg._regen ? 1 : 0);
     let nav = msgEl.querySelector(':scope > .msg-nav');
-    if (!hasVersions) {
+    if (versions < 2) {
         if (nav) nav.remove();
     } else {
         if (!nav) {
@@ -941,37 +945,38 @@ function attachPinButton(msgEl, idx, isPinned, role) {
             msgEl.appendChild(nav);
         }
         nav.innerHTML = '';
-        const total = getCurrentChat()?.messages?.length || 0;
-        if (total > 1) {
-            const prevBtn = document.createElement('button');
-            prevBtn.className = 'msg-nav-btn';
-            prevBtn.innerHTML = '&#8249;';
-            prevBtn.disabled = idx <= 0;
-            prevBtn.title = 'Предыдущее сообщение';
-            prevBtn.addEventListener('click', () => {
-                if (idx > 0) {
-                    const el = chatMessages.querySelector(`.message[data-msg-idx="${idx - 1}"]`);
-                    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('msg-nav-flash'); setTimeout(() => el.classList.remove('msg-nav-flash'), 1200); }
-                }
-            });
-            const count = document.createElement('span');
-            count.className = 'msg-nav-count';
-            count.textContent = (idx + 1) + '/' + total;
-            const nextBtn = document.createElement('button');
-            nextBtn.className = 'msg-nav-btn';
-            nextBtn.innerHTML = '&#8250;';
-            nextBtn.disabled = idx >= total - 1;
-            nextBtn.title = 'Следующее сообщение';
-            nextBtn.addEventListener('click', () => {
-                if (idx < total - 1) {
-                    const el = chatMessages.querySelector(`.message[data-msg-idx="${idx + 1}"]`);
-                    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('msg-nav-flash'); setTimeout(() => el.classList.remove('msg-nav-flash'), 1200); }
-                }
-            });
-            nav.appendChild(prevBtn);
-            nav.appendChild(count);
-            nav.appendChild(nextBtn);
-        }
+        const totalVersions = versions;
+        const curVersion = msg._vIdx || 0;
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'msg-nav-btn';
+        prevBtn.innerHTML = '&#8249;';
+        prevBtn.disabled = curVersion <= 0;
+        prevBtn.title = 'Предыдущая версия';
+        prevBtn.addEventListener('click', () => {
+            if (curVersion > 0) {
+                msg._vIdx = curVersion - 1;
+                saveChats();
+                renderMessages(getCurrentChat());
+            }
+        });
+        const count = document.createElement('span');
+        count.className = 'msg-nav-count';
+        count.textContent = (curVersion + 1) + '/' + totalVersions;
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'msg-nav-btn';
+        nextBtn.innerHTML = '&#8250;';
+        nextBtn.disabled = curVersion >= totalVersions - 1;
+        nextBtn.title = 'Следующая версия';
+        nextBtn.addEventListener('click', () => {
+            if (curVersion < totalVersions - 1) {
+                msg._vIdx = curVersion + 1;
+                saveChats();
+                renderMessages(getCurrentChat());
+            }
+        });
+        nav.appendChild(prevBtn);
+        nav.appendChild(count);
+        nav.appendChild(nextBtn);
     }
 }
 
@@ -1161,6 +1166,7 @@ function saveMessageEdit() {
     if (msgEditEl._newFiles && msgEditEl._newFiles.length) {
         msgEditEl._newFiles.forEach(nf => { if (!m.files.includes(nf)) m.files.push(nf); });
     }
+    m._vIdx = 0; // show original version
     chat.updated_at = Date.now();
     saveChats().then(() => { renderMessages(chat); });
     closeMessageEdit();

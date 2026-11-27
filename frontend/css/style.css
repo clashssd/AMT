@@ -94,10 +94,9 @@ input, textarea, select { caret-color: #b8b4e0; }
 textarea:focus, input:focus, select:focus {
     outline: none;
 }
-/* Фоновый фокус чат-инпута без резкой засветы */
+/* Фокус чат-инпута — без обводки */
 .chat-input-box:focus-within {
-    border-color: rgba(139,134,201,0.5);
-    box-shadow: 0 0 0 3px rgba(139,134,201,0.15), 0 4px 16px rgba(0,0,0,0.25);
+    border-color: var(--border, rgba(255,255,255,0.08));
 }
 
 /* ===== SIDEBAR ===== */
@@ -620,8 +619,7 @@ main.page.active {
     transition: border-color 0.2s, background 0.2s;
 }
 .search-box:focus-within {
-    border-color: rgba(171,171,197,0.5);
-    background: rgba(255,255,255,0.05);
+    border-color: var(--border, rgba(255,255,255,0.08));
 }
 /* Иконка поиска (SVG через data-uri, без обрезания) */
 .search-box .search-icon {
@@ -841,7 +839,7 @@ main.page.active {
     transition: border-color 0.2s, color 0.2s;
 }
 .chat-title-input:hover, .chat-title-input:focus {
-    border-bottom-color: rgba(171,171,197,0.4);
+    border-bottom-color: var(--border, rgba(255,255,255,0.08));
     color: #fff;
     outline: none;
 }
@@ -2060,7 +2058,7 @@ body.density-spacious { --glass-pad: 28px; --page-px: 32px; --page-pty: 32px; }
     font-size: 14px;
     outline: none;
 }
-.chat-search-bar input:focus { border-color: rgba(171,171,197,0.5); }
+.chat-search-bar input:focus { border-color: var(--border, rgba(255,255,255,0.08)); }
 .chat-search-results {
     max-height: 260px;
     overflow-y: auto;
@@ -3015,8 +3013,7 @@ input[type="file"]:hover { border-color: rgba(171,165,197,0.35); }
 }
 .modal-glass select:focus, .modal-glass input:focus, .modal-glass textarea:focus {
     outline: none;
-    border-color: rgba(139,134,201,0.55);
-    box-shadow: 0 0 0 3px rgba(139,134,201,0.18);
+    border-color: var(--border, rgba(255,255,255,0.08));
 }
 .modal-glass label { font-size: 11px; color: #9a9ab8; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
 
@@ -3155,8 +3152,7 @@ input[type="file"]:hover { border-color: rgba(171,165,197,0.35); }
 }
 .form-group input:focus,
 .form-group textarea:focus {
-    border-color: rgba(171,171,197,0.5);
-    background: rgba(255,255,255,0.05);
+    border-color: var(--border, rgba(255,255,255,0.08));
 }
 /* Убираем стрелки-спины у number, чтобы не было белых системных элементов */
 input[type="number"]::-webkit-outer-spin-button,
@@ -3248,8 +3244,7 @@ input[type="number"] {
 }
 .test-btn:focus-visible {
     outline: none;
-    border-color: rgba(171,171,197,0.6);
-    box-shadow: 0 0 0 3px rgba(171,171,197,0.18);
+    border-color: var(--border, rgba(255,255,255,0.08));
 }
 .test-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .test-btn--danger {
@@ -4616,7 +4611,7 @@ input[type="file"], input[type="file"].opt-input {
     border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05);
     color: #e0e0f0; font-size: 14px; outline: none;
 }
-.search-input-wrap input:focus { border-color: rgba(124,92,255,0.5); }
+.search-input-wrap input:focus { border-color: var(--border, rgba(255,255,255,0.08)); }
 .search-input-wrap button {
     padding: 8px 14px; border: none; border-radius: 8px;
     background: rgba(124,92,255,0.25); color: #c4b5fd; font-size: 13px; font-weight: 600;

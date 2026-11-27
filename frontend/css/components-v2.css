@@ -189,8 +189,7 @@ input, textarea, select {
 input:hover, textarea:hover, select:hover { background: var(--field-bg-hover); }
 input:focus, textarea:focus, select:focus {
     outline: none;
-    border-color: var(--field-border-focus);
-    box-shadow: 0 0 0 3px var(--focus-ring);
+    border-color: var(--field-border, rgba(255,255,255,0.08));
 }
 input::placeholder, textarea::placeholder { color: var(--field-placeholder); }
 
@@ -312,8 +311,7 @@ button:disabled, button[aria-disabled="true"] {
 button:focus-visible,
 .btn:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px var(--focus-ring);
-    border-color: var(--field-border-focus);
+    border-color: var(--field-border, rgba(255,255,255,0.08));
 }
 
 /* Варианты */
@@ -450,7 +448,7 @@ textarea[aria-invalid=true] {
 }
 .amt-toggle input:checked + .amt-toggle-track { background: var(--accent-soft); border-color: var(--accent); }
 .amt-toggle input:checked + .amt-toggle-track .amt-toggle-thumb { transform: translateX(16px); background: var(--accent-contrast); }
-.amt-toggle input:focus-visible + .amt-toggle-track { box-shadow: 0 0 0 3px var(--focus-ring); }
+.amt-toggle input:focus-visible + .amt-toggle-track { outline: none; }
 
 /* ---- Toasts: темизация существующей .toast/.toast-container + aria-live ---- */
 .toast-container {
@@ -528,7 +526,6 @@ label:focus-visible {
 .attach-btn:focus-visible,
 .home-quickcreate:focus-visible,
 .home-reset:focus-visible {
-    box-shadow: 0 0 0 3px var(--focus-ring);
     outline: none;
 }
 

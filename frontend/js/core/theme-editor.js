@@ -32,9 +32,14 @@
 
     // Собрать текущий черновик из контролов
     function buildDraft() {
-        const base = T().current ? T().current() : {};
-        const cur = selectedId ? ({ ...loadAllThemes() }[selectedId]) : null;
-        const theme = S().normalizeTheme(cur, selectedId || "ocean");
+        // Start from the unmodified builtin theme if it's a builtin (prevents localStorage contamination)
+        let baseTheme;
+        if (selectedId && window.__AMT_BUILTIN_IDS__ && window.__AMT_BUILTIN_IDS__.includes(selectedId)) {
+            baseTheme = (window.__AMT_BUILTIN_THEMES__ || {})[selectedId] || S().DEFAULT_THEME;
+        } else {
+            baseTheme = selectedId ? loadAllThemes()[selectedId] : S().DEFAULT_THEME;
+        }
+        const theme = S().normalizeTheme(baseTheme, selectedId || "ocean");
         const c = theme.colors, s = theme.surfaces, sh = theme.shape, ef = theme.effects, ty = theme.typography, mo = theme.motion;
 
         // Цвета (быстрые)
@@ -119,22 +124,22 @@
         set("teBg1", c.bg[0]); set("teBg2", c.bg[1]); set("teBg3", c.bg[2] || c.bg[1]);
         set("teAccent", c.accent); set("teAccent2", c.accent2);
         set("teText", c.text); set("teTextDim", c.textDim);
-        set("teGlass", alphaPct(c.glass)); set("teGlassVal").textContent = alphaPct(c.glass) + "%";
-        set("teBorder", alphaPct(c.border)); set("teBorderVal").textContent = alphaPct(c.border) + "%";
+        set("teGlass", alphaPct(c.glass)); const gEl = $("teGlassVal"); if (gEl) gEl.textContent = alphaPct(c.glass) + "%";
+        set("teBorder", alphaPct(c.border)); const bEl = $("teBorderVal"); if (bEl) bEl.textContent = alphaPct(c.border) + "%";
         set("teSuccess", c.success || ""); set("teWarning", c.warning || ""); set("teDanger", c.danger || ""); set("teInfo", c.info || "");
         set("teFieldBg", hexFromRgba(s.fieldBg)); set("teFieldBorder", hexFromRgba(s.fieldBorder));
         set("teFieldText", hexFromRgba(s.fieldText)); set("teFieldPlaceholder", hexFromRgba(s.fieldPlaceholder));
         set("teCardBg", hexFromRgba(s.cardBg)); set("teCardBg2", hexFromRgba(s.cardBg2));
         set("teModalBg", hexFromRgba(s.modalBg));
-        set("teOverlay", alphaPct(s.overlayBg)); set("teOverlayVal").textContent = alphaPct(s.overlayBg) + "%";
+        set("teOverlay", alphaPct(s.overlayBg)); const oEl = $("teOverlayVal"); if (oEl) oEl.textContent = alphaPct(s.overlayBg) + "%";
         set("teDropdownBg", hexFromRgba(s.dropdownBg)); set("teTooltipBg", hexFromRgba(s.tooltipBg));
         set("teCodeBg", hexFromRgba(s.codeBg)); set("teTableBg", hexFromRgba(s.tableBg));
         set("teTableHover", hexFromRgba(s.tableRowHover));
         set("teScrollbarThumb", hexFromRgba(s.scrollbarThumb)); set("teScrollbarTrack", hexFromRgba(s.scrollbarTrack));
         set("teControlBg", hexFromRgba(s.controlBg)); set("teControlBorder", hexFromRgba(s.controlBorder)); set("teControlChecked", hexFromRgba(s.controlChecked));
-        set("teRadius", sh.radius); set("teRadiusVal").textContent = sh.radius + "px";
-        set("teBlur", ef.blur); set("teBlurVal").textContent = ef.blur + "px";
-        set("teGlow", Math.round(ef.glow * 100)); set("teGlowVal").textContent = Math.round(ef.glow * 100) + "%";
+        set("teRadius", sh.radius); const rEl = $("teRadiusVal"); if (rEl) rEl.textContent = sh.radius + "px";
+        set("teBlur", ef.blur); const blEl = $("teBlurVal"); if (blEl) blEl.textContent = ef.blur + "px";
+        set("teGlow", Math.round(ef.glow * 100)); const glEl = $("teGlowVal"); if (glEl) glEl.textContent = Math.round(ef.glow * 100) + "%";
         set("teShadow", ef.shadow); set("teMotion", mo.speed);
         set("teFont", ty.font); set("teHeadingFont", ty.headingFont || ty.font);
         // Custom font family strings
@@ -142,7 +147,7 @@
         const hcEl = $("teHeadingFontCustom");
         if (fcEl) { fcEl.value = ty.fontFamily || ""; fcEl.style.display = ty.font === "custom" ? "block" : "none"; }
         if (hcEl) { hcEl.value = ty.headingFontFamily || ""; hcEl.style.display = (ty.headingFont || ty.font) === "custom" ? "block" : "none"; }
-        set("teScale", Math.round(ty.scale * 100)); set("teScaleVal").textContent = Math.round(ty.scale * 100) + "%";
+        set("teScale", Math.round(ty.scale * 100)); const scEl = $("teScaleVal"); if (scEl) scEl.textContent = Math.round(ty.scale * 100) + "%";
         set("teName", t.label || id);
 
         updateContrast();
@@ -355,7 +360,7 @@
     // Публичный хук: themes.js вызывает при клике на свотч
     window.AMTThemeEditor = {
         onThemeChange(id, themeObj) {
-            if (!init._done) return;
+            if (!window.AMTThemeEditor._done) return;
             loadToControls(themeObj || S().DEFAULT_THEME, id);
             applyAndPersist();
         },

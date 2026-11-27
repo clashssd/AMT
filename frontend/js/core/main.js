@@ -1690,7 +1690,8 @@ async function openChat(chat) {
     renderMessages(chat);
     renderChatsList();
     setStatus('idle');
-    showPage('chat');
+    // Коддинг-чаты открываем на странице «Код», остальные — на «Чат»
+    showPage((chat?.chat_mode === 'coding') ? 'code' : 'chat');
 }
 
 // ===== Chat actions =====
@@ -2204,7 +2205,7 @@ async function doChatSearch() {
         `;
         div.addEventListener('click', async () => {
             const chat = chats.find(c => c.id === mt.chatId);
-            if (chat) { openChat(chat); closeSearchResults(); showPage('chat'); }
+            if (chat) { openChat(chat); closeSearchResults(); }
         });
         chatSearchResults.appendChild(div);
     });

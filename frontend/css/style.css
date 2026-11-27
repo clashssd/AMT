@@ -1048,16 +1048,16 @@ main.page.active {
     gap: 8px;
     margin-top: 8px;
     padding: 8px 12px;
-    background: rgba(59, 130, 246, 0.10);
-    border: 1px solid rgba(59, 130, 246, 0.20);
+    background: var(--surface-1, rgba(59, 130, 246, 0.10));
+    border: 1px solid var(--border, rgba(59, 130, 246, 0.20));
     border-radius: 8px;
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
     max-width: 240px;
 }
 .msg-file-card:hover {
-    background: rgba(59, 130, 246, 0.16);
-    border-color: rgba(59, 130, 246, 0.40);
+    background: var(--surface-1, rgba(59, 130, 246, 0.16));
+    border-color: var(--accent, rgba(59, 130, 246, 0.40));
 }
 .msg-file-card-icon {
     width: 32px;
@@ -1065,7 +1065,7 @@ main.page.active {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #60a5fa;
+    color: var(--accent, #60a5fa);
     flex-shrink: 0;
 }
 .msg-file-card-info {

@@ -231,6 +231,7 @@ const storageExportBtn = document.getElementById('storageExportBtn');
 
 // State for attachments
 let attachedFiles = [];
+let _filesForThisMessage = [];
 // Захват в момент отправки сообщения: чтобы processGenTokens/renderGenInChat
 // могли передать приложенный файл из чата в /api/media/generate как ref_image_b64.
 let _lastChatAttachments = [];
@@ -1373,11 +1374,30 @@ function hideWelcome() {
     if (welcome) welcome.style.display = 'none';
 }
 
-function addUserMessage(text, save = true, files = null) {
+function addUserMessage(text, save = true, files = null, fileItems = null) {
     hideWelcome();
     const div = document.createElement('div');
     div.className = 'message user';
     div.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+    // Превью изображений из вложений
+    if (fileItems && fileItems.length) {
+        const contentEl = div.querySelector('.message-content');
+        fileItems.forEach(item => {
+            if (item.thumb) {
+                const img = document.createElement('img');
+                img.src = item.thumb;
+                img.className = 'msg-img-preview';
+                img.style.maxWidth = '180px';
+                img.style.maxHeight = '140px';
+                img.style.borderRadius = '8px';
+                img.style.marginTop = '8px';
+                img.style.cursor = 'pointer';
+                img.title = item.name;
+                img.addEventListener('click', () => window.open(item.thumb, '_blank'));
+                contentEl.appendChild(img);
+            }
+        });
+    }
     chatMessages.appendChild(div);
     scrollToBottom();
     if (save) updateCurrentChatMessage(text, 'user', files);
@@ -1817,7 +1837,10 @@ async function sendMessage() {
         if (!finalText) {
             finalText = attachedFiles.map(f => f.name).join(', ');
         }
-        renderAttachments(); // очистим после отправки
+        // Запоминаем файлы для превью в сообщении, потом очищаем область вложений
+        _filesForThisMessage = attachedFiles.slice();
+        attachedFiles = [];
+        renderAttachments();
     }
 
     // Добавляем метаданные команд в сообщение (для отображения)
@@ -1825,7 +1848,7 @@ async function sendMessage() {
         ? `[Команды: ${commands.map(c => '/' + c.id).join(' + ')}]\n${finalText}`
         : finalText;
     
-    addUserMessage(userMsgContent, true, hasFiles ? attachedFiles.map(f => f.name) : null);
+    addUserMessage(userMsgContent, true, hasFiles ? _filesForThisMessage.map(f => f.name) : null, _filesForThisMessage || null);
 
     const chat = getCurrentChat();
     const historyForApi = chat.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
@@ -1846,7 +1869,7 @@ async function sendMessage() {
 
     // Запоминаем приложенные к ЭТОМУ сообщению файлы, чтобы токены [[GEN:...]]
     // могли передать файл в генерацию медиа (ref_image_b64).
-    _lastChatAttachments = hasFiles ? attachedFiles.slice() : [];
+    _lastChatAttachments = _filesForThisMessage || [];
 
     isStreaming = true;
     sendBtn.classList.add('hidden');
@@ -1897,7 +1920,7 @@ async function sendMessage() {
     isStreaming = false;
     sendBtn.classList.remove('hidden');
     stopBtn.classList.add('hidden');
-    attachedFiles = [];
+    _filesForThisMessage = [];
 }
 
 function stopStreaming() {
@@ -2654,7 +2677,11 @@ async function clearLogs() {
     try {
         const res = await fetch(`${API_BASE}/api/logs/clear`, { method: 'POST' });
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        loadLogs();
+        if (logViewMode === 'structured') {
+            structuredLogsContainer.innerHTML = '<div class="log-empty">Логи очищены</div>';
+        } else {
+            loadLogs();
+        }
     } catch (e) {
         if (logViewer) logViewer.innerHTML = '<div class="log-empty">Ошибка очистки логов: ' + e.message + '</div>';
     }

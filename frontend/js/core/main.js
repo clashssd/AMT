@@ -641,14 +641,19 @@ async function renderMessages(chat) {
         let el;
         if (m.role === 'user') {
             el = appendMessageEl(m.content, 'user');
-            // Рендерим карточки файлов в пуле пользователя
+            _setMsgIdx(el, idx);
+            // Рендерим компактные карточки файлов в пуле пользователя
             if (m.files && m.files.length) {
                 const contentEl = el.querySelector('.message-content');
                 m.files.forEach(fname => {
+                    const ext = fname.split('.').pop().toUpperCase();
+                    const isImg = /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(fname);
                     const card = document.createElement('div');
                     card.className = 'msg-file-card';
-                    card.innerHTML = `<div class="msg-file-card-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M8 4h8l4 4v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z" fill="rgba(59,130,246,0.15)"/><path d="M16 4v4h4"/><path d="M10 13h4M10 17h4" stroke-linecap="round"/></svg></div><div class="msg-file-card-info"><span class="msg-file-card-name">${escapeHtml(fname)}</span></div>`;
-                    // Клик — скачать/открыть файл
+                    const iconSvg = isImg
+                        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>'
+                        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5" stroke-linecap="round"/></svg>';
+                    card.innerHTML = `<div class="msg-file-card-icon">${iconSvg}</div><div class="msg-file-card-info"><span class="msg-file-card-name">${escapeHtml(fname)}</span><span class="msg-file-card-size">${ext}</span></div>`;
                     card.addEventListener('click', () => {
                         const a = document.createElement('a');
                         a.href = `${API_BASE}/api/files/${encodeURIComponent(fname)}`;
@@ -660,6 +665,7 @@ async function renderMessages(chat) {
             }
         } else {
             el = addBotPlaceholder();
+            _setMsgIdx(el, idx);
             setBotContent(el, m.content);
         }
         attachPinButton(el, idx, m.pinned, m.role);
@@ -921,6 +927,50 @@ function attachPinButton(msgEl, idx, isPinned, role) {
         if (pin) pin.remove();
         const ed = actions.querySelector('.msg-edit-btn');
         if (ed) ed.remove();
+    }
+
+    // Навигация по сообщениям (< 1/5 >)
+    const navChat = getCurrentChat();
+    if (navChat && navChat.messages.length > 1) {
+        let nav = contentEl.querySelector('.msg-nav');
+        if (!nav) {
+            nav = document.createElement('div');
+            nav.className = 'msg-nav';
+            contentEl.appendChild(nav);
+        }
+        const msgs = navChat.messages;
+        let pos = -1;
+        for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i] === getMsg()) { pos = i; break; }
+        }
+        if (pos < 0) pos = idx;
+        nav.innerHTML = '';
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'msg-nav-btn';
+        prevBtn.textContent = '\u2039';
+        prevBtn.title = 'Предыдущее сообщение';
+        prevBtn.disabled = pos === 0;
+        prevBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const prevEl = chatMessages.querySelector(`.message[data-msg-idx="${pos - 1}"]`);
+            if (prevEl) { prevEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); prevEl.classList.add('msg-nav-flash'); setTimeout(() => prevEl.classList.remove('msg-nav-flash'), 1200); }
+        });
+        const count = document.createElement('span');
+        count.className = 'msg-nav-count';
+        count.textContent = `${pos + 1}/${msgs.length}`;
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'msg-nav-btn';
+        nextBtn.textContent = '\u203a';
+        nextBtn.title = 'Следующее сообщение';
+        nextBtn.disabled = pos === msgs.length - 1;
+        nextBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const nextEl = chatMessages.querySelector(`.message[data-msg-idx="${pos + 1}"]`);
+            if (nextEl) { nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); nextEl.classList.add('msg-nav-flash'); setTimeout(() => nextEl.classList.remove('msg-nav-flash'), 1200); }
+        });
+        nav.appendChild(prevBtn);
+        nav.appendChild(count);
+        nav.appendChild(nextBtn);
     }
 }
 
@@ -1387,14 +1437,22 @@ function addUserMessage(text, save = true, files = null, fileItems = null) {
                 const img = document.createElement('img');
                 img.src = item.thumb;
                 img.className = 'msg-img-preview';
-                img.style.maxWidth = '180px';
-                img.style.maxHeight = '140px';
-                img.style.borderRadius = '8px';
-                img.style.marginTop = '8px';
-                img.style.cursor = 'pointer';
                 img.title = item.name;
                 img.addEventListener('click', () => window.open(item.thumb, '_blank'));
                 contentEl.appendChild(img);
+            } else {
+                // Не-изображение: компактная карточка-чип
+                const chip = document.createElement('div');
+                chip.className = 'msg-file-card';
+                const ext = (item.name || '').split('.').pop().toUpperCase();
+                chip.innerHTML = `<div class="msg-file-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5" stroke-linecap="round"/></svg></div><div class="msg-file-card-info"><span class="msg-file-card-name">${escapeHtml(item.name || 'Файл')}</span><span class="msg-file-card-size">${ext} ${item.size ? (item.size > 1048576 ? (item.size/1048576).toFixed(1)+' MB' : item.size > 1024 ? (item.size/1024).toFixed(1)+' KB' : item.size+' B') : ''}</span></div>`;
+                chip.addEventListener('click', () => {
+                    const a = document.createElement('a');
+                    a.href = `${API_BASE}/api/files/${encodeURIComponent(item.name || '')}`;
+                    a.download = item.name || '';
+                    a.click();
+                });
+                contentEl.appendChild(chip);
             }
         });
     }
@@ -1404,7 +1462,11 @@ function addUserMessage(text, save = true, files = null, fileItems = null) {
     // Кнопки действий должны появляться СРАЗУ (без ожидания релоада):
     // индекс = последняя запись в chat.messages (только что дописанное сообщение)
     const chat = getCurrentChat();
-    if (chat) attachPinButton(div, chat.messages.length - 1, false, 'user');
+    if (chat) {
+        const msgIdx = chat.messages.length - 1;
+        div.dataset.msgIdx = String(msgIdx);
+        attachPinButton(div, msgIdx, false, 'user');
+    }
 }
 
 function addBotPlaceholder() {
@@ -1415,6 +1477,11 @@ function addBotPlaceholder() {
     chatMessages.appendChild(div);
     scrollToBottom();
     return div;
+}
+
+// Утилита: добавить data-msg-idx к элементу сообщения
+function _setMsgIdx(el, idx) {
+    if (el) el.dataset.msgIdx = String(idx);
 }
 
 function appendBotContent(el, chunk) {

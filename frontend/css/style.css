@@ -1928,6 +1928,18 @@ body.no-focus *:focus-visible {
     outline: none !important;
     box-shadow: none !important;
 }
+/* When focus outlines are ON (default), show a subtle ring */
+body:not(.no-focus) input:focus,
+body:not(.no-focus) textarea:focus,
+body:not(.no-focus) select:focus {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #6b70ff) 20%, transparent);
+    border-color: var(--field-border, rgba(255,255,255,0.08));
+}
+body:not(.no-focus) button:focus-visible,
+body:not(.no-focus) .test-btn:focus-visible,
+body:not(.no-focus) .icon-btn:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #6b70ff) 20%, transparent);
+}
 body.compact-sidebar .sidebar { width: 64px; }
 body.compact-sidebar .sidebar .nav-label { display: none; }
 body.compact-sidebar .sidebar .sidebar-footer { display: none; }

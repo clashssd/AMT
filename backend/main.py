@@ -6431,14 +6431,22 @@ async def mcp_set_enabled(server_id: str, body: dict):
     if mcp_manager is None:
         return {"error": "MCP manager not initialized"}
     enabled = body.get("enabled", True)
-    mcp_manager.set_enabled(server_id, enabled)
-    cfg = mcp_manager.get_server(server_id)
+    try:
+        mcp_manager.set_enabled(server_id, enabled)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
     if enabled:
-        # Re-register tools for the now-enabled server
-        prefix = f"mcp__{server_id}"
-        tool_registry.unregister_prefix(prefix)
+        # Connect the server so tools are available on next AI call
+        try:
+            await mcp_manager.ensure_connected(server_id)
+        except Exception as e:
+            return {"ok": True, "warning": f"Server enabled but connection failed: {e}"}
     else:
         tool_registry.unregister_prefix(f"mcp__{server_id}")
+        try:
+            await mcp_manager.disconnect(server_id)
+        except Exception:
+            pass
     return {"ok": True}
 
 

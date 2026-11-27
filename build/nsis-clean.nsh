@@ -1,15 +1,14 @@
-; build/nsis-clean.nsh — кастомный фрагмент NSIS для electron-builder (подключается
-; через build.nsis.include в package.json).
+; build/nsis-clean.nsh — кастомный фрагмент NSIS для electron-builder.
 ;
-; Определяет !macro customUnInstall — стандартный хук electron-builder
-; (см. templates/nsis/uninstaller.nsh: `!ifmacrodef customUnInstall`),
-; вызываемый автоматически в конце uninstall-секции.
+; При УДАЛЕНИИ приложения per-user данные (лог/чаты/ключи/память/MCP/конфиги)
+; живут под %APPDATA%\AMT Chat\  — их НЕ удаляем автоматически, чтобы
+; после переустановки (uninstall → install) данные сохранялись.
 ;
-; "Чистая" развёртка: при удалении приложения убираем и per-user runtime-данные
-; (лог/чаты/ключи/память в frozen-режиме лежат под %APPDATA%\AMT Chat\),
-; чтобы после удаления приложения не осталось личных данных пользователя.
+; Опциональная галка "Удалить мои данные" добавляет кастомную секцию (unselectable
+; → пользователь решает сам), вызывающую RMDir только по явному выбору.
 
-!macro customUnInstall
-  ; Electron всегда использует per-user app data (см. комментарий в uninstaller.nsh)
+; --- Опциональная секция: удалить личные данные (выбирает пользователь) ---
+Section "Удалить мои данные (чаты, ключи, настройки)"
   RMDir /r "$APPDATA\AMT Chat"
-!macroend
+  SectionIn RO
+SectionEnd

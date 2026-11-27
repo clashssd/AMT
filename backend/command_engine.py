@@ -1,6 +1,7 @@
 """
 command_engine.py — парсинг и выполнение slash-команд
 """
+import asyncio
 import json
 import os
 from dataclasses import dataclass, field
@@ -316,10 +317,17 @@ def execute_command_request(user_message: str, history: list, settings: dict, mc
     # Строим контекст
     ctx = build_context(commands, REGISTRY)
     
-    # Включаем MCP-серверы
+    # Включаем MCP-серверы (sync context → asyncio.run if no running loop)
     for server_id in ctx.enabled_mcp:
         try:
-            mcp_manager.ensure_connected(server_id)
+            coro = mcp_manager.ensure_connected(server_id)
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                asyncio.run(coro)
+            else:
+                # Already inside an async context — schedule it (best-effort).
+                loop.create_task(coro)
         except Exception as e:
             print(f"Failed to connect MCP {server_id}: {e}")
     

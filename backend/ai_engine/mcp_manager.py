@@ -276,6 +276,15 @@ class MCPManager:
         self._procs[server_id] = holder.proc
         log.info("MCP server '%s' connected (%s)", server_id, cfg.transport)
 
+    async def ensure_connected(self, server_id: str) -> None:
+        """Connect the server if not already connected. No-op if connected.
+
+        Used by callers (main.py, command_engine.py) that need to guarantee
+        a live session before invoking tools. Tolerates the already-connected
+        case (connect() is a no-op when the session exists).
+        """
+        await self.connect(server_id)
+
     async def disconnect(self, server_id: str) -> None:
         holder = self._clients.pop(server_id, None)
         if holder is None:

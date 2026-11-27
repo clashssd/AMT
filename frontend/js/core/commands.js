@@ -30,13 +30,26 @@
   function parseCommands(input) {
     const commands = [];
     let remaining = input;
-    
-    // Ищем все /command
-    while (remaining.includes('/')) {
+
+    // Ищем все /command — только те, где '/' стоит в начале слова
+    // (не внутри URL, Windows-пути или др. символов)
+    while (true) {
       const slashPos = remaining.indexOf('/');
+      if (slashPos === -1) break;
+
+      // '/' должен быть в начале строки или после пробела/возврата
+      if (slashPos > 0 && !/\s/.test(remaining[slashPos - 1])) {
+        // '/' внутри слова (URL, путь) — пропускаем дальше
+        // Ищем следующую возможность: после первого пробела
+        const nextSpace = remaining.indexOf(' ', slashPos);
+        if (nextSpace === -1) break;
+        remaining = remaining.substring(0, nextSpace + 1);
+        continue;
+      }
+
       const before = remaining.substring(0, slashPos);
       const after = remaining.substring(slashPos + 1);
-      
+
       // Читаем имя команды
       let cmdName = '';
       let i = 0;
@@ -44,13 +57,19 @@
         cmdName += after[i];
         i++;
       }
-      
+
+      // Пустая команда (например, "/") — пропускаем
+      if (!cmdName) {
+        remaining = before + (i < after.length ? after.substring(i) : '');
+        continue;
+      }
+
       // Извлекаем аргументы
       let args = {};
       if (i < after.length) {
         const argsStr = after.substring(i).trim();
         const argsWithoutPlus = argsStr.split('+')[0].trim();
-        
+
         if (cmdName === 'gen') {
           args = parseGenArgs(argsWithoutPlus);
         } else if (cmdName === 'agent') {
@@ -61,16 +80,16 @@
           if (filetype) args.filetype = filetype.toLowerCase();
         }
       }
-      
+
       commands.push({ id: cmdName.toLowerCase(), args });
-      
+
       // Удаляем команду
       remaining = before + (i < after.length ? after.substring(i) : '');
       if (remaining && remaining[0] === '+') {
         remaining = remaining.substring(1).trim();
       }
     }
-    
+
     return { commands, text: remaining.trim() };
   }
   
@@ -195,7 +214,9 @@
   function toggleAgent(agentType) {
     const toggleMap = {
       'web': 'webAgentToggle',
-      'jailbreak': 'jailbreakToggle'
+      'jailbreak': 'jailbreakToggle',
+      'system': 'sysInteractionToggle',
+      'thinker': 'thinkerToggle'
     };
     const btnId = toggleMap[agentType];
     if (btnId) {
@@ -325,9 +346,17 @@
         }
         break;
       }
-      case 'code_permissions':
-        if (window.amtPrompt) await window.amtPrompt('Разрешения: allow|ask|deny', 'ask');
+      case 'code_permissions': {
+        const policy = await window.amtPrompt?.('Разрешения: allow|ask|deny', 'ask');
+        if (policy && chat) {
+          chat.toolPolicy = [policy.trim().toLowerCase()];
+          window.saveChats?.();
+          appendSystemMessage(`Политика инструментов: ${chat.toolPolicy.join(', ')}`);
+        } else if (chat) {
+          appendSystemMessage('Отменено — политика не изменена.');
+        }
         break;
+      }
       case 'code_orchestrator': {
         if (!chat || !chat.projectRoot) {
           appendSystemMessage('Сначала укажите проект: /code_project C:\\path');

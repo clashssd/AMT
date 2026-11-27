@@ -232,23 +232,26 @@ async function mcpSubmit(existingId) {
         if (k) body.env[k] = v;
     });
     try {
-        const resp = await fetch(`${API_BASE}/api/mcp/servers`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-        if (!resp.ok) {
-            const err = await resp.json().catch(() => ({}));
-            flashStatus('Ошибка: ' + (err.error || resp.status));
-            return;
-        }
+        let resp;
         if (existingId) {
-            // Обновление: PUT текущие значения (env не передаётся — оставляем как есть)
-            await fetch(`${API_BASE}/api/mcp/servers/${encodeURIComponent(existingId)}`, {
+            // Обновление существующего сервера — только PUT
+            resp = await fetch(`${API_BASE}/api/mcp/servers/${encodeURIComponent(existingId)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
+        } else {
+            // Создание нового сервера — только POST
+            resp = await fetch(`${API_BASE}/api/mcp/servers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+        }
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            flashStatus('Ошибка: ' + (err.error || resp.status));
+            return;
         }
         form.style.display = 'none';
         flashStatus(existingId ? 'MCP-сервер обновлён' : 'MCP-сервер добавлен');

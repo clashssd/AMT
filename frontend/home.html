@@ -6,8 +6,11 @@
     <title>AMT Chat</title>
     <link rel="icon" href="./assets/icon.svg">
     <link rel="stylesheet" href="./css/style.css">
+    <link rel="stylesheet" href="./css/tokens.css">
+    <link rel="stylesheet" href="./css/components-v2.css">
     <link rel="stylesheet" href="./css/voice.css">
     <link rel="stylesheet" href="./css/commands.css">
+    <link rel="stylesheet" href="./css/motion-v2.css">
 </head>
 <body>
     <!-- Свой тайтлбар (frameless-окно): заменяет нативную серую полосу.
@@ -1890,6 +1893,18 @@
         </div>
     </div>
 
+    <!-- Модалка: MCP-инструменты (результаты теста) -->
+    <div class="modal-overlay hidden" id="mcpToolsModal">
+        <div class="modal-glass">
+            <h3 id="mcpToolsTitle">MCP-инструменты</h3>
+            <p class="block-desc" id="mcpToolsSummary"></p>
+            <div class="mcp-tools-list" id="mcpToolsList" style="max-height:300px;overflow-y:auto"></div>
+            <div class="btn-row">
+                <button class="test-btn" id="mcpToolsClose">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Контекстное меню чатов (ПКМ) -->
     <div class="ctx-menu hidden" id="ctxMenu"></div>
 
@@ -1920,7 +1935,9 @@
     <script src="./js/core/secure-store.js"></script>
 
     <script src="./js/core/i18n.js"></script>
-    <script src="./js/themes.js"></script>
+    <script src="./js/theme-schema.js"></script>
+    <script src="./js/core/themes.js"></script>
+    <script src="./js/theme-editor.js"></script>
     <script src="./js/core/extensions.js"></script>
     <script>
         // После полной загрузки — инициализируем frontend-расширения

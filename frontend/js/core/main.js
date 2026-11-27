@@ -294,6 +294,18 @@ let currentWs = null;
 let currentStreamingEl = null;
 let currentFullText = '';
 
+// Экспонирование для IIFE-модулей (commands.js и др.), которые читают через window
+Object.defineProperty(window, 'chats', {
+    get() { return chats; },
+    set(v) { chats = v; },
+    configurable: true,
+});
+Object.defineProperty(window, 'currentChatId', {
+    get() { return currentChatId; },
+    set(v) { currentChatId = v; },
+    configurable: true,
+});
+
 // ===== Chat storage (зашифрованно) =====
 async function loadChats() {
     chats = await SecureStore.get(STORAGE_CHATS, []);

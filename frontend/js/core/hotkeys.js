@@ -89,7 +89,7 @@
       }
       
       // Проверяем назначенные хоткеи
-      if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+      if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT' && !e.target.isContentEditable) {
         const combo = getComboString(e);
         for (const [id, assigned] of Object.entries(hotkeys)) {
           if (assigned && assigned === combo) {
@@ -222,12 +222,18 @@
     document.body.classList.remove('recording-hotkey');
   }
   
-  // Обновляет отображение
+  // Обновляет отображение — ищет <code class="hotkey-combo"> внутри .hotkey-row[data-hk-id]
   function updateHotkeyDisplay(hotkeyId, text) {
-    const el = document.getElementById(`hotkey-${hotkeyId}`);
-    if (el) {
-      el.textContent = text;
-      el.dataset.assigned = text;
+    const row = document.querySelector(`.hotkey-row[data-hk-id="${hotkeyId}"] .hotkey-combo`);
+    if (row) {
+      row.textContent = text;
+      row.dataset.assigned = text;
+    }
+    // Фоллбэк для legacy-разметки
+    const legacy = document.getElementById(`hotkey-${hotkeyId}`);
+    if (legacy) {
+      legacy.textContent = text;
+      legacy.dataset.assigned = text;
     }
   }
   
@@ -235,12 +241,12 @@
   function renderHotkeySettings(container) {
     loadHotkeys();
     
-    let html = '<h3>Хоткеи</h3><p>Нажми "Назначить" и затем клавишу. По умолчанию все не назначены.</p>';
+    let html = '<h3>Хоткеи</h3><p>Нажми «Назначить» и затем сочетание клавиш. По умолчанию все не назначены.</p>';
     
     for (const [id, info] of Object.entries(AVAILABLE_HOTKEYS)) {
       const current = hotkeys[id] || '';
       html += `
-        <div class="hotkey-row">
+        <div class="hotkey-row" data-hk-id="${id}">
           <div class="hotkey-info">
             <strong>${info.description}</strong>
             <code class="hotkey-combo">${current || '—'}</code>
@@ -260,6 +266,25 @@
       btn.addEventListener('click', () => {
         const hotkeyId = btn.dataset.hotkey;
         startRecording(hotkeyId);
+        // Кнопка «Отмена» — появляется после нажатия «Назначить»
+        const actions = btn.parentElement;
+        if (!actions.querySelector('[data-action="cancel"]')) {
+          const cancelBtn = document.createElement('button');
+          cancelBtn.className = 'btn small';
+          cancelBtn.dataset.action = 'cancel';
+          cancelBtn.dataset.hotkey = hotkeyId;
+          cancelBtn.textContent = 'Отмена';
+          actions.appendChild(cancelBtn);
+        }
+      });
+    });
+    
+    container.querySelectorAll('[data-action="cancel"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const hotkeyId = btn.dataset.hotkey;
+        cancelRecording();
+        updateHotkeyDisplay(hotkeyId, hotkeys[hotkeyId] || '—');
+        renderHotkeySettings(container);
       });
     });
     

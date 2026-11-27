@@ -231,7 +231,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     settingsSubnavLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            showSettingsPage(link.dataset.sec);
+            const sec = link.dataset.sec;
+            showSettingsPage(sec);
+            // Ленивая инициализация: хоткеи + MCP
+            if (sec === 'sec-hotkeys' && window.AMTHotkeys) {
+                const hkContainer = document.getElementById('hotkeySettingsContainer');
+                if (hkContainer && !hkContainer.dataset.rendered) {
+                    window.AMTHotkeys.renderHotkeySettings(hkContainer);
+                    hkContainer.dataset.rendered = '1';
+                }
+            }
+            if (sec === 'sec-mcp' && typeof renderMcpSettings === 'function') {
+                renderMcpSettings();
+            }
         });
     });
 

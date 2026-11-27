@@ -96,10 +96,23 @@ function startSidecar(port = 8000) {
     if (appDataDir) {
       spawnEnv.AMT_LOG_DIR = path.join(appDataDir, 'logs');
       spawnEnv.AMT_CHATS_DIR = path.join(appDataDir, 'chats');
+      spawnEnv.AMT_DATA_DIR = appDataDir;
       try {
         fs.mkdirSync(path.join(appDataDir, 'logs'), { recursive: true });
         fs.mkdirSync(path.join(appDataDir, 'chats'), { recursive: true });
       } catch { /* non-fatal */ }
+      // Dev fallback: if user has existing mcp_servers.json in project root,
+      // copy it to appDataDir so configured servers survive packaging.
+      const devMcpFile = path.join(__dirname, '..', 'mcp_servers.json');
+      const targetMcpFile = path.join(appDataDir, 'mcp_servers.json');
+      if (!fs.existsSync(targetMcpFile) && fs.existsSync(devMcpFile)) {
+        try { fs.copyFileSync(devMcpFile, targetMcpFile); } catch { /* non-fatal */ }
+      }
+      const devMcpKey = path.join(__dirname, '..', 'mcp_key.key');
+      const targetMcpKey = path.join(appDataDir, 'mcp_key.key');
+      if (!fs.existsSync(targetMcpKey) && fs.existsSync(devMcpKey)) {
+        try { fs.copyFileSync(devMcpKey, targetMcpKey); } catch { /* non-fatal */ }
+      }
     }
 
     child = spawn(cmd, args, {

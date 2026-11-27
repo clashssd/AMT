@@ -928,6 +928,45 @@ function attachPinButton(msgEl, idx, isPinned, role) {
         if (ed) ed.remove();
     }
 
+    // Навигация < n/m > (пред/след) — под действиями
+    let nav = msgEl.querySelector(':scope > .msg-nav');
+    if (!nav) {
+        nav = document.createElement('div');
+        nav.className = 'msg-nav';
+        msgEl.appendChild(nav);
+    }
+    nav.innerHTML = '';
+    const total = getCurrentChat()?.messages?.length || 0;
+    if (total > 1) {
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'msg-nav-btn';
+        prevBtn.innerHTML = '&#8249;';
+        prevBtn.disabled = idx <= 0;
+        prevBtn.title = 'Предыдущее сообщение';
+        prevBtn.addEventListener('click', () => {
+            if (idx > 0) {
+                const el = chatMessages.querySelector(`.message[data-msg-idx="${idx - 1}"]`);
+                if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('msg-nav-flash'); setTimeout(() => el.classList.remove('msg-nav-flash'), 1200); }
+            }
+        });
+        const count = document.createElement('span');
+        count.className = 'msg-nav-count';
+        count.textContent = (idx + 1) + '/' + total;
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'msg-nav-btn';
+        nextBtn.innerHTML = '&#8250;';
+        nextBtn.disabled = idx >= total - 1;
+        nextBtn.title = 'Следующее сообщение';
+        nextBtn.addEventListener('click', () => {
+            if (idx < total - 1) {
+                const el = chatMessages.querySelector(`.message[data-msg-idx="${idx + 1}"]`);
+                if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('msg-nav-flash'); setTimeout(() => el.classList.remove('msg-nav-flash'), 1200); }
+            }
+        });
+        nav.appendChild(prevBtn);
+        nav.appendChild(count);
+        nav.appendChild(nextBtn);
+    }
 }
 
 // ===== Message Ribbon (лента сообщений) =====

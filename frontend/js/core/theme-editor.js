@@ -357,6 +357,7 @@
         onThemeChange(id, themeObj) {
             if (!init._done) return;
             loadToControls(themeObj || S().DEFAULT_THEME, id);
+            applyAndPersist();
         },
         _done: false,
     };

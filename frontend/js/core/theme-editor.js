@@ -111,14 +111,25 @@
 
         const set = (id2, v) => { const el = $(id2); if (el) el.value = v; };
         const hexFromRgba = (rgba) => {
-            const m = /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/.exec(rgba || "");
+            // RGBA → hex. Если альфа < 1 — композитим на bg1 (тёмный фон).
+            const m = /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?\)/.exec(rgba || "");
             if (!m) return "";
-            const toHex = n => Math.round(n).toString(16).padStart(2, "0");
-            return "#" + toHex(+m[1]) + toHex(+m[2]) + toHex(+m[3]);
+            const toHex = n => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, "0");
+            const r = +m[1], g = +m[2], b = +m[3];
+            const a = m[4] !== undefined ? Math.max(0, Math.min(1, parseFloat(m[4]))) : 1;
+            if (a >= 0.999) return "#" + toHex(r) + toHex(g) + toHex(b);
+            // Композит на bg1 (тёмный фон) — результат в виде hex
+            const bgRgb = S().hexToRgb ? S().hexToRgb(c.bg[0] || "#05050a") : [5, 5, 10];
+            const comp = (fg, bg) => Math.round(fg * a + bg * (1 - a));
+            return "#" + toHex(comp(r, bgRgb[0])) + toHex(comp(g, bgRgb[1])) + toHex(comp(b, bgRgb[2]));
         };
         const alphaPct = (rgba) => {
+            // Работает с rgba(r,g,b,a) и rgba(r,g,b / a)
             const m = /rgba?\([^)]*[,/]\s*([\d.]+)\s*\)/.exec(rgba || "");
-            return m ? Math.round(parseFloat(m[1]) * 100) : 0;
+            if (!m) return 0;
+            const v = parseFloat(m[1]);
+            // Если значение > 1 — это уже процент (0-100), иначе альфа (0-1)
+            return v <= 1 ? Math.round(v * 100) : Math.round(v);
         };
 
         set("teBg1", c.bg[0]); set("teBg2", c.bg[1]); set("teBg3", c.bg[2] || c.bg[1]);

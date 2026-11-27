@@ -171,5 +171,21 @@ def read_context_docs(names: list[str] | None = None) -> str:
     return _json_result(out)
 
 
+def main() -> int:
+    """Run the amt-coding MCP server over STDIO.
+
+    Used both as the script entrypoint (`python coding_mcp_server.py`) and by
+    the frozen sidecar (`amt-backend.exe` with AMT_BACKEND_MODE=coding), which
+    drops the script-path argument and needs a mode branch in main.py instead.
+    """
+    try:
+        asyncio.run(mcp.run_stdio_async())
+        return 0
+    except Exception as e:
+        import sys as _s
+        print(f"[AMT] Coding MCP server failed to start: {e}", file=_s.stderr)
+        return 1
+
+
 if __name__ == "__main__":
-    asyncio.run(mcp.run_stdio_async())
+    sys.exit(main())

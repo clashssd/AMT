@@ -5883,6 +5883,7 @@ async def mcp_list_servers():
         d = cfg.__dict__.copy()
         if d.get("env"):
             d["env"] = {k: "***" for k in d["env"]}  # mask env values
+        d["connected"] = mcp_manager.is_connected(cfg.id)
         result.append(d)
     return result
 
@@ -6254,10 +6255,28 @@ def _amt_coding_preset_config() -> dict:
     server_path = os.path.join(backend_dir, "coding_mcp_server.py")
 
     if frozen:
+        # Frozen sidecar: the PyInstaller bootloader always runs main.py and
+        # DROPS any script-path argument, so `amt-backend.exe
+        # coding_mcp_server.py` silently starts the HTTP API instead of the
+        # MCP server → "Connection closed". Set AMT_BACKEND_MODE=coding and let
+        # main.py's entrypoint launch the coding stdio loop instead.
         appdata = os.environ.get("APPDATA", os.path.expanduser("~"))
         backend_dir = os.path.join(appdata, "AMT Chat", "backend") if os.path.exists(os.path.join(appdata, "AMT Chat", "backend")) else backend_dir
-        server_path = os.path.join(backend_dir, "coding_mcp_server.py")
+        return {
+            "id": "amt-coding",
+            "name": "AMT Coding (advanced)",
+            "transport": "stdio",
+            "command": sys.executable,   # amt-backend.exe
+            "args": [],
+            "env": {
+                "AMT_BACKEND_MODE": "coding",
+                "AMT_CODING_ROOT": os.environ.get("AMT_CODING_ROOT", ""),
+            },
+            "enabled": False,
+            "auto_approve": False,
+        }
 
+    # Dev mode: a real interpreter runs the script directly.
     return {
         "id": "amt-coding",
         "name": "AMT Coding (advanced)",
@@ -6899,6 +6918,18 @@ if __name__ == "__main__":
         except Exception as e:
             import sys as _s
             print(f"[AMT] Writer MCP server failed to start: {e}", file=_s.stderr)
+            _s.exit(1)
+    elif _mode == "coding":
+        # The coding preset historically passed `coding_mcp_server.py` as a
+        # script argument, but the frozen PyInstaller bootloader drops script
+        # args (it always runs this main.py entrypoint). So the preset sets
+        # AMT_BACKEND_MODE=coding and we launch the stdio MCP loop here.
+        try:
+            import coding_mcp_server as _coding
+            _sys.exit(_coding.main())
+        except Exception as e:
+            import sys as _s
+            print(f"[AMT] Coding MCP server failed to start: {e}", file=_s.stderr)
             _s.exit(1)
     import uvicorn
     _port = int(os.environ.get("PORT", "8000"))

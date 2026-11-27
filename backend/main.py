@@ -1342,7 +1342,29 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
             continue  # system уже добавлен выше
         messages.append({"role": msg["role"], "content": msg["content"]})
 
-    messages.append({"role": "user", "content": user_message})
+    # Если в user_message есть base64 изображения (data:image/...;base64,...) —
+    # преобразуем в multipart content format для vision-моделей (OpenAI-compatible).
+    # Это нужно, чтобы LLM видела реальные пиксели, а не строку-плейсхолдер.
+    import re as _re_img
+    _img_match = _re_img.search(r'\[Изображение: ([^\]]+)\]\s*!\[[^\]]*\]\(data:image/(\w+);base64,([A-Za-z0-9+/=]+)\)', user_message)
+    if _img_match:
+        _text_before = user_message[:_img_match.start()]
+        _text_after = user_message[_img_match.end():]
+        _content_parts = []
+        # Текст до изображения
+        if _text_before.strip():
+            _content_parts.append({"type": "text", "text": _text_before.strip()})
+        # Изображение как base64 data-URL
+        _content_parts.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/{_img_match.group(2)};base64,{_img_match.group(3)}"}
+        })
+        # Текст после изображения
+        if _text_after.strip():
+            _content_parts.append({"type": "text", "text": _text_after.strip()})
+        messages.append({"role": "user", "content": _content_parts})
+    else:
+        messages.append({"role": "user", "content": user_message})
 
     # Provider-neutral guard: base_url must be non-empty to call any provider.
     # (Settings defaults are empty; a key without a base_url can't route.)
@@ -1918,7 +1940,8 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
 async def chat(request: ChatRequest):
     """Обрабатывает сообщение и возвращает ответ AI + usage. Поддерживает slash-команды."""
     if str(request.chat_mode or "general").lower() == "coding" and not str(request.project_root or "").strip():
-        raise HTTPException(400, "Для кодинг-чата нужно указать project root")
+        # Fallback: используем каталог бэкенда как рабочую папку
+        request.project_root = os.environ.get("AMT_DATA_DIR", os.path.dirname(__file__))
 
     # Обрабатываем команды если есть
     extra_params = {}
@@ -3970,7 +3993,9 @@ def _build_coding_request_registry(project_root: str, tool_policy: list[dict]) -
 def _validate_chat_mode_project(payload: dict) -> None:
     """Coding requests must carry a project_root."""
     if str(payload.get("chat_mode", "general")).lower() == "coding" and not str(payload.get("project_root", "")).strip():
-        raise HTTPException(400, "Для кодинг-чата нужно указать project root")
+        # Не блокируем — используем текущий каталог бэкенда как fallback.
+        # Пользователь может кодить без привязки к конкретному проекту.
+        payload["project_root"] = os.environ.get("AMT_DATA_DIR", os.path.dirname(__file__))
 
 
 @app.websocket("/ws/chat")
@@ -6557,13 +6582,24 @@ def parse_file_for_ai(file_path: str, mime_type: str) -> str:
                 return "\n\n".join(slides_text) if slides_text else f"[Пустой PPTX: {name}]"
             except Exception:
                 return f"[PPTX: {name} — не удалось разобрать содержимое]"
-        # --- Медиа: плейсхолдеры ---
+        # --- Медиа: изображения встраиваются как base64, остальное — плейсхолдеры ---
         elif mime_type.startswith("image/"):
-            return f"[Изображение: {name}]"
+            # Встраиваем изображение как base64 data-URL, чтобы LLM видела содержимое
+            try:
+                import base64 as _b64
+                with open(file_path, "rb") as _f:
+                    img_data = _f.read()
+                if len(img_data) > 20 * 1024 * 1024:  # 20 MB limit
+                    return f"[Изображение: {name} — файл слишком большой]"
+                mime_ext = mime_type.split("/")[-1]  # png, jpeg, webp
+                b64_str = _b64.b64encode(img_data).decode("ascii")
+                return f"[Изображение: {name}]\n![{name}](data:image/{mime_ext};base64,{b64_str})"
+            except Exception:
+                return f"[Изображение: {name}]"
         elif mime_type.startswith("audio/"):
-            return f"[Аудио: {name}]"
+            return f"[Аудио: {name}] (файл: {file_path})"
         elif mime_type.startswith("video/"):
-            return f"[Видео: {name}]"
+            return f"[Видео: {name}] (файл: {file_path})"
         else:
             return f"[Файл: {name}]"
     except Exception:

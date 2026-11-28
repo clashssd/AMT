@@ -1059,9 +1059,16 @@ async function regenerateMessage(idx) {
     const userText = chat.messages[userIdx].content;
     const um = chat.messages[userIdx];
     // _attPaths — точные dict-приложения {path, filename, mime_type}, сохранённые
-    // при отправке. Для старых сообщений (без _attPaths) отдаём «голые» имена —
-    // бэкенд теперь резолвит их в FILES_DIR и не падает на валидации.
-    const attDicts = (um._attPaths && um._attPaths.length) ? um._attPaths : (um.files || []);
+    // при отправке. Для старых сообщений (без _attPaths) резолвим «голые» имена
+    // через /api/files/resolve, чтобы получить валидные пути и mime.
+    let attDicts;
+    if (um._attPaths && um._attPaths.length) {
+        attDicts = um._attPaths;
+    } else if (um.files && um.files.length) {
+        attDicts = await resolveFileNamesToAttachments(um.files);
+    } else {
+        attDicts = [];
+    }
     // Отмечаем ответ «в работе»
     const target = chat.messages[idx];
     const prevContent = target.content;
@@ -1955,14 +1962,17 @@ async function uploadAttachments() {
     for (const item of attachedFiles) {
         try {
             const b64 = await readFileAsBase64(item.file);
+            const mime = (item.type && item.type !== 'application/octet-stream')
+                ? item.type
+                : (guessMimeFromName(item.name) || '');
             const res = await fetch(`${API_BASE}/api/files/upload`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename: item.name, content: b64, mime_type: item.type || '' }),
+                body: JSON.stringify({ filename: item.name, content: b64, mime_type: mime }),
             });
             const data = await res.json();
             if (data.status === 'ok') {
-                results.push({ path: data.path, filename: item.name, mime_type: item.type || '' });
+                results.push({ path: data.path, filename: item.name, mime_type: mime });
             }
         } catch { /* пропускаем при ошибке */ }
     }
@@ -1977,17 +1987,37 @@ async function uploadAttachments() {
 async function uploadSingleFile(file) {
     try {
         const b64 = await readFileAsBase64(file);
+        const mime = (file.type && file.type !== 'application/octet-stream')
+            ? file.type
+            : (guessMimeFromName(file.name) || '');
         const res = await fetch(`${API_BASE}/api/files/upload`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename: file.name, content: b64, mime_type: file.type || '' }),
+            body: JSON.stringify({ filename: file.name, content: b64, mime_type: mime }),
         });
         const data = await res.json();
         if (data.status === 'ok') {
-            return { path: data.path, filename: file.name, mime_type: file.type || '' };
+            return { path: data.path, filename: file.name, mime_type: mime };
         }
-    } catch { /* пропускаем при ��шибке */ }
+    } catch { /* пропускаем при ошибке */ }
     return null;
+}
+
+// Резолвит список «голых» имён файлов (как хранятся в m.files) в точные
+// dict-приложения {path, filename, mime_type} через /api/files/resolve.
+// Используется при перегенерации для старых сообщений без _attPaths.
+async function resolveFileNamesToAttachments(names) {
+    if (!Array.isArray(names) || !names.length) return [];
+    try {
+        const res = await fetch(`${API_BASE}/api/files/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ names }),
+        });
+        const data = await res.json();
+        if (data && Array.isArray(data.files)) return data.files;
+    } catch { /* при ошибке — отдаём имена, бэкенд резолвит их сам */ }
+    return names.filter(n => typeof n === 'string');
 }
 
 
@@ -3029,13 +3059,40 @@ function addFiles(files) {
     Array.from(files).forEach(file => {
         // Дедупликация: не добавлять файл с тем же именем и размером
         if (attachedFiles.some(f => f.name === file.name && f.size === file.size)) return;
-        const item = { file, name: file.name, size: file.size, type: file.type };
-        if (file.type && file.type.startsWith('image/')) {
+        // file.type бывает пустым (особенно при вставке Ctrl+V из-за
+        // «неизвестного» расширения). Подставляем mime по расширению,
+        // чтобы бэкенд корректно路由ировал файл (изображение/видео/текст).
+        let mime = file.type || '';
+        if (!mime || mime === 'application/octet-stream') {
+            mime = guessMimeFromName(file.name) || '';
+        }
+        const item = { file, name: file.name, size: file.size, type: mime };
+        if (mime && mime.startsWith('image/')) {
             item.thumb = URL.createObjectURL(file);
         }
         attachedFiles.push(item);
     });
     renderAttachments();
+}
+// Угадываем MIME-тип по расширению (фронтенд-аналог backend _guess_mime),
+// чтобы пустой file.type не приводил к «модель не видит фото».
+const _MIME_BY_EXT = {
+    '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.webp':'image/webp',
+    '.gif':'image/gif', '.bmp':'image/bmp', '.svg':'image/svg+xml', '.heic':'image/heic',
+    '.mp4':'video/mp4', '.webm':'video/webm', '.mov':'video/quicktime', '.mkv':'video/x-matroska',
+    '.mp3':'audio/mpeg', '.wav':'audio/wav', '.ogg':'audio/ogg', '.m4a':'audio/mp4',
+    '.txt':'text/plain', '.md':'text/markdown', '.json':'application/json', '.xml':'application/xml',
+    '.csv':'text/csv', '.py':'text/x-python', '.js':'application/javascript', '.ts':'application/typescript',
+    '.html':'text/html', '.css':'text/css', '.pdf':'application/pdf',
+    '.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
+function guessMimeFromName(name) {
+    if (!name) return '';
+    const dot = name.lastIndexOf('.');
+    if (dot < 0) return '';
+    return _MIME_BY_EXT[name.slice(dot).toLowerCase()] || '';
 }
 function handleFileSelect(files) { addFiles(files); }
 

@@ -824,10 +824,23 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
             path = att.get("path", "")
             fname = att.get("filename", "")
             mime = att.get("mime_type", "")
-            # Безопасность: путь должен быть внутри FILES_DIR
-            real = os.path.realpath(path)
-            if not real.startswith(os.path.realpath(FILES_DIR)):
-                continue
+            # mime_type мог остаться пустым/неинформативным (например,
+            # фронтенд передал '' для файла без type). Угадываем по имени,
+            # чтобы изображение/видео попали в правильную ветку парсинга.
+            if not mime or mime == "application/octet-stream":
+                mime = _guess_mime(fname or path)
+            # Безопасность: путь должен быть внутри FILES_DIR и реально
+            # существовать на диске. Если сохранённый абсолютный путь устарел
+            # (приложение пересобрано/перемещено, dev↔frozen, FILES_DIR сменился),
+            # пробуем заново резолвить файл по имени в ТЕКУЩЕМ FILES_DIR.
+            _files_dir_real = os.path.realpath(FILES_DIR)
+            real = os.path.realpath(path) if path else ""
+            if not real or not real.startswith(_files_dir_real) or not os.path.isfile(real):
+                re_resolved = _resolve_attachment_name(fname) if fname else None
+                if not re_resolved:
+                    continue  # файл действительно не найден — пропускаем
+                real = os.path.realpath(re_resolved["path"])
+                mime = re_resolved.get("mime_type") or mime
             parsed = parse_file_for_ai(real, mime)
             if parsed:
                 # Обрезаем слишком большие ТЕКСТОВЫЕ файлы (не медиа!).
@@ -1491,7 +1504,26 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
             _content_parts.append({"type": "text", "text": _text_after.strip()})
         messages.append({"role": "user", "content": _content_parts})
     else:
-        messages.append({"role": "user", "content": user_message})
+        # Галлюцинационный guard: если изображения НЕ встроены (нет data-URL),
+        # но пользователь упомянул фото/файл (маркер [Файл: ...] / [Изображение: ...]
+        # или слово «фото» в тексте), явно сообщаем модели, что пикселей нет.
+        # Без этого слабые модели «придумывают» содержимое несуществующего фото.
+        _no_img_note = ""
+        try:
+            import re as _re_noimg
+            _marker = _re_noimg.search(r"\[(Файл|Изображение|Медиа): [^\]]+\]", user_message)
+            _photo_word = _re_noimg.search(r"\b(фото|картинк[аиу]|изображени[ея]|снимк[аиу]|picture|photo|image)\b", user_message, _re_noimg.IGNORECASE)
+            if (_marker or _photo_word) and attachments:
+                _no_img_note = (
+                    "\n\nВНИМАНИЕ: в данном сообщении нет встроенных пиксельных данных "
+                    "изображений — только имена файлов. Ты НЕ видишь содержимое фото/изображений. "
+                    "Не описывай и не «придумывай» то, что на фото. Скажи, что изображение "
+                    "недоступно для просмотра, и попроси пользователя приложить его заново."
+                )
+        except Exception:
+            _no_img_note = ""
+        _user_content = user_message + _no_img_note
+        messages.append({"role": "user", "content": _user_content})
 
     # Provider-neutral guard: base_url must be non-empty to call any provider.
     # (Settings defaults are empty; a key without a base_url can't route.)

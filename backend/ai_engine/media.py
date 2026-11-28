@@ -782,15 +782,19 @@ def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
         s = str(out.get("error", ""))
         return "upstream" in s.lower() or s.startswith("5")
 
-    def _try_agnes_ref(client, ref_url: str) -> dict:
-        # Agnes: image-to-image через extra_body (data-URI или публичный URL)
+    def _try_agnes_ref(client, ref_b64: str) -> dict:
+        # Agnes: image-to-image через extra_body (RAW base64 или публичный URL).
+        # ВАЖНО: НЕ data-URI. Agnes-хаб валидирует extra_body.image как
+        # «public http(s) URL or valid image base64» — data:-префикс (data:...)
+        # считается невалидным б64 и даёт 400 «extra_body.image is not a valid
+        # image base64». Передаём ЧИСТЫЙ base64 (без data:-префикса).
         jbody = {"model": model or _FB_IMAGE_MODEL, "prompt": prompt, "size": size,
-                 "extra_body": {"image": [ref_url], "response_format": "url"}}
+                 "extra_body": {"image": [ref_b64], "response_format": "url"}}
         if extra:
             jbody.update(extra)
         return _parse_image_resp(client.post(f"{_img_base}/images/generations",
-                                              headers={"Authorization": f"Bearer {p['key']}"},
-                                              json=jbody))
+                                             headers={"Authorization": f"Bearer {p['key']}"},
+                                             json=jbody))
 
     def _try_edits(client, raw: bytes) -> dict:
         # Provider-neutral: OpenAI /images/edits (multipart). Основной путь для ref —
@@ -831,23 +835,28 @@ def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
                                               headers={"Authorization": f"Bearer {p['key']}"},
                                               json=jbody))
 
-    def _run_ref(client, raw: bytes, data_uri: str) -> dict:
+    def _run_ref(client, raw: bytes, ref_b64: str) -> dict:
         out = _try_edits(client, raw)
         if out.get("ok") is False and is_agnes:
-            out = _try_agnes_ref(client, data_uri)
+            out = _try_agnes_ref(client, ref_b64)
         if out.get("ok") is False and _is_transient(out):
             time.sleep(2.0)
             out = _try_edits(client, raw)
             if out.get("ok") is False and is_agnes:
-                out = _try_agnes_ref(client, data_uri)
+                out = _try_agnes_ref(client, ref_b64)
         return out
 
     try:
         with _client(proxy, timeout=300.0) as c:
             if ref_image_b64:
                 raw = base64.b64decode(ref_image_b64)
-                data_uri = f"data:image/png;base64,{ref_image_b64}"
-                out = _run_ref(c, raw, data_uri)
+                # Чистый base64 (без data:-префикса) для agnes extra_body.image.
+                # ref_image_b64 приходит из _clean_ref_base64 (уже чистый), но
+                # дефензивно отрезаем возможный data:-префикс.
+                _clean_ref = ref_image_b64
+                if _clean_ref.startswith("data:"):
+                    _clean_ref = _clean_ref.split(",", 1)[1] if "," in _clean_ref else _clean_ref
+                out = _run_ref(c, raw, _clean_ref)
                 if out.get("ok"):
                     return out
                 # Provider-neutral fallback: this provider cannot image-edit from a local

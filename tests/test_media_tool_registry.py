@@ -446,6 +446,55 @@ def test_generate_image_ref_falls_back_to_text2img_when_provider_cannot_edit(mon
     assert "note" in out and "not supported" in out["note"]
 
 
+def test_generate_image_ref_agnes_extra_body_uses_raw_base64_not_data_uri(monkeypatch):
+    """Regression: agnes extra_body.image must carry RAW base64, NOT a data:-
+    prefixed data-URI. The agnes hub validates the ref as «public http(s) URL or
+    valid image base64» — a data: prefix is rejected with 400
+    "extra_body.image is not a valid image base64".
+    """
+    from ai_engine import media as _m
+
+    captured = []
+
+    class _Resp:
+        def __init__(self, sc, body=None, b64=""):
+            self.status_code = sc
+            self._body = body or {}
+            self._b64 = b64
+        def json(self):
+            return self._body
+        @property
+        def text(self):
+            return "boom" if self.status_code >= 400 else ""
+
+    class _Client:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def post(self, url, headers=None, json=None, content=None):
+            if json is not None:
+                captured.append(json)
+            if "/images/edits" in url:
+                return _Resp(400, {"error": "edits not supported"})  # force the agnes extra_body fallback
+            return _Resp(200, {"data": [{"b64_json": "QUtFTVQ=", "url": ""}]}, "QUtFTVQ=")
+
+    monkeypatch.setattr(_m, "_client", lambda proxy="", timeout=60.0: _Client())
+    monkeypatch.setattr(_m, "_BASE_PROVIDER_HINTS", {"agnes": "img-agnes.example.com"})
+    out = _m.generate_image_ref(
+        base_url="https://img-agnes.example.com/v1",
+        api_key="k", model="m", prompt="a cat", size="512x512",
+        ref_image_b64="QUtFTVQ=", proxy="")
+    assert out.get("ok") is True
+    # Find the extra_body (agnes) call and assert its image field is raw b64.
+    extra = [c for c in captured if c and "extra_body" in c]
+    assert extra, "expected the agnes extra_body fallback to fire"
+    img = extra[0]["extra_body"]["image"]
+    # image is a list per the dialect; first element must be the raw b64, not a data-URI.
+    assert isinstance(img, list) and img
+    assert not any(str(x).startswith("data:") for x in img), \
+        "extra_body.image must NOT carry a data:-prefixed data-URI"
+    assert "QUtFTVQ=" in [str(x) for x in img]
+
+
 def test_generate_video_standard_first_dialect_fallback(monkeypatch):
     """Provider-neutral video: the standard OpenAI-compatible /v1/videos/text2video
     is tried FIRST for all providers; the config-hinted provider dialect is only a

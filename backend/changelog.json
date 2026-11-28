@@ -1,10 +1,18 @@
 {
-  "version": "1.1.15",
+  "version": "1.1.16",
   "name": "AMT Chat",
-  "latest_at": "2026-11-28",
+  "latest_at": "2026-11-29",
   "releases": [
     {
-      "version": "1.1.15",
+      "version": "1.1.16",
+      "date": "2026-11-29",
+      "title": "Генерация медиа (image-to-image): чистый base64 в extra_body.image для agnes (фикс 400 «not a valid image base64»)",
+      "changes": [
+        "Image-to-image (agnes-хаб): устранён ложный 400 \"extra_body.image is not a valid image base64\". Протокол agnes валидирует extra_body.image как «публичный http(s) URL или валидный image base64» и отклонял data-URI с префиксом data:. Теперь в extra_body.image отправляется чистый base64 без префикса data: (обёртка снимается дефensively перед вызовом).",
+        "Стандартный путь /images/edits (OpenAI-совместимый multipart) не изменён — чистый base64 в extra_body.image применяется только к запасному агнес-диалекту.",
+        "1 новый regression-тест (tests/test_media_tool_registry.py): extra_body.image в agnes-фолбэке — не data-URI, а raw base64. 59 media/registry тестов зелёные."
+      ]
+    },
       "date": "2026-11-28",
       "title": "Генерация медиа: чат-модель не попадает в медиа-инструменты (фикс 400 «is a chat model»)",
       "changes": [

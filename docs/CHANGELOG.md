@@ -9,7 +9,20 @@
 
 ---
 
-## 1.1.15 — текущий (2026-11-28)
+## 1.1.16 — текущий (2026-11-29)
+
+- Генерация медиа (image-to-image): устранён ложный 400
+  «extra_body.image is not a valid image base64» на agnes-хабах. Протокол
+  agnes валидирует `extra_body.image` как «публичный http(s) URL или валидный
+  image base64» и отклонял data-URI с префиксом `data:`. Теперь в
+  `extra_body.image` отправляется чистый base64 без префикса (обёртка
+  снимается дефensively перед вызовом). Стандартный путь
+  `/images/edits` (OpenAI-совместимый multipart) не изменён — чистый base64
+  применяется только к запасному agnes-диалекту.
+- 1 новый regression-тест (tests/test_media_tool_registry.py):
+  extra_body.image в agnes-фолбэке — не data-URI, а raw base64.
+
+## 1.1.15 — (2026-11-28)
 
 - Медиа (tool-calling): устранён ложный 400 «Model agnes-3.0-flash is a chat
   model. Use /v1/chat/completions». Когда активный чат-ключ (из 1.1.14)

@@ -729,50 +729,15 @@ def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
     if _nb:
         return _nb
     is_agnes = any(h in p["base"] for h in _BASE_PROVIDER_HINTS)
-    # Agnes-хаб требует /v1 в пути. Если base после обрезки не содержит /v1 — допишем.
-    _agnes_base = p["base"]
-    if is_agnes and not _agnes_base.endswith("/v1"):
-        _agnes_base = f"{_agnes_base}/v1"
-    try:
-        import base64 as _b64
-        with _client(proxy, timeout=300.0) as c:
-            if ref_image_b64 and is_agnes:
-                # Agnes: image-to-image через extra_body (URL или b64 data URI)
-                ref_url = f"data:image/png;base64,{ref_image_b64}"
-                jbody = {"model": model or _FB_IMAGE_MODEL, "prompt": prompt, "size": size,
-                         "extra_body": {"image": [ref_url], "response_format": "url"}}
-                if extra:
-                    jbody.update(extra)
-                r = c.post(f"{_agnes_base}/images/generations",
-                           headers={"Authorization": f"Bearer {p['key']}"},
-                           json=jbody)
-            elif ref_image_b64:
-                raw = _b64.b64decode(ref_image_b64)
-                import urllib3, io as _io
-                # OpenAI /images/edits (multipart)
-                from urllib3.filepost import encode_multipart_formdata
-                fields = {"model": model or _FB_IMAGE_MODEL, "prompt": prompt, "size": size}
-                if extra:
-                    fields.update({k: str(v) for k, v in extra.items()})
-                files = {"image[]": ("ref.png", raw, "image/png")}
-                body, content_type = encode_multipart_formdata(
-                    {**files, **{k: (k, v) for k, v in fields.items()}})
-                r = c.post(f"{p['base']}/images/edits",
-                           headers={"Authorization": f"Bearer {p['key']}", "Content-Type": content_type},
-                           content=body)
-            else:
-                jbody = {"model": model or _FB_IMAGE_MODEL, "prompt": prompt, "n": 1, "size": size}
-                if is_agnes:
-                    # Agnes: return_base64=true → бинарный ответ в data[0].b64_json
-                    jbody["return_base64"] = True
-                if extra:
-                    jbody.update(extra)
-                _img_endpoint = _agnes_base if is_agnes else p["base"]
-                r = c.post(f"{_img_endpoint}/images/generations",
-                           headers={"Authorization": f"Bearer {p['key']}"},
-                           json=jbody)
+    # Дialect base: OpenAI-совместимый (по умолчанию, работает у любого провайдера).
+    # Agnes-хаб требует /v1 в пути — авто-опознанный диалект, дописываем только для него.
+    _img_base = p["base"]
+    if is_agnes and not _img_base.endswith("/v1"):
+        _img_base = f"{_img_base}/v1"
+
+    def _parse_image_resp(r) -> dict:
         if r.status_code >= 400:
-            return {"ok": False, "code": "unsupported", "error": f"{r.status_code} {r.text[:200]}"}
+            return {"ok": False, "code": "unsupported", "error": f"{r.status_code} {r.text[:300]}"}
         data = r.json()
         item = data.get("data", [{}])[0] if isinstance(data.get("data"), list) else {}
         b64 = item.get("b64_json", "")
@@ -782,11 +747,83 @@ def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
         if url:
             return {"ok": True, "mime": "image/png", "url": url}
         return {"ok": False, "code": "error", "error": "Не получено изображение"}
+
+    def _is_transient(out: dict) -> bool:
+        # Транзитные ошибки провайдера («Failed to reach upstream», 5xx) — ретраим.
+        s = str(out.get("error", ""))
+        return "upstream" in s.lower() or s.startswith("5")
+
+    def _try_agnes_ref(client, ref_url: str) -> dict:
+        # Agnes: image-to-image через extra_body (data-URI или публичный URL)
+        jbody = {"model": model or _FB_IMAGE_MODEL, "prompt": prompt, "size": size,
+                 "extra_body": {"image": [ref_url], "response_format": "url"}}
+        if extra:
+            jbody.update(extra)
+        return _parse_image_resp(client.post(f"{_img_base}/images/generations",
+                                              headers={"Authorization": f"Bearer {p['key']}"},
+                                              json=jbody))
+
+    def _try_edits(client, raw: bytes) -> dict:
+        # Provider-neutral: OpenAI /images/edits (multipart). Основной путь для ref —
+        # работает у любого OpenAI-совместимого провайдера (не только agnes).
+        # Мultipart-тело собираем вручную (без urllib3 — он не в зависимостях).
+        fields = {"model": model or _FB_IMAGE_MODEL, "prompt": prompt, "size": size}
+        if extra:
+            fields.update({k: str(v) for k, v in extra.items()})
+        boundary = "----amtmedia" + base64.b32encode(os.urandom(8)).decode().lower()
+        parts = []
+        for k, v in fields.items():
+            parts.append(
+                f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}'
+            )
+        parts.append(
+            f'--{boundary}\r\n'
+            f'Content-Disposition: form-data; name="image[]"; filename="ref.png"\r\n'
+            f'Content-Type: image/png\r\n\r\n'
+        )
+        head = "".join(parts).encode("utf-8")
+        tail = f"\r\n--{boundary}--\r\n".encode("utf-8")
+        body = head + raw + tail
+        content_type = f"multipart/form-data; boundary={boundary}"
+        return _parse_image_resp(client.post(f"{p['base']}/images/edits",
+                                             headers={"Authorization": f"Bearer {p['key']}",
+                                                      "Content-Type": content_type},
+                                             content=body))
+
+    def _try_text2img(client) -> dict:
+        # Обычная генерация (без рефа) — OpenAI-совместимый /images/generations.
+        jbody = {"model": model or _FB_IMAGE_MODEL, "prompt": prompt, "n": 1, "size": size}
+        if is_agnes:
+            # Agnes: return_base64=true → бинарный ответ в data[0].b64_json
+            jbody["return_base64"] = True
+        if extra:
+            jbody.update(extra)
+        return _parse_image_resp(client.post(f"{_img_base}/images/generations",
+                                              headers={"Authorization": f"Bearer {p['key']}"},
+                                              json=jbody))
+
+    def _run_ref(client, raw: bytes, data_uri: str) -> dict:
+        out = _try_edits(client, raw)
+        if out.get("ok") is False and is_agnes:
+            out = _try_agnes_ref(client, data_uri)
+        if out.get("ok") is False and _is_transient(out):
+            time.sleep(2.0)
+            out = _try_edits(client, raw)
+            if out.get("ok") is False and is_agnes:
+                out = _try_agnes_ref(client, data_uri)
+        return out
+
+    try:
+        with _client(proxy, timeout=300.0) as c:
+            if ref_image_b64:
+                raw = base64.b64decode(ref_image_b64)
+                data_uri = f"data:image/png;base64,{ref_image_b64}"
+                return _run_ref(c, raw, data_uri)
+            return _try_text2img(c)
     except Exception as e:
         return {"ok": False, "code": "error", "error": str(e)[:200]}
 
 
-# ===== Видео: aspect ratio (16:9, 9:16) =====
 def generate_video(base_url: str = "", api_key: str = "", model: str = "", prompt: str = "",
                    duration: str = "5", aspect_ratio: str = "16:9", proxy: str = "", extra: dict = None) -> dict:
     """Видео text2video. aspect_ratio: 16:9 (обычное) или 9:16 (кружок/вертикаль).

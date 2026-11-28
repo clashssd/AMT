@@ -319,3 +319,83 @@ def test_generate_audio_no_text_returns_clean_error():
     payload = json.loads(out)
     assert payload["code"] == "no_text"
     assert called["n"] == 0
+
+
+def test_generate_image_ref_non_agnes_uses_edits(monkeypatch):
+    """Provider-neutral image-to-image: a NON-agnes provider with a ref must go
+    through the standard OpenAI /images/edits multipart (not the agnes extra_body
+    dialect). We stub the httpx client so no real network call happens."""
+    from ai_engine import media as _m
+
+    captured = {"calls": []}
+
+    class _Resp:
+        def __init__(self, sc=200, b64="QUtFTVQ="):
+            self.status_code = sc
+            self._b64 = b64
+        def json(self):
+            return {"data": [{"b64_json": self._b64, "url": ""}]}
+        @property
+        def text(self):
+            return ""
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def post(self, url, headers=None, json=None, content=None):
+            captured["calls"].append({"url": url, "multipart": content is not None, "json": json})
+            return _Resp(200, "QUtFTVQ=")
+
+    monkeypatch.setattr(_m, "_client", lambda proxy="", timeout=60.0: _Client())
+    # A generic OpenAI-compatible host (NOT in _BASE_PROVIDER_HINTS)
+    out = _m.generate_image_ref(
+        base_url="https://img.example.com/v1",
+        api_key="k", model="m", prompt="a cat", size="512x512",
+        ref_image_b64="QUtFTVQ=", proxy="")
+    assert out.get("ok") is True
+    urls = [c["url"] for c in captured["calls"]]
+    assert any("/images/edits" in u for u in urls), f"expected /images/edits, got {urls}"
+    # No extra_body (agnes dialect) must be sent to a non-agnes provider
+    assert not any((c.get("json") and "extra_body" in str(c["json"])) for c in captured["calls"])
+
+
+def test_generate_image_ref_agnes_falls_back_to_extra_body(monkeypatch):
+    """Agnes provider: if /images/edits fails, fall back to extra_body dialect."""
+    from ai_engine import media as _m
+
+    calls = []
+
+    class _Resp:
+        def __init__(self, sc, body=None, b64=""):
+            self.status_code = sc
+            self._body = body or {}
+            self._b64 = b64
+        def json(self):
+            return self._body
+        @property
+        def text(self):
+            return "boom" if self.status_code >= 400 else ""
+
+    class _Client:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def post(self, url, headers=None, json=None, content=None):
+            calls.append(url)
+            if "/images/edits" in url:
+                return _Resp(400, {"error": "edits not supported"})  # edits fails
+            return _Resp(200, {"data": [{"b64_json": "QUtFTVQ=", "url": ""}]}, "QUtFTVQ=")
+
+    # force agnes dialect: the real hint matches hosts containing "agnes"
+    monkeypatch.setattr(_m, "_client", lambda proxy="", timeout=60.0: _Client())
+    monkeypatch.setattr(_m, "_BASE_PROVIDER_HINTS", {"agnes": "img-agnes.example.com"})
+    out = _m.generate_image_ref(
+        base_url="https://img-agnes.example.com/v1",
+        api_key="k", model="m", prompt="a cat", size="512x512",
+        ref_image_b64="QUtFTVQ=", proxy="")
+    # edits failed -> extra_body fallback succeeded
+    assert out.get("ok") is True
+    assert any("/images/edits" in u for u in calls)
+    assert any("/images/generations" in u for u in calls)
+

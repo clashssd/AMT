@@ -1,8 +1,19 @@
 {
-  "version": "1.1.11",
+  "version": "1.1.12",
   "name": "AMT Chat",
   "latest_at": "2026-11-28",
   "releases": [
+    {
+      "version": "1.1.12",
+      "date": "2026-11-28",
+      "title": "Генерация картинок (image-to-image) provider-neutral: работает с любыми провайдерами",
+      "changes": [
+        "Image-to-image теперь provider-neutral: основной путь — стандартный OpenAI-совместимый /images/edits (multipart). Протокол agnes (extra_body.image) — только запасной вариант для auto-опознанного agnes-хаба. Ранее ref у не-agnes провайдера падал с 400.",
+        "Убрана скрытая зависимость от urllib3 (не было в requirements): multipart-тело для /images/edits собирается вручную.",
+        "Ретрай при транзитных ошибках провайдера (Failed to reach upstream / 5xx): после неудач��ого запроса одна повторная попытка через 2 сек.",
+        "2 новых regression-теста (всего 64 media-теста зелёные)."
+      ]
+    },
     {
       "version": "1.1.11",
       "date": "2026-11-28",

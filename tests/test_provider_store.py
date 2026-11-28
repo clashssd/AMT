@@ -145,3 +145,34 @@ def test_resolve_dialect_from_active_provider(tmp_backend, monkeypatch):
     unknown = media.resolve_dialect("https://some.random.host")
     assert unknown["extra_body_ref"] is False
     assert unknown["xi_api_key"] is False
+
+
+def test_provider_key_survives_reread(tmp_backend, monkeypatch):
+    """Regression: after add(), a subsequent list_public() / get_active() (which
+    re-reads disk) must still report hasKey=True for the same provider.
+    Simulates the live desync scenario where a stale in-memory state lost the
+    encrypted key but disk still had it."""
+    import main
+    _point_providers_to(tmp_backend["tmp"], monkeypatch)
+    _clean_settings(monkeypatch)
+
+    pid = main.providers_store.add({
+        "name": "Test",
+        "base_url": "https://test.example",
+        "api_key": "sk-test-key-123",
+        "capabilities": {"image": True, "video": False, "audio": False},
+    })["id"]
+
+    # First read: should have the key.
+    pub1 = main.providers_store.list_public()
+    entry1 = next(p for p in pub1 if p["id"] == pid)
+    assert entry1["hasKey"] is True
+
+    # Simulate a re-read (e.g., after a save() round-trip or settings reload).
+    pub2 = main.providers_store.list_public()
+    entry2 = next(p for p in pub2 if p["id"] == pid)
+    assert entry2["hasKey"] is True, "hasKey must survive a re-read"
+
+    # get_active() must also decrypt the key correctly.
+    active = main.providers_store.get_active()
+    assert active["api_key"] == "sk-test-key-123"

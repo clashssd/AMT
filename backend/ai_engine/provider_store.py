@@ -52,7 +52,7 @@ class ProviderStore:
         self.providers: list[dict] = []
         self.active_id: str = ""
         self._fkey: Optional[bytes] = self._load_or_create_key()
-        self._load()
+        self._load(merge=False)
 
     # ---------- key management (Fernet) ----------
     def _load_or_create_key(self) -> Optional[bytes]:
@@ -91,15 +91,33 @@ class ProviderStore:
             return ""
 
     # ---------- persistence ----------
-    def _load(self):
+    def _load(self, merge: bool = True):
+        """Load providers from disk.
+
+        When ``merge`` is True (the default for accessor re-reads), in-memory
+        ``api_key_enc`` values are preserved for any provider id that lost its
+        key on disk — so a just-written key is never clobbered by a stale read.
+        Fresh initialization passes merge=False (caller is the new process).
+        """
+        existing = {p.get("id"): p.get("api_key_enc") for p in self.providers} if merge else {}
         if os.path.exists(self.path):
             try:
                 with open(self.path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                self.providers = data.get("providers", [])
+                loaded = data.get("providers", [])
+                for p in loaded:
+                    pid = p.get("id")
+                    if pid in existing and not p.get("api_key_enc") and existing[pid]:
+                        # Preserve the in-memory encrypted key that disk lacks.
+                        p["api_key_enc"] = existing[pid]
+                self.providers = loaded
                 self.active_id = data.get("activeId", "")
             except Exception:
-                self.providers, self.active_id = [], ""
+                if merge:
+                    # Keep in-memory state rather than wiping on a read error.
+                    pass
+                else:
+                    self.providers, self.active_id = [], ""
 
     def save(self):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
@@ -114,10 +132,26 @@ class ProviderStore:
             json.dump(payload, f, ensure_ascii=False, indent=2)
 
     # ---------- CRUD ----------
+    def _refresh(self) -> None:
+        """Re-read disk so accessor methods always reflect the persisted encrypted keys.
+
+        Disk is the source of truth for api_key_enc; the in-memory list can desync
+        (e.g. after a save round-trip or a settings reload), so we reload on read.
+        Cheap: providers.json is small.
+        """
+        self._load()
+        # Re-sync the fernet key in case the key file rotated under us.
+        self._fkey = self._load_or_create_key()
+
+    def _records(self) -> list[dict]:
+        """Fresh list of provider records loaded from disk."""
+        self._refresh()
+        return self.providers
+
     def list_public(self) -> list[dict]:
         """Public list: no raw api key, only hasKey + decrypted-on-read key for the active one."""
         out = []
-        for p in self.providers:
+        for p in self._records():
             pub = {k: p.get(k) for k in self._FIELDS if k in p}
             pub["hasKey"] = bool(p.get("api_key_enc"))
             pub.pop("id", None)
@@ -127,6 +161,7 @@ class ProviderStore:
 
     def get_active(self) -> Optional[dict]:
         """Return the active provider WITH its api key decrypted (for the media layer)."""
+        self._refresh()
         if not self.active_id:
             return None
         for p in self.providers:
@@ -137,6 +172,7 @@ class ProviderStore:
         return None
 
     def get(self, provider_id: str) -> Optional[dict]:
+        self._refresh()
         for p in self.providers:
             if p.get("id") == provider_id:
                 d = {k: p.get(k) for k in p if k != "api_key_enc"}

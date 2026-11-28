@@ -1,8 +1,20 @@
 {
-  "version": "1.1.18",
+  "version": "1.1.19",
   "name": "AMT Chat",
   "latest_at": "2026-11-29",
   "releases": [
+    {
+      "version": "1.1.19",
+      "date": "2026-11-29",
+      "title": "Provider store: фикс рассинхронизации api_key_enc + live verification",
+      "changes": [
+        "ProviderStore: устранена рассинхронизация in-memory/disk для api_key_enc. Аксессоры (list_public/get_active/get) теперь вызывают _refresh() (re-read с merge), который сохраняет in-memory зашифрованные ключи для provider ids, у которых на диске ключа нет — валидный ключ больше не теряется после save() round-trip или settings reload.",
+        "Добавлены _refresh() + _records() хелперы; __init__ использует merge=False (fresh process), accessors используют merge=True (preserves in-memory keys).",
+        "Новый regression test: tests/test_provider_store.py::test_provider_key_survives_reread (add → list_public ×2 → get_active, все имеют hasKey=True + корректный ключ).",
+        "65 media/registry/provider тестов зелёные (включая 5 provider_store + quota_exhausted).",
+        "Live verification: app launched hidden (backend :8009 + frontend), all paths verified with agnes key — chat, i2i, text2img, video (quota), MCP media creds. 2 bugs found & fixed (facade /v1/v1 double-suffix + MCP creds from active provider, committed in 8d45bf0)."
+      ]
+    },
     {
       "version": "1.1.18",
       "date": "2026-11-29",

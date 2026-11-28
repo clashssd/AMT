@@ -9,7 +9,15 @@
 
 ---
 
-## 1.1.18 — текущий (2026-11-29)
+## 1.1.19 — текущий (2026-11-29)
+
+- ProviderStore: устранена рассинхронизация in-memory/disk для api_key_enc — аксессоры (list_public/get_active/get) теперь вызывают _refresh() (re-read с merge), валидный ключ больше не теряется после save() round-trip или settings reload.
+- Добавлены _refresh() + _records() хелперы; __init__ использует merge=False, accessors используют merge=True (preserves in-memory keys).
+- Новый regression test: test_provider_key_survives_reread (add → list_public ×2 → get_active).
+- Live verification: app launched hidden (backend :8009), all paths verified with agnes key — chat, i2i, text2img, video (quota), MCP media creds. 2 bugs found & fixed (facade /v1/v1 double-suffix + MCP creds from active provider).
+- 65 media/registry/provider тестов зелёные.
+
+## 1.1.18 — (2026-11-29)
 
 - Добавлено 13 базовых шаблонов провайдеров в providers.json: OpenAI,
   Anthropic, Google, Agnes (с фиксированными default_image_model=

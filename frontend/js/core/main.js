@@ -3831,6 +3831,7 @@ function showSettingsPage(secId) {
     if (secId === 'sec-personality') fillPersonalitySelects();
     if (secId === 'sec-tools') loadToolsConfig();
     if (secId === 'sec-media') loadMediaKeysUI();
+    if (secId === 'sec-providers-med' && typeof loadProvidersMedUI === 'function') loadProvidersMedUI();
     if (secId === 'sec-mcp' && typeof renderMcpSettings === 'function') renderMcpSettings();
     if (secId === 'sec-hotkeys' && window.AMTHotkeys) {
         const container = document.getElementById('hotkeySettingsContainer');

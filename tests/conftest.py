@@ -61,6 +61,7 @@ def tmp_backend(tmp_path, monkeypatch):
     monkeypatch.setenv("AMT_DESKTOP_LOG", str(tmp_path / "desktop_log.jsonl"))
     monkeypatch.setenv("AMT_MCP_SERVERS_FILE", str(tmp_path / "mcp_servers.json"))
     monkeypatch.setenv("AMT_MCP_KEY_FILE", str(tmp_path / "mcp_key.key"))
+    monkeypatch.setenv("AMT_PROVIDERS_FILE", str(tmp_path / "providers.json"))
     (tmp_path / "backgrounds").mkdir()
     (tmp_path / "configs").mkdir()
 

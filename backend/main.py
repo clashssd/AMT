@@ -26,6 +26,7 @@ from ai_engine.orchestrator import Orchestrator
 from ai_engine.agents import AgentSkillManager
 from ai_engine.web_scraper import fetch_youtube_channel, fetch_twitch_channel
 from ai_engine.keymanager import KeyManager
+from ai_engine.provider_store import ProviderStore
 from ai_engine.tools import tools as tools_sandbox
 from ai_engine.sysinteraction import SysInteractionOrchestrator
 from ai_engine import filegen
@@ -317,6 +318,11 @@ class Settings(BaseModel):
     background: str = ""   # URL/путь к фону (картинка или видео)
     # Default browser (detected on first run, overridable by user)
     defaultBrowser: str = ""
+    # Active media provider id (from providers.json / ProviderStore). When set,
+    # the media generation layer resolves the active provider's credentials +
+    # dialect flags as a fallback layer (before the dedicated per-function keys
+    # and the global apiKey). Empty = no active provider (legacy behavior).
+    active_provider: str = ""
     # Native LLM tool-calling (OpenAI tools/tool_calls). When True, the LLM
     # receives tool schemas and can emit tool_calls; [[GEN]] tags are still
     # parsed on the final text as a safety net. When False, the MEDIA_CAPABILITY
@@ -425,6 +431,10 @@ def log_agent_skills(agent_id, extra_skills):
 # ===== МУЛЬТИ-АПИ-КЛЮЧИ =====
 KEYS_FILE = os.environ.get("AMT_KEYS_FILE") or os.path.join(os.path.dirname(__file__), "keys.json")
 keys_mgr = KeyManager(KEYS_FILE)
+
+# ===== МЕДИА-ПРОВАЙДЕРЫ (шаблоны) =====
+PROVIDERS_FILE = os.environ.get("AMT_PROVIDERS_FILE") or os.path.join(os.path.dirname(__file__), "providers.json")
+providers_store = ProviderStore(PROVIDERS_FILE)
 
 
 @app.post("/api/memory/wipe")
@@ -4569,6 +4579,69 @@ async def set_round_robin(enabled: bool = True):
     keys_mgr.save()
     return {"status": "ok", "roundRobin": enabled}
 
+
+# ===== МЕДИА-ПРОВАЙДЕРЫ (шаблоны) =====
+class ProviderIn(BaseModel):
+    id: str = ""
+    name: str = ""
+    base_url: str = ""
+    api_key: str = ""          # plaintext in/out; encrypted at rest by ProviderStore
+    model: str = ""
+    capabilities: dict = {}    # {"image": bool, "video": bool, "audio": bool}
+    dialect: dict = {}         # {"extra_body_ref", "v1_suffix", "return_base64",
+                                #  "videos_mode_body", "agnesapi_poll", "stt", "xi_api_key"}
+    default_voice: str = ""
+    default_image_model: str = ""
+    default_video_model: str = ""
+    default_audio_model: str = ""
+    note: str = ""
+    makeActive: bool = False
+
+def _provider_public(p: dict) -> dict:
+    """Strip the raw api key from a public payload (hasKey instead)."""
+    out = {k: v for k, v in p.items() if k not in ("api_key", "api_key_enc")}
+    out["hasKey"] = bool(p.get("api_key") or p.get("api_key_enc"))
+    return out
+
+@app.get("/api/providers")
+async def list_providers():
+    """Общедоступный список шаблонов медиа-провайдеров — без plaintext api_key."""
+    return {
+        "providers": [_provider_public(p) for p in providers_store.list_public()],
+        "activeId": providers_store.active_id,
+    }
+
+@app.post("/api/providers")
+async def add_provider(t: ProviderIn):
+    created = providers_store.add(t.model_dump(exclude={"makeActive"}), make_active=t.makeActive)
+    return {"status": "created", "provider": _provider_public(created)}
+
+@app.put("/api/providers/{provider_id}")
+async def update_provider(provider_id: str, t: ProviderIn):
+    res = providers_store.update(provider_id, t.model_dump(exclude={"makeActive"}))
+    if not res:
+        raise HTTPException(404, "Provider not found")
+    return {"status": "updated", "provider": _provider_public(res)}
+
+@app.delete("/api/providers/{provider_id}")
+async def delete_provider(provider_id: str):
+    ok = providers_store.delete(provider_id)
+    return {"status": "deleted" if ok else "not_found"}
+
+@app.post("/api/providers/{provider_id}/activate")
+async def activate_provider(provider_id: str):
+    ok = providers_store.set_active(provider_id)
+    if ok:
+        server_settings.active_provider = provider_id
+        persist_settings()
+    return {"status": "activated" if ok else "not_found", "activeId": providers_store.active_id}
+
+@app.post("/api/providers/deactivate")
+async def deactivate_provider():
+    providers_store.clear_active()
+    server_settings.active_provider = ""
+    persist_settings()
+    return {"status": "deactivated", "activeId": providers_store.active_id}
 
 # ===== МАССОВЫЙ ИМПОРТ АГЕНТОВ И СКИЛЛОВ (из файла/пачки) =====
 class ImportAgentsRequest(BaseModel):

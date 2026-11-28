@@ -1,0 +1,27 @@
+{
+  "providers": [
+    {
+      "id": "p_agnes",
+      "name": "Agnes",
+      "base_url": "https://apihub.agnes-ai.com",
+      "api_key_enc": "",
+      "model": "",
+      "capabilities": { "image": true, "video": true, "audio": false },
+      "dialect": {
+        "extra_body_ref": true,
+        "v1_suffix": true,
+        "return_base64": true,
+        "videos_mode_body": true,
+        "agnesapi_poll": true,
+        "stt": false,
+        "xi_api_key": false
+      },
+      "default_voice": "",
+      "default_image_model": "",
+      "default_video_model": "",
+      "default_audio_model": "",
+      "note": "OpenAI-совместимый хаб Agnes. extra_body.image принимает RAW base64 (без data:-префикса). Видео: POST /v1/videos + polling GET /agnesapi."
+    }
+  ],
+  "activeId": ""
+}

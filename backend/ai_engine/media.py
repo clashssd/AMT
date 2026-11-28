@@ -114,6 +114,94 @@ _ELEVENLABS_HOST = (os.environ.get("AMT_ELEVENLABS_HOST", "") or "").strip()
 if not _ELEVENLABS_HOST:
     _ELEVENLABS_HOST = _BASE_PROVIDER_HINTS.get("elevenlabs", "") or "elevenlabs.io"
 
+
+# ---------------------------------------------------------------------------
+# Generic provider dialect resolver (provider-neutral).
+# Resolves the DIALECT FLAGS for a base_url WITHOUT hardcoding provider names:
+#   1) the active provider template from providers.json (ProviderStore), matched
+#      by base_url — its explicit `dialect` flags win (user-declared, most specific);
+#   2) provider_hints.json / AMT_PROVIDER_HINTS config (per-hint extra_body_ref etc.);
+#   3) built-in auto-detect (the `is_agnes` host-hint check, the `is_eleven` host).
+# Returns a flag dict consumed by the media handlers. Unknown/absent flag = False.
+# This makes new providers pluggable via config/templates, not via code edits.
+# ---------------------------------------------------------------------------
+_DIALECT_DEFAULTS = {
+    "extra_body_ref": False,   # image-to-image via extra_body.image (RAW base64 or public URL)
+    "v1_suffix": False,        # provider requires /v1 in the path
+    "return_base64": False,    # text2img returns b64_json in data[0] when set
+    "videos_mode_body": False, # video uses mode/seconds/size body, not text2video
+    "agnesapi_poll": False,    # video task polling via GET /agnesapi?video_id=
+    "stt": False,              # STT supported via /v1/audio/transcriptions
+    "xi_api_key": False,       # ElevenLabs-style header (xi-api-key + model_id + voices[])
+}
+
+def resolve_dialect(base_url: str = "", caps: dict = None) -> dict:
+    """Provider-neutral: resolve the dialect flags for a base_url.
+
+    Priority (first source that yields a non-empty dialect):
+      1) active provider template (providers.json / ProviderStore) matching this
+         base_url — its `dialect` map wins (explicit user declaration).
+      2) provider_hints config (provider_hints.json / AMT_PROVIDER_HINTS): when a
+         hint host matches base_url, apply that hint's `dialect` if present.
+      3) built-in auto-detect: host-hint match -> the OpenAI-hub dialect set;
+         elevenlabs host -> the xi_api_key dialect set.
+    Falls back to _DIALECT_DEFAULTS for anything unspecified.
+    """
+    flags = dict(_DIALECT_DEFAULTS)
+    base = (base_url or "").strip()
+    if base:
+        base_l = base.rstrip("/").lower()
+        host = base_l.split("://", 1)[-1]
+        host = host.split("/v1", 1)[0]  # normalize: drop a trailing /v1
+        host = host.rstrip("/").lower()
+        # 1) active provider template from providers.json (ProviderStore).
+        try:
+            import os as _os
+            _here = _os.path.dirname(_os.path.abspath(__file__))
+            _cand = _os.environ.get("AMT_PROVIDERS_FILE") or _os.path.join(_os.path.dirname(_here), "providers.json")
+            if _os.path.exists(_cand):
+                with open(_cand, "r", encoding="utf-8") as _fh:
+                    _data = json.load(_fh)
+                _active = _data.get("activeId", "")
+                for _p in _data.get("providers", []):
+                    if _active and _p.get("id") == _active:
+                        _pb = (_p.get("base_url") or "").rstrip("/").lower()
+                        _pbhost = _pb.split("://", 1)[-1].split("/v1", 1)[0].rstrip("/").lower()
+                        # Match when the template base host matches this request host
+                        # (same provider family).
+                        if _pbhost and (_pbhost == host or _pbhost in base_l or host in _pbhost):
+                            _dl = _p.get("dialect", {}) or {}
+                            for _k in flags:
+                                if _k in _dl:
+                                    flags[_k] = bool(_dl[_k])
+                            break
+        except Exception:
+            pass
+        # 2) provider_hints config dialect (per-hint host).
+        if not any(v for v in flags.values()):
+            for _hint_host, _hint in _BASE_PROVIDER_HINTS.items():
+                if _hint and isinstance(_hint, dict) and _hint.get("host"):
+                    if host and host == str(_hint.get("host")).lower():
+                        _dl = _hint.get("dialect", {}) or {}
+                        for _k in flags:
+                            if _k in _dl:
+                                flags[_k] = bool(_dl[_k])
+        # 3) built-in auto-detect (OpenAI-hub / elevenlabs host hints).
+        if not any(v for v in flags.values()):
+            _hub_host = str(_BASE_PROVIDER_HINTS.get("agnes", ""))
+            if _hub_host and (_hub_host.lower() in host or host in _hub_host.lower()):
+                # OpenAI-compatible hub (Agnes-style): the documented dialect set.
+                flags["extra_body_ref"] = True
+                flags["v1_suffix"] = True
+                flags["return_base64"] = True
+                flags["videos_mode_body"] = True
+                flags["agnesapi_poll"] = True
+                flags["stt"] = False
+            elif _ELEVENLABS_HOST and _ELEVENLABS_HOST.lower() in host:
+                flags["xi_api_key"] = True
+                flags["stt"] = False
+    return flags
+
 # ---------------------------------------------------------------------------
 # Универсальный фасад (generate_media): дефолтные константы + helper'ы.
 # Provider-neutral: ключ/URL/модель ПУСТЫЕ по умолчанию (не привязаны к
@@ -369,8 +457,9 @@ def check_capability(kind: str, base_url: str = "", api_key: str = "", model: st
                                 "поддерживается" if r.status_code in (200, 201, 202) else f"HTTP {r.status_code}")
     except Exception as e:
         results["audio"] = (False, str(e)[:80])
-    # Video endpoint (Agnes-style or OpenAI-style)
-    is_agnes = any(h in base for h in _BASE_PROVIDER_HINTS)
+    # Video endpoint (Agnes-style or OpenAI-style) — provider-neutral dialect.
+    _cap_d = resolve_dialect(base)
+    is_agnes = bool(_cap_d.get("videos_mode_body") or _cap_d.get("extra_body_ref"))
     if is_agnes:
         try:
             with _client(proxy, timeout=30.0) as c:
@@ -413,11 +502,12 @@ def check_video_task(base_url: str = "", api_key: str = "", task_id: str = "", p
         # check_video_task возвращает dict со полем "status" — сохраняем контракт.
         return {"ok": False, "status": "error", "code": "no_base_url",
                 "error": _nb["error"]}
-    is_agnes = any(h in p["base"] for h in _BASE_PROVIDER_HINTS)
+    _vt_d = resolve_dialect(p["base"])
+    is_agnes = bool(_vt_d.get("agnesapi_poll") or _vt_d.get("videos_mode_body"))
     try:
         with _client(proxy) as c:
             if is_agnes:
-                # Agnes (документированный): GET <host>/agnesapi?video_id=<ID>&model_name=<model>
+                # Agnes-style (документированный): GET <host>/agnesapi?video_id=<ID>&model_name=<model>
                 # host = base без /v1. При status=completed — top-level url.
                 host = p["base"]
                 if host.endswith("/v1"):
@@ -463,7 +553,10 @@ def generate_audio(base_url: str = "", api_key: str = "", model: str = "", text:
         если base_url указывает на elevenlabs.io — сохраняя дефолтный голос/параметры.
     """
     p = provider_profile("audio", base_url, api_key, model, voice_id=voice_id, proxy=proxy)
-    is_eleven = _ELEVENLABS_HOST in (p["base"] or "")
+    # Provider-neutral: xi_api_key dialect = ElevenLabs-style (xi-api-key header +
+    # model_id + voices[] body). Resolved via the dialect resolver, not a hard host.
+    _audio_d = resolve_dialect(p["base"])
+    is_eleven = bool(_audio_d.get("xi_api_key"))
     if is_eleven:
         return _generate_audio_elevenlabs(p, text, proxy, voice_settings, extra)
     # ---- Универсальный OpenAI-совместимый TTS ----
@@ -757,11 +850,12 @@ def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
     _nb = _missing_base_error(p, "картинок")
     if _nb:
         return _nb
-    is_agnes = any(h in p["base"] for h in _BASE_PROVIDER_HINTS)
-    # Дialect base: OpenAI-совместимый (по умолчанию, работает у любого провайдера).
-    # Agnes-хаб требует /v1 в пути — авто-опознанный диалект, дописываем только для него.
+    _img_d = resolve_dialect(p["base"])
+    # Provider-neutral: extra_body_ref = image-to-image через extra_body;
+    # v1_suffix = provider requires /v1 in the path. Both from the dialect resolver.
+    is_agnes = bool(_img_d.get("extra_body_ref"))
     _img_base = p["base"]
-    if is_agnes and not _img_base.endswith("/v1"):
+    if _img_d.get("v1_suffix") and not _img_base.endswith("/v1"):
         _img_base = f"{_img_base}/v1"
 
     def _parse_image_resp(r) -> dict:
@@ -885,10 +979,12 @@ def generate_video(base_url: str = "", api_key: str = "", model: str = "", promp
     _nb = _missing_base_error(p, "видео")
     if _nb:
         return _nb
-    is_agnes = any(h in p["base"] for h in _BASE_PROVIDER_HINTS)
-    # Agnes-хаб требует /v1 в пути. Если base после обрезки не содержит /v1 — допишем.
+    _vid_d = resolve_dialect(p["base"])
+    # Provider-neutral: videos_mode_body = provider uses mode/seconds/size video body;
+    # v1_suffix = requires /v1 in the path. Both from the dialect resolver.
+    is_agnes = bool(_vid_d.get("videos_mode_body"))
     _agnes_base = p["base"]
-    if is_agnes and not _agnes_base.endswith("/v1"):
+    if _vid_d.get("v1_suffix") and not _agnes_base.endswith("/v1"):
         _agnes_base = f"{_agnes_base}/v1"
     try:
         with _client(proxy, timeout=300.0) as c:

@@ -221,6 +221,50 @@ def _media_cfg(kind: str) -> dict:
         except Exception:
             pass  # reload не обязан ломать вызов; остаётся no_key, как раньше
 
+    # Fallback: активный медиа-провайдер (шаблон из providers.json / ProviderStore).
+    # Если ни dedicated (imageKey/videoKey/audioKey), ни global (apiKey), ни
+    # чат-ключ не дали ключа — берём ключ/базу/модель/диалект активного
+    # провайдера. Это делает генерацию медиа provider-neutral: пользователь
+    # добавляет провайдера (шаблон) в настройках, активирует его — и генерация
+    # (нативные tool-calling + MCP-пресет) автоматически использует его, не
+    # хардкодя конкретные провайдеры.
+    if not (key or "").strip():
+        try:
+            import main as _main
+            _ps = getattr(_main, "providers_store", None)
+            if _ps is not None:
+                _active = _ps.get_active()
+                if _active:
+                    _caps = _active.get("capabilities", {}) or {}
+                    _kind_caps = {"image": _caps.get("image", True),
+                                  "video": _caps.get("video", True),
+                                  "audio": _caps.get("audio", True)}
+                    # Provider applies only if it claims this capability (or caps empty).
+                    if _kind_caps.get(kind, True):
+                        # Key: fill only when still empty (dedicated/global already win above).
+                        if not (key or "").strip():
+                            key = _active.get("api_key", "")
+                        # Media model: per-kind default from the template, else its model.
+                        # Fill only when empty so a dedicated model is preserved.
+                        _mk = {"image": "default_image_model", "video": "default_video_model",
+                               "audio": "default_audio_model"}.get(kind, "")
+                        model = model or _active.get(_mk, "") or _active.get("model", "")
+                        # Base: preserve the kind's dedicated base if set (mirrors the
+                        # chat-key fallback: only the CHAT/provider base wins when the
+                        # dedicated base is absent, never clobber it).
+                        _dedicated_base = ""
+                        if ss is not None:
+                            if kind == "image":
+                                _dedicated_base = getattr(ss, "imageBaseUrl", "") or ""
+                            elif kind == "video":
+                                _dedicated_base = getattr(ss, "videoBaseUrl", "") or ""
+                            elif kind == "audio":
+                                _dedicated_base = getattr(ss, "audioBaseUrl", "") or ""
+                        if not _dedicated_base.strip():
+                            base = _active.get("base_url", "") or base
+        except Exception:
+            pass  # не обязан ломать вызов; остаётся нетронуто
+
     # Последний fallback: активный чат-ключ (которым модель уже успешно делает
     # tool-calling). Если ни dedicated (imageKey/videoKey/audioKey), ни global
     # (apiKey) не задан — используем ключ чата. Это устраняет ложный no_key,

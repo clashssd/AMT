@@ -9,7 +9,35 @@
 
 ---
 
-## 1.1.16 — текущий (2026-11-29)
+## 1.1.17 — текущий (2026-11-29)
+
+- Новый раздел «Настройки → Провайдеры (медиа)»: быстро добавлять любые
+  провайдеры по шаблону (имя, base_url, API-ключ, модель, capabilities
+  image/video/audio, dialect-флаги extra_body_ref/v1_suffix/return_base64/
+  videos_mode_body/agnesapi_poll/stt/xi_api_key, default_voice и
+  default_*_model). Активный провайдер выбирается в списке и автоматически
+  используется медиа-слоем.
+- Активный провайдер как fallback для медиа-инструментов: в
+  tool_registry._media_cfg добавлен слой — если дедичированные
+  imageKey/videoKey/audioKey и глобальный apiKey пусты, берутся
+  ключ/адрес/модель активного провайдера (по capability). Ключ шифруется
+  Fernet (providers.json, providers.key 0600).
+- Provider-neutral dialect: media.py resolve_dialect(base_url) читает
+  dialect активного провайдера из providers.json (приоритет), затем
+  конфиг-хинты, затем встроенный auto-detect (agnes/elevenlabs). 5
+  жёстко-заточенных is_agnes/is_eleven мест заменены резолвером — новый
+  провайдер подключается только конфигом/шаблоном, без правки кода.
+- Сидирован провайдер agnes (https://apihub.agnes-ai.com, caps image+video,
+  agnes dialect). Генерация через него — 100% provider-neutral.
+- MCP-генерация тоже подхватывает активного провайдера: нативные
+  media-инструменты (generate_image/video/audio/file) и MCP media preset
+  совместно используют path _media_cfg — отдельной MCP-логики не нужно.
+- REST /api/providers (GET/POST/PUT/DELETE + /{id}/activate + /deactivate),
+  Settings.active_provider, UI list+form (frontend/js/providers-med/). 4
+  regression-теста (tests/test_provider_store.py). 63 media/registry/provider
+  теста зелёные.
+
+## 1.1.16 — (2026-11-29)
 
 - Генерация медиа (image-to-image): устранён ложный 400
   «extra_body.image is not a valid image base64» на agnes-хабах. Протокол

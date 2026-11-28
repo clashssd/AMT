@@ -34,7 +34,7 @@ from command_engine import REGISTRY as COMMAND_REGISTRY
 from logging_structured import logger as structured_logger
 from ai_engine import extensions as ext_loader
 from ai_engine.async_utils import run_com_sync
-from ai_engine.tool_registry import tool_registry, ToolRegistry, ToolDef, MAX_TOOL_ITERATIONS
+from ai_engine.tool_registry import tool_registry, ToolRegistry, ToolDef, MAX_TOOL_ITERATIONS, set_active_chat_media
 from ai_engine.mcp_manager import MCPManager, mcp_manager as _mcp_mgr_singleton, MCPServerConfig
 from ai_engine.coding_profile import resolve_chat_profile, ChatProfile
 from ai_engine.coding_tools import ProjectContext, CodingToolset
@@ -1792,6 +1792,11 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                 # headers so 429 key-rotation and proxy config stay consistent.
                 max_iter = profile.max_iterations or settings.effective_max_iterations
                 if settings.toolCalling and msg.get("tool_calls"):
+                    # Фиксируем активный чат-ключ как fallback для медиа-инструментов:
+                    # если у пользователя нет отдельных image/video/audio-ключей в
+                    # Настройках, медиа-генерация идёт тем же ключом, которым модель
+                    # уже успешно делает tool-calling (устраняет ложный no_key).
+                    set_active_chat_media(base_url, api_key, model)
                     for _iteration in range(max_iter):
                         # Append the assistant message (with its tool_calls) to context
                         assistant_msg = {"role": "assistant", "content": msg.get("content")}

@@ -141,6 +141,20 @@ def _files_dir() -> str:
     return os.environ.get("AMT_FILES_DIR", os.path.join(os.path.dirname(__file__), "..", "FILES_DIR"))
 
 
+# Активный чат-ключ (api_key/base_url/model, которым модель ШЛЁТ tool-calling).
+# Устанавливается main.py перед tool-loop (set_active_chat_media). Используется
+# как ПОСЛЕДНИЙ fallback медиа-инструментов, когда ни dedicated (imageKey и др.),
+# ни global (apiKey) ключ не задан. Это устраняет ложный no_key: модель уже
+# успешно работает с этим ключом, значит и генерация медиа может его использовать.
+_active_chat_media: dict = {"base": "", "key": "", "model": ""}
+
+
+def set_active_chat_media(base: str = "", key: str = "", model: str = "") -> None:
+    """Зафиксировать активный чат-ключ как fallback для медиа-инструментов."""
+    global _active_chat_media
+    _active_chat_media = {"base": base or "", "key": key or "", "model": model or ""}
+
+
 def _media_cfg(kind: str) -> dict:
     """Ключ/адрес/модель/прокси для kind из глобальных настроек (main.server_settings).
 
@@ -206,6 +220,35 @@ def _media_cfg(kind: str) -> dict:
                     model = model or getattr(_ss2, "model", "")
         except Exception:
             pass  # reload не обязан ломать вызов; остаётся no_key, как раньше
+
+    # Последний fallback: активный чат-ключ (которым модель уже успешно делает
+    # tool-calling). Если ни dedicated (imageKey/videoKey/audioKey), ни global
+    # (apiKey) не задан — используем ключ чата. Это устраняет ложный no_key,
+    # когда пользователь работает через мульти-ключ (keys.json), у которого
+    # image-ключ не вынесен отдельно.
+    #
+    # ВАЖНО про base: активный base чата ПРВОСТЕРЕСТВУЕТ generic baseUrl.
+    # baseUrl — это адрес LLM-чата, который не обязан поддерживать
+    # /images/generations; база чат-ключа (тот же провайдер, которым модель
+    # уже работает) скорее поддерживает image-генерацию. Поэтому, когда
+    # dedicated base (imageBaseUrl и др.) пуст, берём chat base.
+    if not (key or "").strip() and _active_chat_media.get("key"):
+        key = _active_chat_media["key"]
+        model = model or _active_chat_media.get("model", "")
+        # base: берём chat base, если dedicated base для данного kind не задан.
+        # Определяем, был ли у kind свой dedicated base (из ss), иначе — чат base.
+        _dedicated_base = ""
+        if ss is not None:
+            if kind == "image":
+                _dedicated_base = getattr(ss, "imageBaseUrl", "") or ""
+            elif kind == "video":
+                _dedicated_base = getattr(ss, "videoBaseUrl", "") or ""
+            elif kind == "audio":
+                _dedicated_base = getattr(ss, "audioBaseUrl", "") or ""
+            else:
+                _dedicated_base = ""
+        if not _dedicated_base.strip():
+            base = _active_chat_media.get("base", "") or base
 
     return {"base": base, "key": key, "model": model, "proxy": proxy}
 

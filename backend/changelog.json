@@ -1,8 +1,19 @@
 {
-  "version": "1.1.13",
+  "version": "1.1.14",
   "name": "AMT Chat",
   "latest_at": "2026-11-28",
   "releases": [
+    {
+      "version": "1.1.14",
+      "date": "2026-11-28",
+      "title": "Генерация картинок/видео/аудио: активный ключ чата как fallback для медиа-инструментов",
+      "changes": [
+        "Фикс no_key: generate_image/generate_video/generate_audio теперь подхватывают активный ключ и base_url чата (multi-key / session key_id), если в server_settings нет ded. imageKey/videoKey/audioKey. Ключ, которым уже работает LLM-чат, доступен медиа-инструментам tool-calling.",
+        "Дедичированные ключи (imageKey и т.п.) и base_url (imageBaseUrl и т.п.) имеют приоритет над чатовским fallback — переопределяют только при пустом дедичированном.",
+        "4 regression-теста (tests/test_media_active_key_fallback.py) — ordering-safe, проходят и в полном суите.",
+        "64 media/tool-calling теста зелёные; полный пайтест 635 passed."
+      ]
+    },
     {
       "version": "1.1.13",
       "date": "2026-11-28",

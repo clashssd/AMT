@@ -1,8 +1,17 @@
 {
-  "version": "1.1.8",
+  "version": "1.1.9",
   "name": "AMT Chat",
   "latest_at": "2026-11-28",
   "releases": [
+    {
+      "version": "1.1.9",
+      "date": "2026-11-28",
+      "title": "Image-to-image через tool-calling: чистый base64 референса, устранён 400-краш",
+      "changes": [
+        "Image-to-image (tool-calling): устранён 400-краш «extra_body.image must be a public http(s) URL or valid image base64». Модель в tool-calling режиме сама передаёт ref_image_b64, но присылала markdown-обёртку (![](...)) или обрезанный data-URI — media.generate_image_ref двойно оборачивал мусор. Новый помощник _clean_ref_base64 вычищает/валидирует base64 (из аргумента модели, из встроенного data-URI в сообщении, либо читает прикреплённое фото на диске) и подставляет чистый b64 перед вызовом; если чистых байтов нет — ref отключается, идёт обычная генерация.",
+        "Регрессия: 13 тестов tests/test_media_tool_registry.py (нормализация markdown-обёртки, bare data-URI, валидный b64, отклонение повреждённого, fallback в сообщение/файл)."
+      ]
+    },
     {
       "version": "1.1.8",
       "date": "2026-11-28",

@@ -20,6 +20,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
 import ai_engine.tool_registry as tool_registry  # noqa: E402
+import main as _main  # noqa: E402  (for _clean_ref_base64)
 
 
 def _fake_settings(**overrides):
@@ -167,3 +168,78 @@ def test_media_cfg_reloads_when_key_empty(monkeypatch):
         else:
             live.unlink(missing_ok=True)
         monkeypatch.delenv("AMT_SETTINGS_FILE", raising=False)
+
+
+# --- _clean_ref_base64 (tool-calling image-to-image) ---
+# Regression: the model passes ref_image_b64 as a markdown-wrapped/truncated
+# data URI, or leaves it empty; the provider then 400s "must be a public
+# http(s) URL or valid image base64". _clean_ref_base64 must return CLEAN
+# base64 (no ![](...) wrapper, no data: prefix) or fall back to the attached
+# image embedded in user_message / attachments.
+
+import base64 as _b64_test  # noqa: E402
+
+
+def _valid_png_b64():
+    """Minimal 1x1 transparent PNG, base64. Used to build data-URIs that a
+    real provider would accept."""
+    import struct
+    import zlib
+    sig = b"\x89PNG\r\n\x1a\n"
+    def chunk(typ, data):
+        c = struct.pack(">I", len(data)) + typ + data
+        c += struct.pack(">I", zlib.crc32(typ + data) & 0xffffffff)
+        return c
+    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+    raw = b"\x00\x00\x00\x00\x00"
+    idat = chunk(b"IDAT", zlib.compress(raw))
+    iend = chunk(b"IEND", b"")
+    return _b64_test.b64encode(sig + ihdr + idat + iend).decode("ascii")
+
+
+def test_clean_ref_normalizes_markdown_wrapper():
+    b64 = _valid_png_b64()
+    wrapped = f"![ref](data:image/png;base64,{b64})"
+    assert _main._clean_ref_base64(wrapped, "", None) == b64
+
+
+def test_clean_ref_normalizes_bare_data_uri():
+    b64 = _valid_png_b64()
+    assert _main._clean_ref_base64(f"data:image/png;base64,{b64}", "", None) == b64
+
+
+def test_clean_ref_passes_clean_b64_through():
+    b64 = _valid_png_b64()
+    assert _main._clean_ref_base64(b64, "", None) == b64
+
+
+def test_clean_ref_rejects_truncated_b64():
+    # Mangled base64 (non-alphabet chars / cut stream) must NOT be returned.
+    b64 = _valid_png_b64()
+    # Append junk chars that break the base64 alphabet → invalid.
+    mangled = b64 + "!!!"
+    # value-branch must reject it; with no embed/disk fallback, returns "".
+    assert _main._clean_ref_base64(mangled, "", None) == ""
+
+
+def test_clean_ref_falls_back_to_user_message_embed():
+    """Empty/invalid value, but user_message has an embedded attachment data-URL."""
+    b64 = _valid_png_b64()
+    user_message = f"измени шарф на зелёный\n![фото](data:image/png;base64,{b64})"
+    assert _main._clean_ref_base64("", user_message, None) == b64
+
+
+def test_clean_ref_falls_back_to_attachment_on_disk(monkeypatch, tmp_path):
+    """value empty + no embed in user_message → read first image/* attachment."""
+    b64 = _valid_png_b64()
+    raw = _b64_test.b64decode(b64)
+    p = tmp_path / "ref.png"
+    p.write_bytes(raw)
+    att = [{"path": str(p), "filename": "ref.png", "mime_type": "image/png"}]
+    out = _main._clean_ref_base64("", "", att)
+    assert out == b64
+
+
+def test_clean_ref_returns_empty_when_nothing_valid():
+    assert _main._clean_ref_base64("not-base64!!!", "no images here", None) == ""
+    assert _main._clean_ref_base64("", "no images here", None) == ""

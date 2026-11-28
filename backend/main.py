@@ -651,6 +651,78 @@ def _resolve_attachment_name(name: str) -> dict:
     return None
 
 
+def _clean_ref_base64(value, user_message: str, attachments: list | None) -> str:
+    """Вернуть ЧИСТЫЙ base64 референс-картинки для image-to-image (tool-calling).
+
+    Модель в tool-calling режиме сама передаёт ref_image_b64, но у неё нет
+    чистых б64-байтов — она либо кладёт обрезанный/mardown-обёрнутый
+    data-URI, либо оставляет пустым. Тогда провайдер отвечает 400
+    «must be a public http(s) URL or valid image base64». Поэтому:
+
+      1) если value содержит валидный б64 (после очистки от markdown/data-префикса) — вернуть его;
+      2) иначе извлечь первое чистое изображение из user_message (встроенный
+         data-URL вложения — те же б64, что модель уже видит как «прикреплённое фото»);
+      3) иначе прочитать с диска первое image/*-вложение из attachments.
+
+    Возвращает "" если ничего валидного нет (тогда generate_image_ref не нужен).
+    """
+    import re
+    import base64 as _b64
+
+    def _normalize(v: str) -> str:
+        """Убрать markdown-обёртку ![alt](...) и data-префикс; вернуть сам б64 или ''."""
+        if not isinstance(v, str):
+            return ""
+        v = v.strip()
+        # ![...](data:image/png;base64,XXX)  →  XXX
+        m = re.search(r'\(data:image/[\w+.-]+;base64,([A-Za-z0-9+/=\s]+)\)', v)
+        if m:
+            v = m.group(1)
+        # data:image/png;base64,XXX  →  XXX
+        m = re.match(r'^data:image/[\w+.-]+;base64,([A-Za-z0-9+/=\s]+)$', v)
+        if m:
+            v = m.group(1)
+        v = re.sub(r'\s+', '', v)
+        if not v:
+            return ""
+        # Валидный б64: длина кратна 4 после дополнения, алфавит допустим.
+        if not re.fullmatch(r'[A-Za-z0-9+/]+={0,2}', v):
+            return ""
+        try:
+            _b64.b64decode(v + "=" * (-len(v) % 4), validate=True)
+        except Exception:
+            return ""
+        return v
+
+    # 1) сам value, переданный моделью
+    n = _normalize(value)
+    if n:
+        return n
+
+    # 2) встроенные data-URL в user_message (те же фото, что модель видит)
+    for m in re.finditer(r'!\[[^\]]*\]\(data:image/([\w+.-]+);base64,([A-Za-z0-9+/=]+)\)', user_message or ""):
+        cand = m.group(2)
+        if _normalize(cand):
+            return cand
+
+    # 3) image/*-вложения на диске (из attachments)
+    if attachments:
+        for att in attachments:
+            if not isinstance(att, dict):
+                continue
+            mime = (att.get("mime_type") or "").lower()
+            if not mime.startswith("image/"):
+                continue
+            path = att.get("path", "")
+            try:
+                if path and os.path.isfile(path):
+                    with open(path, "rb") as fh:
+                        return _b64.b64encode(fh.read()).decode("ascii")
+            except Exception:
+                continue
+    return ""
+
+
 async def call_ai_api(user_message: str, history: list[Message], settings: Settings = None,
                       agent_id: str = "", extra_skills: list[str] = None,
                       core_agents: list[str] = None,
@@ -1733,7 +1805,19 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                                 tc_args = json.loads(tc["function"].get("arguments", "{}"))
                             except json.JSONDecodeError:
                                 tc_args = {}
-                            tool_events.append({"type": "tool_call_start", "tool": tc_name, "args": tc_args})
+                            # Image-to-image через tool-calling: у модели нет чистых
+                            # б64-байтов — она либо кладёт обрезанный/mardown-обёрнутый
+                            # data-URI, либо оставляет ref_image_b64 пустым. Тогда
+                            # провайдер отвечает 400 «must be a public http(s) URL or
+                            # valid image base64». Чистим/инжектим референс автоматически
+                            # (зеркалим авто-подстановку [[GEN]]).
+                            if tc_name == "generate_image":
+                                _clean = _clean_ref_base64(tc_args.get("ref_image_b64", ""), user_message, attachments)
+                                if _clean and _clean != tc_args.get("ref_image_b64"):
+                                    tc_args["ref_image_b64"] = _clean
+                                tool_events.append({"type": "tool_call_start", "tool": tc_name, "args": tc_args})
+                            else:
+                                tool_events.append({"type": "tool_call_start", "tool": tc_name, "args": tc_args})
 
                             try:
                                 tc_result = await request_tool_registry.execute(tc_name, tc_args)

@@ -399,3 +399,130 @@ def test_generate_image_ref_agnes_falls_back_to_extra_body(monkeypatch):
     assert any("/images/edits" in u for u in calls)
     assert any("/images/generations" in u for u in calls)
 
+
+
+def test_generate_image_ref_falls_back_to_text2img_when_provider_cannot_edit(monkeypatch):
+    """Provider-neutral: when image-to-image is impossible (no /images/edits AND
+    no agnes extra_body dialect — i.e. a plain OpenAI-compatible host whose edits
+    endpoint 400s), generate_image_ref must fall back to text-to-image and attach
+    a clear note, instead of returning the ref error. This is the honest fix for
+    a local-photo edit request on a provider that cannot do image-to-image."""
+    from ai_engine import media as _m
+
+    calls = []
+
+    class _Resp:
+        def __init__(self, sc, b64=""):
+            self.status_code = sc
+            self._b64 = b64
+        def json(self):
+            return {"data": [{"b64_json": self._b64, "url": ""}]}
+        @property
+        def text(self):
+            return "boom" if self.status_code >= 400 else ""
+
+    class _Client:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def post(self, url, headers=None, json=None, content=None):
+            calls.append(url)
+            if "/images/edits" in url:
+                # This provider does NOT support /images/edits -> 503.
+                return _Resp(503)
+            # text-to-image /images/generations succeeds.
+            return _Resp(200, "QUtFTVQ=")
+
+    monkeypatch.setattr(_m, "_client", lambda proxy="", timeout=60.0: _Client())
+    # Plain OpenAI-compatible host (NOT in provider hints) with a ref.
+    out = _m.generate_image_ref(
+        base_url="https://plain.example.com/v1",
+        api_key="k", model="m", prompt="a cat with an orange scarf",
+        size="512x512", ref_image_b64="QUtFTVQ=", proxy="")
+    assert out.get("ok") is True
+    assert any("/images/edits" in u for u in calls), "must attempt the ref path first"
+    assert any("/images/generations" in u for u in calls), "must fall back to text-to-image"
+    assert "note" in out and "not supported" in out["note"]
+
+
+def test_generate_video_standard_first_dialect_fallback(monkeypatch):
+    """Provider-neutral video: the standard OpenAI-compatible /v1/videos/text2video
+    is tried FIRST for all providers; the config-hinted provider dialect is only a
+    fallback. For a non-agnes provider that succeeds on standard, no dialect call
+    is made."""
+    from ai_engine import media as _m
+
+    calls = []
+
+    class _Resp:
+        def __init__(self, sc):
+            self.status_code = sc
+        def json(self):
+            return {"task_id": "t1"}
+        @property
+        def text(self):
+            return ""
+
+    class _Client:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def post(self, url, headers=None, json=None, content=None):
+            calls.append(url)
+            return _Resp(200)
+
+    monkeypatch.setattr(_m, "_client", lambda proxy="", timeout=60.0: _Client())
+    out = _m.generate_video(
+        base_url="https://plain.example.com/v1",
+        api_key="k", model="video-model", prompt="a sunset",
+        duration="5", aspect_ratio="16:9", proxy="")
+    assert out.get("ok") is True
+    # Standard endpoint tried first (and only).
+    assert any("/v1/videos/text2video" in u for u in calls)
+    assert not any(u.rstrip("/").endswith("/videos") and "text2video" not in u for u in calls), \
+        f"non-agnes provider must not hit the dialect /videos: {calls}"
+
+
+def test_generate_video_example_uses_manual_multipart_no_urllib3(monkeypatch):
+    """generate_video_example must assemble multipart by hand (no urllib3 import),
+    so it does not crash at runtime in an env where urllib3 is not installed."""
+    import ai_engine.media as _mod
+    import importlib
+    from ai_engine import media as _m
+
+    # urllib3 must NOT be referenced as a real import in media.py anymore.
+    src = open(_mod.__file__, encoding="utf-8").read()
+    assert "from urllib3.filepost import encode_multipart_formdata" not in src
+    assert "import urllib3" not in src
+
+    calls = []
+
+    class _Resp:
+        status_code = 200
+        def json(self):
+            return {"data": {"task_id": "t1"}}
+        @property
+        def text(self):
+            return ""
+
+    class _Client:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def post(self, url, headers=None, json=None, content=None):
+            calls.append({"url": url, "content": content,
+                          "ct": (headers or {}).get("Content-Type", "")})
+            return _Resp()
+
+    monkeypatch.setattr(_m, "_client", lambda proxy="", timeout=60.0: _Client())
+    out = _m.generate_video_example(
+        base_url="https://plain.example.com/v1",
+        api_key="k", model="video-model", prompt="extend this clip",
+        example_b64="QUtFTVQ=", duration="5", aspect_ratio="16:9", proxy="")
+    assert out.get("ok") is True
+    assert len(calls) == 1
+    assert isinstance(calls[0]["content"], (bytes, bytearray))
+    assert "multipart/form-data; boundary=" in calls[0]["ct"]

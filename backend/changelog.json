@@ -1,8 +1,18 @@
 {
-  "version": "1.1.12",
+  "version": "1.1.13",
   "name": "AMT Chat",
   "latest_at": "2026-11-28",
   "releases": [
+    {
+      "version": "1.1.13",
+      "date": "2026-11-28",
+      "title": "Медиа: provider-neutral второй проход — конфиг-хинты, text2img-fallback, видео standard-first, без urllib3",
+      "changes": [
+        "Медиа: подсказки провайдеров (host-хинты) теперь читаются из конфига (env AMT_PROVIDER_HINTS / provider_hints.json / встроенный дефолт только для совместимости) — код не хардкодит хосты; новый провайдер подключается конфигом.",
+        "Медиа: image-to-image — честный fallback: если провайдер не умеет редактировать по локальному референсу (нет /images/edits или extra_body требует публичный URL), генерируется картинка по тексту с явным note, а не падает 400/500.",
+        "Медиа: генерация видео — provider-neutral (standard-first): сначала /v1/videos/text2video для любого провайдера, диалект провайдера (из конфига) — только fallback; multipart для video2video собирается без urllib3."
+      ]
+    },
     {
       "version": "1.1.12",
       "date": "2026-11-28",

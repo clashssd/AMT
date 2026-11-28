@@ -66,9 +66,36 @@ PROVIDERS = {
 # Автоопределение провайдера по base_url. Оставляем пустым по умолчанию: приложение
 # не «узнаёт» конкретные хосты провайдеров, если пользователь не указал base_url.
 # (Подключите адрес через Настройки/Хранилище — автоопределение заработает по нему.)
-_BASE_PROVIDER_HINTS = {
-    "agnes": "apihub.agnes-ai.com",
-}
+def _load_provider_hints() -> dict:
+    # Provider-neutral: auto-detect provider dialects from CONFIG, not from code.
+    # Order (first hit wins):
+    #   1) env AMT_PROVIDER_HINTS (JSON string)
+    #   2) provider_hints.json next to this module or its parent dir
+    #   3) built-in default (compatibility only).
+    # New providers are added via config, never by editing this source.
+    import json as _json, os as _os
+    raw = _os.environ.get("AMT_PROVIDER_HINTS", "").strip()
+    if raw:
+        try:
+            v = _json.loads(raw)
+            if isinstance(v, dict):
+                return v
+        except Exception:
+            pass
+    _here = _os.path.dirname(_os.path.abspath(__file__))
+    for cand in (_here, _os.path.dirname(_here)):
+        p = _os.path.join(cand, "provider_hints.json")
+        if _os.path.exists(p):
+            try:
+                with open(p, encoding="utf-8") as _fh:
+                    v = _json.load(_fh)
+                if isinstance(v, dict):
+                    return v
+            except Exception:
+                pass
+    return {"agnes": "apihub.agnes-ai.com"}
+
+_BASE_PROVIDER_HINTS = _load_provider_hints()
 # Provider-neutral: запасные имена моделей, используемые ТОЛЬКО когда пользователь
 # не указал model. По умолчанию ПУСТЫЕ — приложение не «угадывает» модель провайдера.
 # При желании их можно задать через env AMT_DEFAULT_MEDIA_MODELS (JSON: {"image":"","audio":"","video":""}).
@@ -83,7 +110,9 @@ _FB_AUDIO_MODEL = _FALLBACK_MODELS.get("audio", "")
 _FB_VIDEO_MODEL = _FALLBACK_MODELS.get("video", "")
 # ElevenLabs: отдельный протокол (заголовок xi-api-key, path /v1/text-to-speech/{voice},
 # body model_id, ответ voices[]). Автоопределение по base_url.
-_ELEVENLABS_HOST = "elevenlabs.io"
+_ELEVENLABS_HOST = (os.environ.get("AMT_ELEVENLABS_HOST", "") or "").strip()
+if not _ELEVENLABS_HOST:
+    _ELEVENLABS_HOST = _BASE_PROVIDER_HINTS.get("elevenlabs", "") or "elevenlabs.io"
 
 # ---------------------------------------------------------------------------
 # Универсальный фасад (generate_media): дефолтные константы + helper'ы.
@@ -818,7 +847,20 @@ def generate_image_ref(base_url: str = "", api_key: str = "", model: str = "",
             if ref_image_b64:
                 raw = base64.b64decode(ref_image_b64)
                 data_uri = f"data:image/png;base64,{ref_image_b64}"
-                return _run_ref(c, raw, data_uri)
+                out = _run_ref(c, raw, data_uri)
+                if out.get("ok"):
+                    return out
+                # Provider-neutral fallback: this provider cannot image-edit from a local
+                # ref (no /images/edits, or extra_body needs a public URL). Fall back to
+                # text-to-image so the user still gets a usable result, with a clear note.
+                out2 = _try_text2img(c)
+                if out2.get("ok"):
+                    out2["note"] = (
+                        u"image-to-image not supported by this provider \u2014"
+                        u" generated from the text prompt instead"
+                    )
+                    return out2
+                return out
             return _try_text2img(c)
     except Exception as e:
         return {"ok": False, "code": "error", "error": str(e)[:200]}
@@ -841,22 +883,23 @@ def generate_video(base_url: str = "", api_key: str = "", model: str = "", promp
         _agnes_base = f"{_agnes_base}/v1"
     try:
         with _client(proxy, timeout=300.0) as c:
-            if is_agnes:
-                # Agnes (OpenAI Videos): POST /v1/videos, нужен mode. seconds 4-12. size 720P/1080P.
-                # Модель должна быть видеомоделью Agnes — чат-модель (agnes-3.0-flash) отклоняется.
+            # Provider-neutral: standard OpenAI-compatible /v1/videos/text2video first.
+            # The provider-dialect path (config-hinted /videos with mode/seconds/size) is
+            # only a FALLBACK when the standard endpoint 4xx/5xx and the provider is
+            # auto-detected from config hints.
+            r = c.post(f"{p['api_base']}/v1/videos/text2video",
+                       headers={"Authorization": f"Bearer {p['key']}"},
+                       json=_gen_video_body(prompt, duration, aspect_ratio, model, extra))
+            if r.status_code >= 400 and is_agnes:
                 _vid_model = model if "video" in (model or "").lower() else (_FB_VIDEO_MODEL or model or "video")
                 _sec = str(duration or "5")
                 body = {**{"model": _vid_model, "prompt": prompt,
                             "mode": "text", "seconds": _sec,
                             "size": "720P", "aspect_ratio": aspect_ratio, "n": 1},
-                        **({} if not extra else extra)}
+                         **({} if not extra else extra)}
                 r = c.post(f"{_agnes_base}/videos",
                            headers={"Authorization": f"Bearer {p['key']}", "Content-Type": "application/json"},
                            json=body)
-            else:
-                r = c.post(f"{p['api_base']}/v1/videos/text2video",
-                           headers={"Authorization": f"Bearer {p['key']}"},
-                           json=_gen_video_body(prompt, duration, aspect_ratio, model, extra))
         if r.status_code in (200, 201, 202):
             d = r.json()
             # Agnes: video_id; OpenAI-style: task_id / data[]
@@ -885,14 +928,24 @@ def generate_video_example(base_url: str = "", api_key: str = "", model: str = "
         return _nb
     try:
         import base64 as _b64
-        import urllib3
-        from urllib3.filepost import encode_multipart_formdata
         raw = _b64.b64decode(example_b64)
-        files = {"video": ("example.mp4", raw, "video/mp4")}
         fields = {"prompt": prompt, "duration": duration, "aspect_ratio": aspect_ratio}
         if extra:
             fields.update({k: str(v) for k, v in extra.items()})
-        body, content_type = encode_multipart_formdata({**files, **{k: (k, v) for k, v in fields.items()}})
+        # Multipart assembled manually (no urllib3 - not in dependencies).
+        boundary = "----amtmedia" + _b64.b32encode(os.urandom(8)).decode().lower()
+        parts = []
+        for k, v in fields.items():
+            parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}')
+        parts.append(
+            f'--{boundary}\r\n'
+            f'Content-Disposition: form-data; name="video[]"; filename="example.mp4"\r\n'
+            f'Content-Type: video/mp4\r\n\r\n'
+        )
+        head = "".join(parts).encode("utf-8")
+        tail = f"\r\n--{boundary}--\r\n".encode("utf-8")
+        body = head + raw + tail
+        content_type = f"multipart/form-data; boundary={boundary}"
         with _client(proxy, timeout=300.0) as c:
             r = c.post(f"{p['api_base']}/v1/videos/video2video",
                        headers={"Authorization": f"Bearer {p['key']}", "Content-Type": content_type},

@@ -789,10 +789,15 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                 # уже ограничены по байтам внутри parse_file_for_ai
                 # (изображения 20 MB, аудио 50 MB, видео 200 MB), поэтому
                 # текстовую обрезку для них пропускаем.
+                # PPTX тоже пропускаем: parse_file_for_ai теперь встраивает
+                # base64-кадры слайдов (image/png data-URL) — обрезка на
+                # 120_000 сломила бы эту регулярку, как для картинок.
                 is_media = (
                     mime.startswith("image/")
                     or mime.startswith("audio/")
                     or mime.startswith("video/")
+                    or "presentationml" in mime
+                    or fname.lower().endswith((".pptx", ".ppt"))
                 )
                 if not is_media and len(parsed) > 120_000:
                     parsed = parsed[:120_000] + "\n… [файл обрезан]"
@@ -6636,10 +6641,15 @@ def parse_file_for_ai(file_path: str, mime_type: str) -> str:
                 return "\n".join(paras) if paras else f"[Пустой DOCX: {name}]"
             except Exception:
                 return f"[DOCX: {name} — не удалось разобрать содержимое]"
-        # --- PPTX: читать через python-pptx → текст слайдов ---
+        # --- PPTX: python-pptx → текст слайдов + рендер слайдов в картинки ---
+        # Текст всегда извлекается. Дополнительно, если есть движок
+        # (PowerPoint COM / LibreOffice), каждый слайд растеризуется в PNG и
+        # встраивается как base64 data-URL — модель видит не только текст, а и
+        # визуально макет/картинки слайда. Если движка нет — только текст.
         elif mime_type in (
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         ) or name.lower().endswith((".pptx", ".ppt")):
+            parts: list[str] = []
             try:
                 from pptx import Presentation
                 prs = Presentation(file_path)
@@ -6654,9 +6664,24 @@ def parse_file_for_ai(file_path: str, mime_type: str) -> str:
                                     texts.append(t)
                     if texts:
                         slides_text.append(f"[Слайд {i}]\n" + "\n".join(texts))
-                return "\n\n".join(slides_text) if slides_text else f"[Пустой PPTX: {name}]"
+                if slides_text:
+                    parts.append("\n\n".join(slides_text))
             except Exception:
-                return f"[PPTX: {name} — не удалось разобрать содержимое]"
+                parts.append(f"[PPTX: {name} — не удалось разобрать текст]")
+            # Рендер слайдов в картинки (COM → LibreOffice → fallback).
+            try:
+                import media_understanding
+                pngs = media_understanding.render_pptx_slides(file_path)
+                if pngs:
+                    parts.append(f"[Кадры слайдов из презентации: {name}]")
+                    for i, png in enumerate(pngs, 1):
+                        b64 = base64.b64encode(png).decode("ascii")
+                        parts.append(f"![slide_{i}](data:image/png;base64,{b64})")
+            except Exception as _pptx_render_exc:
+                logger.warning("PPTX slide render skipped: %s", str(_pptx_render_exc)[:150])
+            if parts:
+                return "\n\n".join(parts)
+            return f"[Пустой PPTX: {name}]"
         # --- Медиа: изображения встраиваются как base64, аудио/видео — через STT + keyframes ---
         elif mime_type.startswith("image/"):
             # Встраиваем изображение как base64 data-URL, чтобы LLM видела содержимое

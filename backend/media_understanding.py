@@ -442,3 +442,116 @@ def _video_md(name: str, keyframes: list[bytes], transcript: str) -> str:
         parts.append(f"[Видео: {name} — ни кадры, ни звук не удалось извлечь]")
 
     return "\n\n".join(parts)
+
+
+# ===== PPTX slide rendering =====
+# python-pptx can only read slide XML (text) — it has no rendering engine.
+# To let the vision model SEE slides (layout, images on slides) we rasterize
+# each slide to PNG. Two engines, in order of preference:
+#   1. PowerPoint COM automation (Windows, if Office is installed) — renders
+#      ALL slides reliably headless via pres.Slides(i).Export(path, 'PNG').
+#   2. LibreOffice headless (soffice/libreoffice on PATH or in data dir) —
+#      renders slide 1 via --convert-to png; best-effort for the rest.
+# If neither engine is available the PPTX branch falls back to text-only.
+
+PPTX_MAX_RENDER = 200   # defensive cap on slide images (avoid context blowup)
+PPTX_PNG_MAX_BYTES = 8 * 1024 * 1024  # cap any single rendered slide
+
+
+def _find_libreoffice() -> Optional[str]:
+    """Locate a LibreOffice headless binary, or None."""
+    found = shutil.which("soffice") or shutil.which("libreoffice")
+    if found:
+        return found
+    # data dir layout (mirrors the ffmpeg auto-download dir)
+    data_dir = os.environ.get("AMT_DATA_DIR", "")
+    if data_dir:
+        for cand in (os.path.join(data_dir, "libreoffice", "program", "soffice.exe"),
+                     os.path.join(data_dir, "libreoffice", "program", "soffice")):
+            if os.path.isfile(cand):
+                return cand
+    return None
+
+
+def _render_pptx_com(pptx_path: str, tmp_dir: str, slide_count: int) -> list[bytes]:
+    """Render every slide to PNG via PowerPoint COM. Returns list of PNG bytes."""
+    import pythoncom
+    import win32com.client as wc
+    pythoncom.CoInitialize()
+    app = wc.Dispatch("PowerPoint.Application")
+    out: list[bytes] = []
+    try:
+        pres = app.Presentations.Open(pptx_path, ReadOnly=True, WithWindow=False)
+        for i in range(1, slide_count + 1):
+            png = os.path.join(tmp_dir, f"slide_{i:03d}.png")
+            pres.Slides(i).Export(png, "PNG")
+            if os.path.isfile(png):
+                with open(png, "rb") as f:
+                    data = f.read()
+                if len(data) <= PPTX_PNG_MAX_BYTES:
+                    out.append(data)
+        pres.Close()
+    finally:
+        try:
+            app.Quit()
+        except Exception:
+            pass
+        pythoncom.CoUninitialize()
+    return out
+
+
+def _render_pptx_libreoffice(pptx_path: str, tmp_dir: str, soffice: str) -> list[bytes]:
+    """Best-effort LibreOffice headless rasterize (slide 1 reliably)."""
+    out: list[bytes] = []
+    try:
+        subprocess.run(
+            [soffice, "--headless", "--convert-to", "png",
+             "--outdir", tmp_dir, pptx_path],
+            timeout=180, capture_output=True,
+        )
+        base = os.path.splitext(os.path.basename(pptx_path))[0]
+        p1 = os.path.join(tmp_dir, base + ".png")
+        if os.path.isfile(p1):
+            with open(p1, "rb") as f:
+                data = f.read()
+            if len(data) <= PPTX_PNG_MAX_BYTES:
+                out.append(data)
+    except Exception as e:
+        log.warning("PPTX LibreOffice render failed: %s", str(e)[:150])
+    return out
+
+
+def render_pptx_slides(file_path: str, max_slides: int = PPTX_MAX_RENDER) -> list[bytes]:
+    """Rasterize PPTX slides to PNG (base64-ready bytes).
+
+    Returns a (possibly empty) list of PNG bytes, one per slide, in slide
+    order. Empty list means no renderer was available — caller falls back
+    to text-only. Exposed for unit testing.
+    """
+    try:
+        from pptx import Presentation
+        prs = Presentation(file_path)
+        slide_count = min(len(prs.slides._sldIdLst), max_slides)
+    except Exception as e:
+        log.warning("PPTX render: could not open %s: %s", os.path.basename(file_path), str(e)[:120])
+        return []
+
+    if slide_count == 0:
+        return []
+
+    with tempfile.TemporaryDirectory(prefix="amt_pptx_") as tmp_dir:
+        # Engine 1: PowerPoint COM (Windows) — renders all slides.
+        if platform.system() == "Windows":
+            try:
+                import win32com.client  # noqa: F401
+                data = _render_pptx_com(file_path, tmp_dir, slide_count)
+                if data:
+                    return data
+            except Exception as e:
+                log.warning("PPTX COM render failed (%s) — trying LibreOffice", str(e)[:120])
+        # Engine 2: LibreOffice headless — best-effort.
+        soffice = _find_libreoffice()
+        if soffice:
+            return _render_pptx_libreoffice(file_path, tmp_dir, soffice)
+
+    return []

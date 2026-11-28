@@ -1957,9 +1957,13 @@ async function openChat(chat) {
 }
 
 // ===== Chat actions =====
-async function uploadAttachments() {
+async function uploadAttachments(items) {
+    // По умолчанию — глобальный attachedFiles, но вызывающая сторона может
+    // передать свой срез (например, уже отобранный _filesForThisMessage),
+    // если глобальный массив к моменту загрузки очищен.
+    const list = Array.isArray(items) ? items : attachedFiles;
     const results = [];
-    for (const item of attachedFiles) {
+    for (const item of list) {
         try {
             const b64 = await readFileAsBase64(item.file);
             const mime = (item.type && item.type !== 'application/octet-stream')
@@ -1976,8 +1980,8 @@ async function uploadAttachments() {
             }
         } catch { /* пропускаем при ошибке */ }
     }
-    // Освобождаем objectURL для картинок
-    attachedFiles.forEach(f => { if (f.thumb) URL.revokeObjectURL(f.thumb); });
+    // Освобождаем objectURL для картинок (только для тех, что реально обработали)
+    list.forEach(f => { if (f.thumb) URL.revokeObjectURL(f.thumb); });
     return results;
 }
 
@@ -2148,7 +2152,10 @@ async function sendMessage() {
 
     // Загружаем файлы на бэкенд (если е��ть)
     if (hasFiles) {
-        attachmentsPayload = await uploadAttachments();
+        // Глобальный attachedFiles уже очищен выше (L2126), поэтому
+        // передаём отобранный срез _filesForThisMessage, иначе файлов на
+        // бэкенд не загрузится и ИИ не увидит вложения.
+        attachmentsPayload = await uploadAttachments(_filesForThisMessage);
     }
 
     // Персистим точные dict-приложения {path, filename, mime_type} на сообщении,

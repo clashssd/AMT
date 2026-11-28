@@ -9,7 +9,21 @@
 
 ---
 
-## 1.1.14 — текущий (2026-11-28)
+## 1.1.15 — текущий (2026-11-28)
+
+- Медиа (tool-calling): устранён ложный 400 «Model agnes-3.0-flash is a chat
+  model. Use /v1/chat/completions». Когда активный чат-ключ (из 1.1.14)
+  использовался как fallback для `generate_image`/`video`/`audio`, LLM-чат-модель
+  ошибочно передавалась в `/images/generations` как медиа-модель и провайдер
+  её отклонял. Теперь чат-модель НЕ наследуется медиа-инструментами: медиа-модель
+  остаётся dedicated (imageModel/videoModel/audioModel) или global (model), либо
+  пустой — тогда провайдер сам выберет дефолт.
+- Fallback chat base + chat key (no_key-фикс из 1.1.14) сохранён — только
+  chat-модель отключена от медиа-слоя.
+- 2 новых regression-теста в tests/test_media_active_key_fallback.py
+  (чат-модель не доходит до media-слоя; dedicated imageModel доходит).
+
+## 1.1.14 — (2026-11-28)
 
 - Медиа (tool-calling): устранён ложный `no_key` при генерации картинок/видео/
   голоса, когда пользователь работает через мульти-ключ (keys.json) или

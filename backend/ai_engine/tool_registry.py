@@ -234,7 +234,13 @@ def _media_cfg(kind: str) -> dict:
     # dedicated base (imageBaseUrl и др.) пуст, берём chat base.
     if not (key or "").strip() and _active_chat_media.get("key"):
         key = _active_chat_media["key"]
-        model = model or _active_chat_media.get("model", "")
+        # ВАЖНО: НЕ наследуем chat-model. _active_chat_media["model"] — это модель
+        # LLM-чата (например agnes-3.0-flash), а НЕ медиа-модель. Если отправить
+        # её в /images/generations как field "model", провайдер ответит 400
+        # "Model X is a chat model. Use /v1/chat/completions" (то есть ровно тот
+        # баг, который мы чиним). Медиа-модель остаётся тем, что уже было в cfg
+        # (dedicated imageModel/videoModel/audioModel или global model), либо
+        # пустой — тогда media-слой подставит собственный _FB_* default.
         # base: берём chat base, если dedicated base для данного kind не задан.
         # Определяем, был ли у kind свой dedicated base (из ss), иначе — чат base.
         _dedicated_base = ""
@@ -263,10 +269,10 @@ async def _handle_generate_image(prompt: str = "", size: str = "1:1", model: str
     from ai_engine import media
     cfg = _media_cfg("image")
     if ref_image_b64:
-        result = media.generate_image_ref(cfg["base"], cfg["key"], model or cfg["model"],
+        result = media.generate_image_ref(cfg["base"], cfg["key"], (model or cfg["model"] or "").strip(),
                                           prompt, size or "1024x1024", ref_image_b64, cfg["proxy"])
     else:
-        result = media.generate_image(cfg["base"], cfg["key"], model or cfg["model"],
+        result = media.generate_image(cfg["base"], cfg["key"], (model or cfg["model"] or "").strip(),
                                       prompt, size or "1024x1024", cfg["proxy"])
     return json.dumps(result, ensure_ascii=False)
 
@@ -277,7 +283,7 @@ async def _handle_generate_video(prompt: str = "", aspect_ratio: str = "9:16", d
                            "error": "Нужен текстовый prompt для генерации видео."}, ensure_ascii=False)
     from ai_engine import media
     cfg = _media_cfg("video")
-    result = media.generate_video(cfg["base"], cfg["key"], model or cfg["model"],
+    result = media.generate_video(cfg["base"], cfg["key"], (model or cfg["model"] or "").strip(),
                                   prompt, str(duration), aspect_ratio, cfg["proxy"])
     return json.dumps(result, ensure_ascii=False)
 
@@ -288,7 +294,7 @@ async def _handle_generate_audio(text: str = "", voice_id: str = "", model: str 
                            "error": "Нужен текст для синтеза/распознавания голоса."}, ensure_ascii=False)
     from ai_engine import media
     cfg = _media_cfg("audio")
-    result = media.generate_audio(cfg["base"], cfg["key"], model or cfg["model"],
+    result = media.generate_audio(cfg["base"], cfg["key"], (model or cfg["model"] or "").strip(),
                                   text, voice_id, cfg["proxy"])
     return json.dumps(result, ensure_ascii=False)
 

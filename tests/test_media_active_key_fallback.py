@@ -54,8 +54,10 @@ def test_active_chat_key_is_media_fallback(tmp_backend, monkeypatch):
     assert cfg["key"] == "sk-live-multi-key"
     # No dedicated image base -> chat base wins over the generic chat baseUrl.
     assert cfg["base"].startswith("https://agnesapi.example")
-    # No global image model or global model -> chat model is the fallback.
-    assert cfg["model"] == "agnes-3.0"
+    # The chat MODEL must NOT leak into the media model: it's the LLM chat model,
+    # not an image model. Sending it to /images/generations yields HTTP 400
+    # ("Model agnes-3.0-flash is a chat model. Use /v1/chat/completions").
+    assert cfg["model"] == "", "chat model must not be inherited as the media model"
 
 
 def test_dedicated_image_key_wins_over_chat_key(tmp_backend, monkeypatch):
@@ -93,3 +95,38 @@ def test_chat_key_fallback_does_not_overwrite_explicit_base(tmp_backend, monkeyp
     assert cfg["key"] == "sk-chat"
     # Video's own dedicated base must be preserved, not clobbered by the chat base.
     assert cfg["base"] == "https://video.example"
+
+
+def test_chat_model_never_reaches_media_layer(tmp_backend, monkeypatch):
+    """Regression: the LLM chat model (e.g. agnes-3.0-flash) must never be passed
+    to the media handlers as the media model — it would trigger HTTP 400.
+
+    With only the active chat key present and no image model configured anywhere,
+    cfg["model"] stays empty so the media layer falls back to its own default
+    (_FB_IMAGE_MODEL / env) or omits the model field and lets the provider choose.
+    """
+    import main
+    from ai_engine.tool_registry import _media_cfg, set_active_chat_media
+
+    _clean_settings(monkeypatch)
+    set_active_chat_media("https://provider.example/v1", "sk-chat", "agnes-3.0-flash")
+    cfg = _media_cfg("image")
+    assert cfg["key"] == "sk-chat"
+    assert cfg["base"].startswith("https://provider.example")
+    # The chat model "agnes-3.0-flash" must NOT appear as the media model.
+    assert cfg["model"] != "agnes-3.0-flash"
+    assert cfg["model"] == ""
+
+
+def test_dedicated_image_model_reaches_media_layer(tmp_backend, monkeypatch):
+    """A real imageModel in settings DOES reach the media layer (only the chat
+    model is excluded)."""
+    import main
+    from ai_engine.tool_registry import _media_cfg, set_active_chat_media
+
+    _clean_settings(monkeypatch, imageModel="gpt-image-1")
+    set_active_chat_media("https://provider.example/v1", "sk-chat", "agnes-3.0-flash")
+    cfg = _media_cfg("image")
+    assert cfg["key"] == "sk-chat"
+    assert cfg["model"] == "gpt-image-1"
+

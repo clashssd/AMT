@@ -1,8 +1,18 @@
 {
-  "version": "1.1.14",
+  "version": "1.1.15",
   "name": "AMT Chat",
   "latest_at": "2026-11-28",
   "releases": [
+    {
+      "version": "1.1.15",
+      "date": "2026-11-28",
+      "title": "Генерация медиа: чат-модель не попадает в медиа-инструменты (фикс 400 «is a chat model»)",
+      "changes": [
+        "Медиа (tool-calling): устранён ложный 400 \"Model X is a chat model. Use /v1/chat/completions\". Когда активный чат-ключ использовался как fallback для generate_image/video/audio, LLM-чат-модель (например agnes-3.0-flash) ошибочно передавалась в /images/generations как медиа-модель. Теперь чат-модель НЕ наследуется — медиа-модель остаётся dedicated (imageModel/videoModel/audioModel) или global (model), либо пустой (провайдер выберет дефолт).",
+        "Ключ/адрес чата как fallback для медиа (no_key-фикс из 1.1.14) сохранён: chat base + chat key по-прежнему подхватываются, только chat-модель отключена от медиа-слоя.",
+        "2 новых regression-теста (tests/test_media_active_key_fallback.py): чат-модель не доходит до media-слоя; dedicated imageModel доходит. 8 медиа-тестов зелёные."
+      ]
+    },
     {
       "version": "1.1.14",
       "date": "2026-11-28",

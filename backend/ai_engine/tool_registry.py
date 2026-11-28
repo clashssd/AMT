@@ -140,6 +140,37 @@ def _media_cfg(kind: str) -> dict:
             base = getattr(ss, "baseUrl", "")
             key = getattr(ss, "apiKey", "")
             model = getattr(ss, "model", "")
+
+    # Анти-«no_key»: если ключ пуст, возможно пользователь ввёл/сохранил его в UI,
+    # но серверный процесс его ещё не увидел (load_persisted_settings() выполняется
+    # один раз при импорте). Перечитываем сохранённые настройки с диска — только
+    # когда ключ пуст, чтобы НЕ затирать актуальный в-памяти ключ сессии.
+    if not (key or "").strip():
+        try:
+            import main as _main
+            _main.load_persisted_settings()
+            _ss2 = _main.server_settings
+            if _ss2 is not None:
+                if kind == "image":
+                    key = getattr(_ss2, "imageKey", "") or getattr(_ss2, "apiKey", "")
+                    base = base or getattr(_ss2, "imageBaseUrl", "")
+                    model = model or getattr(_ss2, "imageModel", "")
+                elif kind == "video":
+                    key = getattr(_ss2, "videoKey", "") or getattr(_ss2, "apiKey", "")
+                    base = base or getattr(_ss2, "videoBaseUrl", "")
+                    model = model or getattr(_ss2, "videoModel", "")
+                elif kind == "audio":
+                    key = getattr(_ss2, "audioKey", "") or getattr(_ss2, "apiKey", "")
+                    _stt = (getattr(_ss2, "sttModel", "") or "").strip()
+                    model = model or (_stt or getattr(_ss2, "audioModel", "") or getattr(_ss2, "model", ""))
+                    base = base or getattr(_ss2, "audioBaseUrl", "")
+                else:
+                    key = key or getattr(_ss2, "apiKey", "")
+                    base = base or getattr(_ss2, "baseUrl", "")
+                    model = model or getattr(_ss2, "model", "")
+        except Exception:
+            pass  # reload не обязан ломать вызов; остаётся no_key, как раньше
+
     return {"base": base, "key": key, "model": model, "proxy": proxy}
 
 

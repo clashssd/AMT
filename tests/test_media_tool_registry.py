@@ -11,6 +11,7 @@ Fix: handlers resolve {base,key,model,proxy} from main.server_settings via
 `base_url` received by the underlying media function is a `str`.
 """
 import asyncio
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -112,3 +113,57 @@ def test_generate_image_ref_passes_string_base_url_and_ref(monkeypatch):
     json.loads(out)
     assert isinstance(captured["base_url"], str)
     assert captured["ref"] == "REFDATA"
+
+
+def test_media_cfg_reloads_when_key_empty(monkeypatch):
+    """Anti-no_key: when the in-memory key is empty, _media_cfg re-reads persisted
+    settings from disk so a key saved mid-session works without a restart."""
+    import ai_engine.media as real_media
+    # Persist a file that HAS the image key.
+    live = Path(__file__).parent.parent / "backend" / "settings.json"
+    original = live.read_text(encoding="utf-8") if live.exists() else None
+    try:
+        live.write_text(
+            json.dumps({"baseUrl": "https://h/v1", "apiKey": "sk-global",
+                        "model": "m", "imageKey": "sk-persisted-img",
+                        "imageBaseUrl": "https://h/v1/images/generations",
+                        "imageModel": "img-2"}),
+            encoding="utf-8")
+        # In-memory server_settings has an EMPTY imageKey (and empty global apiKey
+        # so the first pass resolves key="" and triggers the reload branch).
+        monkeypatch.setenv("AMT_SETTINGS_FILE", str(live))
+        main_mod = mock.MagicMock()
+        main_mod.server_settings = SimpleNamespace(
+            baseUrl="", apiKey="", model="", proxyUrl="", httpsProxy="",
+            imageKey="", imageBaseUrl="", imageModel="",
+            videoKey="", videoBaseUrl="", videoModel="",
+            audioKey="", audioBaseUrl="", audioModel="", sttModel="",
+        )
+        # load_persisted_settings re-reads the file into a fresh object with the key.
+        def _fake_load():
+            main_mod.server_settings = SimpleNamespace(
+                baseUrl="", apiKey="sk-global-reloaded", model="m",
+                proxyUrl="", httpsProxy="",
+                imageKey="sk-persisted-img", imageBaseUrl="https://h/v1/images/generations",
+                imageModel="img-2",
+                videoKey="", videoBaseUrl="", videoModel="",
+                audioKey="", audioBaseUrl="", audioModel="", sttModel="",
+            )
+        main_mod.load_persisted_settings = _fake_load
+        calls = {"reloaded": False}
+        _orig_fake = _fake_load
+        def _fake_load_tracking(*a, **k):
+            calls["reloaded"] = True
+            return _orig_fake(*a, **k)
+        main_mod.load_persisted_settings = _fake_load_tracking
+        with mock.patch.dict("sys.modules", {"main": main_mod}):
+            cfg = tool_registry._media_cfg("image")
+        # Reload pulled the persisted key in even though in-memory was empty.
+        assert cfg["key"] == "sk-persisted-img"
+        assert calls["reloaded"] is True, "expected load_persisted_settings to be invoked on empty key"
+    finally:
+        if original is not None:
+            live.write_text(original, encoding="utf-8")
+        else:
+            live.unlink(missing_ok=True)
+        monkeypatch.delenv("AMT_SETTINGS_FILE", raising=False)

@@ -1057,9 +1057,14 @@ async function regenerateMessage(idx) {
     }
     if (userIdx < 0) { flashStatus('Не найдено сообщение для перегенерации'); return; }
     const userText = chat.messages[userIdx].content;
-    const attachments = chat.messages[userIdx].files || [];
+    const um = chat.messages[userIdx];
+    // _attPaths — точные dict-приложения {path, filename, mime_type}, сохранённые
+    // при отправке. Для старых сообщений (без _attPaths) отдаём «голые» имена —
+    // бэкенд теперь резолвит их в FILES_DIR и не падает на валидации.
+    const attDicts = (um._attPaths && um._attPaths.length) ? um._attPaths : (um.files || []);
     // Отмечаем ответ «в работе»
     const target = chat.messages[idx];
+    const prevContent = target.content;
     target.content = '';
     target.pending = true;
     renderMessages(chat);
@@ -1070,9 +1075,9 @@ async function regenerateMessage(idx) {
     try {
         const historyForApi = chat.messages.slice(0, userIdx).map(m => ({ role: m.role, content: m.content }));
         try {
-            reply = await streamViaWebSocket(userText, historyForApi, currentAgentId, attachments);
+            reply = await streamViaWebSocket(userText, historyForApi, currentAgentId, attDicts);
         } catch (e) {
-            reply = await fallbackRest(userText, historyForApi, currentAgentId, attachments);
+            reply = await fallbackRest(userText, historyForApi, currentAgentId, attDicts);
         }
     } catch (err) {
         reply = 'Не удалось получить ответ.';
@@ -1083,8 +1088,8 @@ async function regenerateMessage(idx) {
     if (hasReply) {
         // Сохраняем предыдущий ответ в историю версий, чтобы стрелками можно было вернуться
         if (!target._versions) target._versions = [];
-        if (target.content && target.content !== reply) {
-            target._versions.push(target.content);
+        if (prevContent && prevContent !== reply) {
+            target._versions.push(prevContent);
         }
         target.content = reply;
         target._vIdx = 0; // показываем свежий ответ
@@ -1137,7 +1142,13 @@ function openMessageEdit(idx) {
             rmBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
             rmBtn.title = 'Удалить файл';
             rmBtn.addEventListener('click', () => {
-                if (m.files && m.files.splice) m.files.splice(i, 1);
+                // Удаляем по ИМЕНИ, а не по индексу: индексы сдвигаются после
+                // каждого splice, и «кнопка X» следующего файла удаляла бы не тот.
+                m.files = (m.files || []).filter(x => (x.name || x) !== name);
+                // И из неза сохранённых в этой сессии
+                if (msgEditEl._newFiles) {
+                    msgEditEl._newFiles = msgEditEl._newFiles.filter(nf => (nf instanceof File ? nf.name : nf) !== name);
+                }
                 d.remove();
             });
             d.appendChild(label);
@@ -1159,7 +1170,7 @@ function openMessageEdit(idx) {
 function closeMessageEdit() {
     if (msgEditEl) msgEditEl.classList.add('hidden');
 }
-function saveMessageEdit() {
+async function saveMessageEdit() {
     const idx = parseInt(msgEditEl.dataset.idx);
     const chat = getCurrentChat();
     if (!chat || !chat.messages[idx]) return;
@@ -1171,8 +1182,22 @@ function saveMessageEdit() {
     m.content = (ta?.value || '').trim();
     // Сохранить список файлов (учитывая удалённые и добавленные в этой сессии)
     if (!m.files) m.files = [];
+    // Загружаем НОВЫЕ файлы (объекты File) на бэкенд, чтобы ИИ их видел,
+    // и сохраняем dict-приложения в _attPaths. Имена (строк) не повторяем.
     if (msgEditEl._newFiles && msgEditEl._newFiles.length) {
-        msgEditEl._newFiles.forEach(nf => { if (!m.files.includes(nf)) m.files.push(nf); });
+        const uploaded = [];
+        for (const nf of msgEditEl._newFiles) {
+            if (nf instanceof File) {
+                if (!m.files.includes(nf.name)) m.files.push(nf.name);
+                const d = await uploadSingleFile(nf);
+                if (d) uploaded.push(d);
+            } else if (typeof nf === 'string' && nf) {
+                if (!m.files.includes(nf)) m.files.push(nf);
+            }
+        }
+        if (uploaded.length) {
+            m._attPaths = (m._attPaths || []).concat(uploaded);
+        }
     }
     m._vIdx = 0; // show original version
     chat.updated_at = Date.now();
@@ -1187,8 +1212,10 @@ function attachFileToEditingMessage(file) {
     if (!chat || !chat.messages[idx]) return;
     if (!chat.messages[idx].files) chat.messages[idx].files = [];
     chat.messages[idx].files.push(file.name);
+    // Храним объект File (а не только имя), чтобы при сохранении реально
+    // загрузить файл на бэкенд — иначе ИИ его не увидит.
     if (!msgEditEl._newFiles) msgEditEl._newFiles = [];
-    msgEditEl._newFiles.push(file.name);
+    msgEditEl._newFiles.push(file);
     const fileArea = msgEditEl.querySelector('.msg-edit-files');
     if (fileArea) {
         const d = document.createElement('div');
@@ -1206,8 +1233,10 @@ function attachFileToEditingMessage(file) {
                 const fi = msg.files.indexOf(file.name);
                 if (fi >= 0) msg.files.splice(fi, 1);
             }
-            const ni = msgEditEl._newFiles ? msgEditEl._newFiles.indexOf(file.name) : -1;
-            if (ni >= 0 && msgEditEl._newFiles) msgEditEl._newFiles.splice(ni, 1);
+            if (msgEditEl._newFiles) {
+                const ni = msgEditEl._newFiles.findIndex(nf => nf instanceof File ? nf.name === file.name : nf === file.name);
+                if (ni >= 0) msgEditEl._newFiles.splice(ni, 1);
+            }
             d.remove();
         });
         d.appendChild(label);
@@ -1942,6 +1971,25 @@ async function uploadAttachments() {
     return results;
 }
 
+// Загружает ОДИН объект File на /api/files/upload и возвращает dict-приложение
+// {path, filename, mime_type} (или null при ошибке). Используется при
+// редактировании сообщения, чтобы новые файлы реально попалли на бэкенд.
+async function uploadSingleFile(file) {
+    try {
+        const b64 = await readFileAsBase64(file);
+        const res = await fetch(`${API_BASE}/api/files/upload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.name, content: b64, mime_type: file.type || '' }),
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            return { path: data.path, filename: file.name, mime_type: file.type || '' };
+        }
+    } catch { /* пропускаем при ��шибке */ }
+    return null;
+}
+
 
 async function sendMessage() {
     const rawText = messageInput.value.trim();
@@ -2071,6 +2119,14 @@ async function sendMessage() {
     // Загружаем файлы на бэкенд (если е��ть)
     if (hasFiles) {
         attachmentsPayload = await uploadAttachments();
+    }
+
+    // Персистим точные dict-приложения {path, filename, mime_type} на сообщении,
+    // чтобы при перегенерации ИИ снова «видел» файлы (а не только их имена).
+    if (hasFiles && attachmentsPayload.length) {
+        const _umIdx = chat.messages.length - 1;
+        chat.messages[_umIdx]._attPaths = attachmentsPayload;
+        saveChats();
     }
 
     // Запоминаем приложенные к ЭТОМУ сообщению файлы, чтобы токены [[GEN:...]]

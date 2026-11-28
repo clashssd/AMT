@@ -368,7 +368,7 @@ class ChatRequest(BaseModel):
     sysinteraction: bool = False  # тумблер «Взаимодействие с системой» в чате
     key_id: str = ""          # явный API-ключ для этого запроса (сессионный)
     systemPromptOverride: str = ""  # переопределение системного промпта (новая личность)
-    attachments: list[dict] = []  # [{path, filename, mime_type}] — файлы из FILES_DIR
+    attachments: list = []  # [{path, filename, mime_type}] или ["name.jpg"] — оба формата приняты
     commands: list[str] = []  # slash-команды (например, ["/rag", "/jailbreak"])
     chat_mode: str = "general"  # "general" | "coding"
     project_root: str = ""
@@ -618,6 +618,35 @@ async def save_settings(new_settings: Settings):
     return {"status": "saved", "hasApiKey": bool(server_settings.apiKey)}
 
 
+def _guess_mime(filename: str) -> str:
+    """Угадать MIME-тип по расширению файла (для резолва приложений без mime_type)."""
+    ext = os.path.splitext(filename)[1].lower().lstrip(".")
+    return MIME_MAP.get(ext, "application/octet-stream")
+
+
+def _resolve_attachment_name(name: str) -> dict:
+    """Резолвить «голое» имя файла в dict-приложение {path, filename, mime_type}.
+
+    Ищет в FILES_DIR сначала точное совпадение, затем варианты с
+    тайм-префиксом {ts}_{name}, которые использует /api/files/upload.
+    Возвращает dict или None, если файл не найден.
+    """
+    if not isinstance(name, str) or not name:
+        return None
+    safe = os.path.basename(name)
+    if not safe:
+        return None
+    exact = os.path.join(FILES_DIR, safe)
+    if os.path.isfile(exact):
+        return {"path": exact, "filename": safe, "mime_type": _guess_mime(safe)}
+    # Варианты вида {timestamp}_{name} (как сохраняет /api/files/upload)
+    import glob as _glob
+    for p in _glob.glob(os.path.join(FILES_DIR, f"*_{safe}")):
+        if os.path.isfile(p):
+            return {"path": p, "filename": safe, "mime_type": _guess_mime(safe)}
+    return None
+
+
 async def call_ai_api(user_message: str, history: list[Message], settings: Settings = None,
                       agent_id: str = "", extra_skills: list[str] = None,
                       core_agents: list[str] = None,
@@ -770,8 +799,24 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     if attachments:
         context_parts = []
         for att in attachments:
+            # Строка — имя файла: резолвим по FILES_DIR (или с тайм-префиксом
+            # вида {ts}_{name}, который использует /api/files/upload).
+            if isinstance(att, str):
+                resolved = _resolve_attachment_name(att)
+                if not resolved:
+                    continue
+                att = resolved
+            elif isinstance(att, dict) and not att.get("path"):
+                # dict без path — пробуем резолвить по filename
+                _fname = att.get("filename") or att.get("name") or ""
+                resolved = _resolve_attachment_name(_fname)
+                if not resolved:
+                    continue
+                _merged = dict(resolved)
+                _merged.update({k: v for k, v in att.items() if k != "path" and v not in (None, "")})
+                att = _merged
             if not isinstance(att, dict):
-                continue  # malformed entry (string / None) — skip defensively
+                continue  # malformed entry (None и т.п.) — skip defensively
             path = att.get("path", "")
             fname = att.get("filename", "")
             mime = att.get("mime_type", "")
@@ -1409,6 +1454,19 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     # Matches: ![alt](data:image/jpeg;base64,XXX)  or  ![name](data:image/png;base64,YYY)
     _img_pattern = r'!\[[^\]]*\]\(data:image/(\w+);base64,([A-Za-z0-9+/=]+)\)'
     _img_matches = list(_re_img.finditer(_img_pattern, user_message))
+    # Если изображения реально встроены (data-URL), модель должна знать, что она
+    # их ВИДИТ — даже в tool-calling режиме, где большой блок MEDIA_CAPABILITY
+    # намеренно опускается, чтобы не дублировать инструкции.
+    if _img_matches:
+        _vision_note = (
+            "\n\nВНИМАНИЕ: к текущему сообщению пользователя прикреплены изображения "
+            "(base64 data-URL) — ты их ВИДИШЬ. Анализируй содержимое изображений и "
+            "отвечай по ним. Не говори, что не можешь увидеть изображение."
+        )
+        if messages and messages[0].get("role") == "system":
+            messages[0]["content"] = messages[0]["content"] + _vision_note
+        else:
+            messages.insert(0, {"role": "system", "content": _vision_note.strip()})
     if _img_matches:
         _content_parts = []
         _last_end = 0
@@ -6681,6 +6739,50 @@ async def upload_file(request: FileUploadRequest):
         return {"status": "ok", "path": file_path, "filename": safe_name, "mime_type": request.mime_type}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+# ===== ЗАГРУЗКА / РЕЗОЛВ ФАЙЛОВ =====
+@app.get("/api/files/{file_name}")
+async def api_files_get(file_name: str):
+    """Отдаёт ранее загруженный файл по его исходному имени.
+
+    Сначала ищет точное имя в FILES_DIR, затем варианты с тайм-префиксом
+    ({ts}_{name}), которые использует /api/files/upload.
+    """
+    import glob as _glob
+    safe = os.path.basename(file_name)
+    if not safe:
+        return JSONResponse({"error": "Invalid file name"}, status_code=400)
+    candidates = [os.path.join(FILES_DIR, safe)]
+    candidates += _glob.glob(os.path.join(FILES_DIR, f"*_{safe}"))
+    target = next((p for p in candidates if os.path.isfile(p)), None)
+    if not target:
+        return JSONResponse({"error": "File not found"}, status_code=404)
+    mime = _guess_mime(safe)
+    return FileResponse(target, filename=safe, media_type=mime)
+
+
+class _FilesResolveReq(BaseModel):
+    names: list = []
+
+
+@app.post("/api/files/resolve")
+async def api_files_resolve(req: _FilesResolveReq):
+    """Резолвит список исходных имён в dict-приложения {path, filename, mime_type}.
+
+    Возвращает {"files": [...]} — только те, которые реально лежат на диске.
+    Используется фронтендом при регенерации старых сообщений без _attPaths.
+    """
+    files = []
+    seen = set()
+    for nm in (req.names or []):
+        if not nm or nm in seen:
+            continue
+        seen.add(nm)
+        d = _resolve_attachment_name(nm)
+        if d:
+            files.append(d)
+    return {"files": files}
 
 
 # ===== РАЗБОРКА ФАЙЛОВ ДЛЯ AI =====

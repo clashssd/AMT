@@ -779,8 +779,14 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                 continue
             parsed = parse_file_for_ai(real, mime)
             if parsed:
-                # Обрезаем слишком большие файлы
-                if len(parsed) > 120_000:
+                # Обрезаем слишком большие ТЕКСТОВЫЕ файлы (не изображения!
+                # Для изображений parsed — это base64 data-URL: если его
+                # обрезать по 120_000 символов, закроется скобка и регулярка
+                # встраивания image_url (ниже, строка ~1350) перестанет
+                # совпасть → модель увидит только имя файла. Изображения
+                # уже ограничены по байтам (20 MB) внутри parse_file_for_ai.
+                is_image = mime.startswith("image/")
+                if not is_image and len(parsed) > 120_000:
                     parsed = parsed[:120_000] + "\n… [файл обрезан]"
                 context_parts.append(f"[Файл: {fname}]\n{parsed}")
         if context_parts:

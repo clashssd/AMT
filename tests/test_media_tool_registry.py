@@ -575,3 +575,43 @@ def test_generate_video_example_uses_manual_multipart_no_urllib3(monkeypatch):
     assert len(calls) == 1
     assert isinstance(calls[0]["content"], (bytes, bytearray))
     assert "multipart/form-data; boundary=" in calls[0]["ct"]
+
+
+def test_generate_video_403_quota_error_returns_friendly_code(monkeypatch):
+    """When a video generation 403s with 'quota' in the body, the error code
+    should be 'quota_exhausted' (not just 'unsupported'). This makes the UI
+    able to show a friendlier message about billing/balance."""
+    from ai_engine import media as _m
+
+    class _Resp:
+        def __init__(self, sc, body=None, text=""):
+            self.status_code = sc
+            self._body = body or {}
+            self._text = text
+        def json(self):
+            return self._body
+        @property
+        def text(self):
+            return self._text
+
+    class _Client:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def post(self, url, headers=None, json=None, content=None):
+            if "/v1/videos/text2video" in url:
+                # Standard path fails with 400, forcing the dialect fallback
+                return _Resp(400, {"error": "not found"}, "404")
+            if "/videos" in url:
+                # Agnes dialect path returns 403 quota
+                return _Resp(403, {}, "Insufficient user quota")
+            return _Resp(200)
+
+    monkeypatch.setattr(_m, "_client", lambda proxy="", timeout=60.0: _Client())
+    monkeypatch.setattr(_m, "_BASE_PROVIDER_HINTS", {"agnes": "img-agnes.example.com"})
+    out = _m.generate_video(
+        base_url="https://img-agnes.example.com/v1",
+        api_key="k", model="agnes-video-2.5", prompt="a sunset",
+        duration="5", aspect_ratio="16:9", proxy="")
+    assert out.get("ok") is False
+    assert out.get("code") == "quota_exhausted", f"expected quota_exhausted, got {out.get('code')}"
+    assert "Insufficient" in out.get("error", "") or "баланс" in out.get("error", "").lower()

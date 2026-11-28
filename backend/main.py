@@ -619,8 +619,12 @@ async def save_settings(new_settings: Settings):
 
 
 def _guess_mime(filename: str) -> str:
-    """Угадать MIME-тип по расширению файла (для резолва приложений без mime_type)."""
-    ext = os.path.splitext(filename)[1].lower().lstrip(".")
+    """Угадать MIME-тип по расширению файла (для резолва приложений без mime_type).
+
+    Ключи MIME_MAP — С точкой (".png", ".mp4"), поэтому расширение не
+    обрезаем, а оставляем с точкой.
+    """
+    ext = os.path.splitext(filename)[1].lower()  # ".png", ".mp4" (с точкой)
     return MIME_MAP.get(ext, "application/octet-stream")
 
 
@@ -6736,7 +6740,13 @@ async def upload_file(request: FileUploadRequest):
         file_path = os.path.join(FILES_DIR, f"{int(time.time())}_{safe_name}")
         with open(file_path, "wb") as f:
             f.write(raw)
-        return {"status": "ok", "path": file_path, "filename": safe_name, "mime_type": request.mime_type}
+        # Если клиент прислал пустой/неинформативный MIME — угадываем по
+        # расширению, иначе parse_file_for_ai не сможет распознать media-тип
+        # (video/audio) и не извлечёт кадры/звук.
+        eff_mime = request.mime_type or ""
+        if not eff_mime or eff_mime == "application/octet-stream":
+            eff_mime = _guess_mime(safe_name)
+        return {"status": "ok", "path": file_path, "filename": safe_name, "mime_type": eff_mime}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -6788,8 +6798,16 @@ async def api_files_resolve(req: _FilesResolveReq):
 # ===== РАЗБОРКА ФАЙЛОВ ДЛЯ AI =====
 def parse_file_for_ai(file_path: str, mime_type: str) -> str:
     """Читает файл и возвращает текст для передачи в AI.
-    Поддерживает: текст, JSON, XML, XLSX, DOCX, PPTX. Остальное — плейсхолдер."""
+    Поддерживает: текст, JSON, XML, XLSX, DOCX, PPTX, image, audio, video.
+    Остальное — плейсхолдер.
+
+    Если mime_type пустой/неинформативный (application/octet-stream или ''),
+    угадываем его по расширению, чтобы media-файлы (видео/аудио/картинки)
+    попали в правильную ветку и ИИ реально их увидел.
+    """
     name = os.path.basename(file_path)
+    if not mime_type or mime_type == "application/octet-stream":
+        mime_type = _guess_mime(name)
     try:
         # --- Текстовые форматы ---
         if mime_type.startswith("text/") or mime_type in (

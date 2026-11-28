@@ -1,7 +1,5 @@
 # AMT Chat
 
-![AMT Chat](.github/assets/logo-256.png)
-
 > **English:** [README_EN.md](README_EN.md) · **History:** [docs/CHANGELOG.md](docs/CHANGELOG.md) · **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · **Contributing:** [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
 
 **Local AI assistant** — чат с любой OpenAI-совместимой или локальной моделью, генерация медиа и файлов, система агентов/скиллов/личностей, оркестратор качества, лонг-терм память, безопасные инструменты, встроенный медиа-плеер и расширяемая система плагинов.

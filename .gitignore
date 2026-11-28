@@ -22,6 +22,13 @@ release/
 AMT Chat Setup.exe
 AMT Chat *.release.zip
 AMT Chat * release.zip
+AMT Chat *.zip
+
+# 7z archives (local builds, never commit)
+*.7z
+
+# Git worktrees (local dev, never commit)
+.worktrees/
 
 # Runtime data (per-user; in frozen desktop mode these live under %APPDATA%\AMT Chat\)
 backend/logs/

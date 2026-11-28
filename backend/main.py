@@ -770,6 +770,8 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
     if attachments:
         context_parts = []
         for att in attachments:
+            if not isinstance(att, dict):
+                continue  # malformed entry (string / None) — skip defensively
             path = att.get("path", "")
             fname = att.get("filename", "")
             mime = att.get("mime_type", "")
@@ -2040,7 +2042,7 @@ async def chat(request: ChatRequest):
         def _cmd_to_str(c):
             if isinstance(c, dict):
                 base = "/" + str(c.get("id", ""))
-                args = c.get("args", {})
+                args = c.get("args") or {}  # None-safe: JSON null → {}
                 parts = [str(args.get("type", "")), str(args.get("filetype", "")),
                          str(args.get("reference", "")), str(args.get("prompt", ""))]
                 parts = [p for p in parts if p]
@@ -4108,7 +4110,7 @@ async def websocket_chat(websocket: WebSocket):
                 def _cmd_to_str(c):
                     if isinstance(c, dict):
                         base = "/" + str(c.get("id", ""))
-                        args = c.get("args", {})
+                        args = c.get("args") or {}  # None-safe: JSON null → {}
                         parts = [str(args.get("type", "")), str(args.get("filetype", "")),
                                  str(args.get("reference", "")), str(args.get("prompt", ""))]
                         parts = [p for p in parts if p]

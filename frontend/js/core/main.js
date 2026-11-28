@@ -934,8 +934,8 @@ function attachPinButton(msgEl, idx, isPinned, role) {
 
     // Навигация по версиям < n/m > — только под версионными сообщениями
     const msg = getMsg();
-    // версий = 1 (оригинал) + _versions.length (отредактированные) + _regen
-    const totalVersions = 1 + (msg && msg._versions ? msg._versions.length : 0) + (msg && msg._regen ? 1 : 0);
+    // версий = 1 (текущий content) + _versions.length (все предыдущие, включая перегенерации и правки)
+    const totalVersions = 1 + (msg && msg._versions ? msg._versions.length : 0);
     let nav = msgEl.querySelector(':scope > .msg-nav');
     if (totalVersions < 2) {
         if (nav) nav.remove();
@@ -1079,9 +1079,17 @@ async function regenerateMessage(idx) {
     }
     isStreaming = false;
     setStatus('idle');
-    target.content = (typeof reply === 'string' && reply && reply !== 'Ошибка соединения') ? reply : target.content;
+    const hasReply = (typeof reply === 'string' && reply && reply !== 'Ошибка соединения');
+    if (hasReply) {
+        // Сохраняем предыдущий ответ в историю версий, чтобы стрелками можно было вернуться
+        if (!target._versions) target._versions = [];
+        if (target.content && target.content !== reply) {
+            target._versions.push(target.content);
+        }
+        target.content = reply;
+        target._vIdx = 0; // показываем свежий ответ
+    }
     target.pending = false;
-    if (reply && reply !== 'Ошибка соединения') target._regen = true;
     renderMessages(chat);
     saveChats();
 }

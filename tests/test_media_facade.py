@@ -211,3 +211,19 @@ def test_api_media_generate_with_paths_endpoint():
     # A dict response (ok true/false), NOT an HTTP 500
     assert r.status_code in (200, 400, 502), f"unexpected status {r.status_code}"
     assert "ok" in r.json(), f"missing 'ok' key in {r.json()}"
+
+
+def test_strip_trailing_v1_prevents_double_suffix():
+    """Regression: a provider base carrying /v1 + a default v1/… path must not
+    produce /v1/v1/… . _strip_trailing_v1 trims the base's /v1 only when the
+    path actually begins with a v1 segment; non-v1 paths are left untouched."""
+    # v1 path + v1 base -> trimmed
+    assert media._strip_trailing_v1("https://apihub.agnes-ai.com/v1", "v1/images/generations") == "https://apihub.agnes-ai.com"
+    # non-v1 path (e.g. agnesapi polling) + v1 base -> base kept
+    assert media._strip_trailing_v1("https://apihub.agnes-ai.com/v1", "agnesapi") == "https://apihub.agnes-ai.com/v1"
+    # v1 path + base already without /v1 -> unchanged
+    assert media._strip_trailing_v1("https://x.com", "v1/images/generations") == "https://x.com"
+    # empty base -> no-op
+    assert media._strip_trailing_v1("", "v1/x") == ""
+    # empty path -> unknown, don't trim (safe)
+    assert media._strip_trailing_v1("https://x.com/v1", "") == "https://x.com/v1"

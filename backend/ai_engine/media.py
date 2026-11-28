@@ -223,6 +223,24 @@ def _is_empty(v) -> bool:
     return (v is None) or (str(v).strip() == "")
 
 
+def _strip_trailing_v1(base: str, path: str) -> str:
+    """Убрать хвост /v1 из base, если путь уже начинается с v1/.
+
+    Prevents double-suffix (…/v1/v1/…) when a provider base carries /v1 but the
+    endpoint path is the default v1/… path. Provider-neutral: only trims when
+    the path actually starts with a v1 segment, so custom paths are untouched.
+    """
+    if not base:
+        return base
+    p = (path or "").strip()
+    if not p:
+        return base.rstrip("/")
+    if p.lower().lstrip("/").split("/", 1)[0].startswith("v1"):
+        b = base.rstrip("/")
+        return b[: -3] if b.lower().endswith("/v1") else b
+    return base.rstrip("/")
+
+
 def _get_path(has_file: bool, prompt: str, is_voice: bool, user_paths: Optional[dict] = None,
               is_video: bool = False) -> str:
     """Выбирает endpoint-путь по наличию файла/голоса/видео/промпта.
@@ -341,6 +359,10 @@ def generate_media(user_api_key, user_base_url, user_model, user_paths,
         "text_image_to_media" if has_file and prompt else \
         "image_to_media" if has_file else "text_to_media"
     active_path = up.get(active_path_key) if not _is_empty(up.get(active_path_key)) else default_path
+    # Provider-neutral: если base уже содержит /v1, а путь-дефолт начинается с
+    # v1/... (DEFAULT_PATH_*), то при склейке получалось /v1/v1/.... Срезаем
+    # хвост /v1 из base, чтобы дефолтные v1-пути не дублировались.
+    active_base_url = _strip_trailing_v1(active_base_url, active_path)
 
     try:
         result = _make_request(active_api_key, active_base_url, active_model,
@@ -354,7 +376,9 @@ def generate_media(user_api_key, user_base_url, user_model, user_paths,
         err1 = str(e)
         _log.warning("media: кастомная конфигурация не сработала, fallback на дефолты: %s", err1)
         try:
-            result = _make_request(DEFAULT_API_KEY, DEFAULT_BASE_URL, DEFAULT_MODEL,
+            result = _make_request(DEFAULT_API_KEY,
+                                   _strip_trailing_v1(DEFAULT_BASE_URL, default_path),
+                                   DEFAULT_MODEL,
                                    default_path, prompt, attached_file,
                                    voice_id=voice_id, voice_settings=voice_settings,
                                    extra=extra)
@@ -1016,6 +1040,10 @@ def generate_video(base_url: str = "", api_key: str = "", model: str = "", promp
                     "model_name": _mn,
                     "raw": d, "agnes": is_agnes,
                     "note": "Видео генерируется (задача создана)" + (" — URL готов" if url else "")}
+        # Quota/billing errors: detect and return a friendlier message
+        if r.status_code == 403 and "quota" in r.text.lower():
+            return {"ok": False, "code": "quota_exhausted",
+                    "error": "Недостаточно средств на аккаунте для генерации видео (агнес-хаб). Попробуйте пополнить баланс."}
         return {"ok": False, "code": "unsupported", "error": f"Провайдер: {r.status_code} {r.text[:200]}"}
     except Exception as e:
         return {"ok": False, "code": "error", "error": str(e)[:200]}

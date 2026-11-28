@@ -6526,6 +6526,38 @@ def _write_media_creds() -> None:
             creds["coding_model"] = s.get("codingModel", "")
     except Exception:
         pass
+    # Provider-neutral: если в settings.json медиа-ключей нет — подставляем
+    # активный медиа-провайдер (providers.json / ProviderStore), чтобы MCP-
+    # генерация автоматически использовала активного провайдера (как и нативные
+    # tool-calling инструменты через tool_registry._media_cfg).
+    try:
+        _ps = providers_store.get_active() if providers_store else None
+    except Exception:
+        _ps = None
+    if _ps:
+        _caps = _ps.get("capabilities", {}) or {}
+        _pkey = _ps.get("api_key", "")
+        _pbase = _ps.get("base_url", "")
+        _pm = _ps.get("model", "")
+        if _caps.get("image", True) and not creds.get("image_api_key"):
+            creds["image_base_url"] = _pbase or creds.get("image_base_url", "")
+            creds["image_api_key"] = _pkey
+            creds["image_model"] = _ps.get("default_image_model", "") or _pm
+        if _caps.get("video", True) and not creds.get("video_api_key"):
+            creds["video_base_url"] = _pbase or creds.get("video_base_url", "")
+            creds["video_api_key"] = _pkey
+            creds["video_model"] = _ps.get("default_video_model", "") or _pm
+        if _caps.get("audio", True) and not creds.get("audio_api_key"):
+            creds["audio_base_url"] = _pbase or creds.get("audio_base_url", "")
+            creds["audio_api_key"] = _pkey
+            creds["audio_model"] = _ps.get("default_audio_model", "") or _pm
+        # Общие (fallback) слоты — тоже заполнить, если пустые.
+        if not creds.get("api_key"):
+            creds["api_key"] = _pkey
+            if not creds.get("base_url"):
+                creds["base_url"] = _pbase
+            if not creds.get("model"):
+                creds["model"] = _pm
     creds_file = os.environ.get("AMT_MEDIA_CREDS_FILE") or os.path.join(os.path.dirname(__file__), "media_creds.json")
     try:
         with open(creds_file, "w") as f:

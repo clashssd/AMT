@@ -105,24 +105,71 @@ def _files_dir() -> str:
     return os.environ.get("AMT_FILES_DIR", os.path.join(os.path.dirname(__file__), "..", "FILES_DIR"))
 
 
+def _media_cfg(kind: str) -> dict:
+    """Ключ/адрес/модель/прокси для kind из глобальных настроек (main.server_settings).
+
+    Точная логика как в main._media_cfg(): image→imageKey/imageBaseUrl/imageModel,
+    video→video*, audio→audio* (+STT-модель в приоритете), иначе глобальный.
+    Инструменты tool-calling не имеют своего ключа, поэтому читаем из настроек."""
+    import sys
+    ss = None
+    try:
+        import main  # локальный импорт, чтобы не тянуть цикл на уровне модуля
+        ss = main.server_settings
+    except Exception:
+        mod = sys.modules.get("main")
+        ss = getattr(mod, "server_settings", None) if mod else None
+
+    base = key = model = proxy = ""
+    if ss is not None:
+        proxy = (getattr(ss, "proxyUrl", "") or "").strip() or (getattr(ss, "httpsProxy", "") or "").strip()
+        if kind == "image":
+            base = getattr(ss, "imageBaseUrl", "") or getattr(ss, "baseUrl", "")
+            key = getattr(ss, "imageKey", "") or getattr(ss, "apiKey", "")
+            model = getattr(ss, "imageModel", "") or getattr(ss, "model", "")
+        elif kind == "video":
+            base = getattr(ss, "videoBaseUrl", "") or getattr(ss, "baseUrl", "")
+            key = getattr(ss, "videoKey", "") or getattr(ss, "apiKey", "")
+            model = getattr(ss, "videoModel", "") or getattr(ss, "model", "")
+        elif kind == "audio":
+            base = getattr(ss, "audioBaseUrl", "") or getattr(ss, "baseUrl", "")
+            key = getattr(ss, "audioKey", "") or getattr(ss, "apiKey", "")
+            stt_model = (getattr(ss, "sttModel", "") or "").strip()
+            model = stt_model or getattr(ss, "audioModel", "") or getattr(ss, "model", "")
+        else:
+            base = getattr(ss, "baseUrl", "")
+            key = getattr(ss, "apiKey", "")
+            model = getattr(ss, "model", "")
+    return {"base": base, "key": key, "model": model, "proxy": proxy}
+
+
 async def _handle_generate_image(prompt: str, size: str = "1:1", model: str = "", ref_image_b64: str = "") -> str:
+    """Генерация картинки (tool-calling). Ключ/адрес — из настроек; вызываем
+    media.generate_image/generate_image_ref с ИМЕННЫМИ аргументами (не dict!)."""
     from ai_engine import media
-    cfg = {"prompt": prompt, "size": size, "model": model, "ref_image_b64": ref_image_b64}
-    result = media.generate_image(cfg)
+    cfg = _media_cfg("image")
+    if ref_image_b64:
+        result = media.generate_image_ref(cfg["base"], cfg["key"], model or cfg["model"],
+                                          prompt, size or "1024x1024", ref_image_b64, cfg["proxy"])
+    else:
+        result = media.generate_image(cfg["base"], cfg["key"], model or cfg["model"],
+                                      prompt, size or "1024x1024", cfg["proxy"])
     return json.dumps(result, ensure_ascii=False)
 
 
 async def _handle_generate_video(prompt: str, aspect_ratio: str = "9:16", duration: int = 5, model: str = "") -> str:
     from ai_engine import media
-    cfg = {"prompt": prompt, "aspect_ratio": aspect_ratio, "duration": duration, "model": model}
-    result = media.generate_video(cfg)
+    cfg = _media_cfg("video")
+    result = media.generate_video(cfg["base"], cfg["key"], model or cfg["model"],
+                                  prompt, str(duration), aspect_ratio, cfg["proxy"])
     return json.dumps(result, ensure_ascii=False)
 
 
 async def _handle_generate_audio(text: str, voice_id: str = "", model: str = "") -> str:
     from ai_engine import media
-    cfg = {"prompt": text, "voice_id": voice_id, "model": model}
-    result = media.generate_audio(cfg)
+    cfg = _media_cfg("audio")
+    result = media.generate_audio(cfg["base"], cfg["key"], model or cfg["model"],
+                                  text, voice_id, cfg["proxy"])
     return json.dumps(result, ensure_ascii=False)
 
 

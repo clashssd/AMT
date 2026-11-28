@@ -1,8 +1,17 @@
 {
-  "version": "1.1.6",
+  "version": "1.1.7",
   "name": "AMT Chat",
   "latest_at": "2026-11-28",
   "releases": [
+    {
+      "version": "1.1.7",
+      "date": "2026-11-28",
+      "title": "Генерация медиа через tool-calling: исправлен краш 'dict has no attribute rstrip'",
+      "changes": [
+        "Генерация фото/видео/аудио через tool-calling (по умолчанию включён): устранён краш «'dict' object has no attribute 'rstrip'» — обработчики инструментов передавали словарь настроек позиционно в base_url, а затем .rstrip() падал на dict. Теперь ключ/адрес/модель/прокси читаются из настроек (_media_cfg) и передаются именными аргументами, включая image-to-image по референсу (generate_image_ref).",
+        "Регрессия: 5 тестов tests/test_media_tool_registry.py фиксируют, что base_url в media.generate_* — строка, а не словарь."
+      ]
+    },
     {
       "version": "1.1.6",
       "date": "2026-11-28",

@@ -5352,7 +5352,7 @@ async def writer_generate(req: WriterGenerateIn):
                                 "validation": result.get("validation", {})}
                     return {"status": "ok", "family": req.family, "note": "Artifact created (no local copy)"}
         except Exception as e:
-            log.warning("writer_generate MCP fallback: %s", e)
+            logger.warning("writer_generate MCP fallback: %s", e)
 
     # Fallback: direct filegen (no MCP)
     try:
@@ -6037,6 +6037,10 @@ def _media_preset_config() -> dict:
         files_dir = os.environ.get("AMT_FILES_DIR") or os.path.join(
             appdata, "AMT Chat", "FILES"
         )
+        # Writable creds location (the _internal dir is read-only in a frozen
+        # install; pointing AMT_MEDIA_CREDS_FILE here lets /test refresh creds
+        # without crashing the whole request).
+        creds_file = os.path.join(appdata, "AMT Chat", "media_creds.json")
         return {
             "id": "media",
             "name": "Медиа-генерация",
@@ -6046,6 +6050,7 @@ def _media_preset_config() -> dict:
             "env": {
                 "AMT_BACKEND_MODE": "media",
                 "AMT_FILES_DIR": files_dir,
+                "AMT_MEDIA_CREDS_FILE": creds_file,
             },
             "enabled": True,
             "auto_approve": False,  # media calls cost money — user should approve
@@ -6148,9 +6153,21 @@ def _write_media_creds() -> None:
     except Exception:
         pass
     creds_file = os.environ.get("AMT_MEDIA_CREDS_FILE") or os.path.join(os.path.dirname(__file__), "media_creds.json")
-    with open(creds_file, "w") as f:
-        json.dump(creds, f, indent=2, ensure_ascii=False)
-    log.info("Media creds written to %s", creds_file)
+    try:
+        with open(creds_file, "w") as f:
+            json.dump(creds, f, indent=2, ensure_ascii=False)
+        logger.info("Media creds written to %s", creds_file)
+    except Exception as e:
+        # Fallback location (e.g. frozen _internal dir can be read-only).
+        # Degrade gracefully: the media/writer server will start with no
+        # creds (no_key responses) rather than 500ing the whole /test call.
+        fallback = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "AMT Chat", "media_creds.json")
+        try:
+            with open(fallback, "w") as f2:
+                json.dump(creds, f2, indent=2, ensure_ascii=False)
+            logger.warning("Media creds fallback write to %s (primary %s failed: %s)", fallback, creds_file, e)
+        except Exception as e2:
+            logger.error("Media creds write failed (primary %s: %s, fallback %s: %s)", creds_file, e, fallback, e2)
 
 
 @app.post("/api/mcp/presets/media/creds")
@@ -6185,6 +6202,10 @@ def _writer_preset_config() -> dict:
         files_dir = os.environ.get("AMT_FILES_DIR") or os.path.join(
             appdata, "AMT Chat", "FILES"
         )
+        # Writable creds location (the _internal dir is read-only in a frozen
+        # install; pointing AMT_MEDIA_CREDS_FILE here lets /test refresh creds
+        # without crashing the whole request).
+        creds_file = os.path.join(appdata, "AMT Chat", "media_creds.json")
         return {
             "id": "writer",
             "name": "Генератор файлов (Writer)",
@@ -6195,6 +6216,7 @@ def _writer_preset_config() -> dict:
                 "AMT_BACKEND_MODE": "writer",
                 "AMT_WRITER_DATA_DIR": data_dir,
                 "AMT_FILES_DIR": files_dir,
+                "AMT_MEDIA_CREDS_FILE": creds_file,
             },
             "enabled": True,
             "auto_approve": False,

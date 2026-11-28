@@ -1812,12 +1812,21 @@ async def call_ai_api(user_message: str, history: list[Message], settings: Setti
                             # valid image base64». Чистим/инжектим референс автоматически
                             # (зеркалим авто-подстановку [[GEN]]).
                             if tc_name == "generate_image":
+                                # Слабые модели иногда не передают prompt, полагая что он
+                                # «уже в контексте». Подставляем текст пользователя как
+                                # fallback — иначе handler упал бы с missing-argument.
+                                if not (tc_args.get("prompt") or "").strip() and user_message:
+                                    tc_args["prompt"] = user_message
                                 _clean = _clean_ref_base64(tc_args.get("ref_image_b64", ""), user_message, attachments)
                                 if _clean and _clean != tc_args.get("ref_image_b64"):
                                     tc_args["ref_image_b64"] = _clean
-                                tool_events.append({"type": "tool_call_start", "tool": tc_name, "args": tc_args})
-                            else:
-                                tool_events.append({"type": "tool_call_start", "tool": tc_name, "args": tc_args})
+                            elif tc_name in ("generate_video", "generate_audio"):
+                                if not (tc_args.get("prompt") or tc_args.get("text") or "").strip() and user_message:
+                                    if tc_name == "generate_video":
+                                        tc_args["prompt"] = user_message
+                                    else:
+                                        tc_args["text"] = user_message
+                            tool_events.append({"type": "tool_call_start", "tool": tc_name, "args": tc_args})
 
                             try:
                                 tc_result = await request_tool_registry.execute(tc_name, tc_args)

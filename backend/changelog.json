@@ -1,8 +1,18 @@
 {
-  "version": "1.1.9",
+  "version": "1.1.10",
   "name": "AMT Chat",
   "latest_at": "2026-11-28",
   "releases": [
+    {
+      "version": "1.1.10",
+      "date": "2026-11-28",
+      "title": "Генерация медиа через tool-calling: устойчивость к пропущенным/битым аргументам модели",
+      "changes": [
+        "Тулл-коллы generate_image/video/audio больше не падают с «missing 1 required positional argument: 'prompt'» и ложным «no_key»: ToolRegistry.execute() теперь нормализует аргументы по JSON-схеме (подставляет default, выпиливает null и неизвестные ключи, коэргит integer↔string), а обработчики медиа возвращают честный отказ no_prompt/no_text вместо TypeError.",
+        "Для generate_image без prompt подставляется текст сообщения пользователя как fallback (зеркалит авто-подстановку [[GEN]]) — генерация/изменение по референсу не падает.",
+        "Регрессия: 8 новых тестов tests/test_media_tool_registry.py (нормализация default/null/unknown/type + no-prompt guard), всего 20 тестов файла зелёные."
+      ]
+    },
     {
       "version": "1.1.9",
       "date": "2026-11-28",

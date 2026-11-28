@@ -9,7 +9,21 @@
 
 ---
 
-## 1.1.9 — текущий (2026-11-28)
+## 1.1.10 — текущий (2026-11-28)
+
+- Генерация медиа через tool-calling: устранён краш «missing 1 required positional
+  argument: 'prompt'» и ложный «no_key». Слабые модели иногда вывезли tool-call
+  generate_image/generate_video/generate_audio без prompt/text, либо присылали
+  null и числа-как-строки. Теперь ToolRegistry.execute() нормализует аргументы
+  по схеме (подставляет default, выпиливает null и неизвестные ключи, коэргит
+  типы), а обработчики медиа возвращают честный отказ no_prompt/no_text вместо
+  TypeError. Для generate_image без prompt подставляется текст сообщения
+  пользователя как fallback (зеркалит авто-подстановку [[GEN]]), чтобы
+  генерация по референсу не падала.
+- Регрессия: 8 новых тестов в tests/test_media_tool_registry.py (нормализация
+  аргументов + no-prompt guard), 20 тестов файла зелёные.
+
+## 1.1.9 — (2026-11-28)
 
 - Image-to-image через tool-calling: исправлен 400-краш «extra_body.image must
   be a public http(s) URL or valid image base64». Модель в tool-calling режиме

@@ -86,7 +86,7 @@ class ToolRegistry:
         if tool is None:
             raise ToolExecutionError(f"Unknown tool: {name}")
         try:
-            result = await tool.handler(**args)
+            result = await tool.handler(**self._normalize_args(tool, args or {}))
             if not isinstance(result, str):
                 result = json.dumps(result, ensure_ascii=False)
             if len(result) > TOOL_RESULT_MAX_BYTES:
@@ -97,6 +97,42 @@ class ToolRegistry:
         except Exception as e:
             log.warning("Tool %s failed: %s\n%s", name, e, traceback.format_exc())
             return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+    @staticmethod
+    def _normalize_args(tool: ToolDef, args: dict) -> dict:
+        """Сделать вызов устойчивым к «слабым» моделям, которые:
+        - пропускают опциональные параметры (должен помочь дефолт из схемы);
+        - присылают null вместо отсутствия;
+        - присылают number как строку или наоборот (duration).
+        Значения, не объявленные в схеме, НЕ пробрасываем в handler
+        (иначе TypeError: unexpected keyword argument).
+        """
+        props = (tool.parameters or {}).get("properties", {}) if tool.parameters else {}
+        defaults = {k: v.get("default") for k, v in props.items() if "default" in v}
+        out = {}
+        for k, v in args.items():
+            if k not in props:
+                # Неизвестный параметр (модель выдумала) — не передаём, чтобы не падать.
+                continue
+            if v is None:
+                # null → дефолт из схемы, иначе опускаем
+                if k in defaults:
+                    out[k] = defaults[k]
+                continue
+            # Коэргция: если в схеме integer, а пришло "5" → 5; если string, а пришло 5 → "5"
+            typ = props.get(k, {}).get("type")
+            if typ == "integer" and isinstance(v, str):
+                try:
+                    v = int(v)
+                except (ValueError, TypeError):
+                    pass
+            elif typ == "string" and not isinstance(v, str):
+                v = str(v)
+            out[k] = v
+        # Дефолты для пропущенных (необязательных) параметров
+        for k, d in defaults.items():
+            out.setdefault(k, d)
+        return out
 
 
 # --- Native tool handlers ---
@@ -174,9 +210,13 @@ def _media_cfg(kind: str) -> dict:
     return {"base": base, "key": key, "model": model, "proxy": proxy}
 
 
-async def _handle_generate_image(prompt: str, size: str = "1:1", model: str = "", ref_image_b64: str = "") -> str:
+async def _handle_generate_image(prompt: str = "", size: str = "1:1", model: str = "", ref_image_b64: str = "") -> str:
     """Генерация картинки (tool-calling). Ключ/адрес — из настроек; вызываем
     media.generate_image/generate_image_ref с ИМЕННЫМИ аргументами (не dict!)."""
+    if not (prompt or "").strip():
+        # Слабая модель вывезла tool-call без prompt — честный отказ, а не TypeError.
+        return json.dumps({"ok": False, "code": "no_prompt",
+                           "error": "Нужен текстовый prompt для генерации картинки."}, ensure_ascii=False)
     from ai_engine import media
     cfg = _media_cfg("image")
     if ref_image_b64:
@@ -188,7 +228,10 @@ async def _handle_generate_image(prompt: str, size: str = "1:1", model: str = ""
     return json.dumps(result, ensure_ascii=False)
 
 
-async def _handle_generate_video(prompt: str, aspect_ratio: str = "9:16", duration: int = 5, model: str = "") -> str:
+async def _handle_generate_video(prompt: str = "", aspect_ratio: str = "9:16", duration: int = 5, model: str = "") -> str:
+    if not (prompt or "").strip():
+        return json.dumps({"ok": False, "code": "no_prompt",
+                           "error": "Нужен текстовый prompt для генерации видео."}, ensure_ascii=False)
     from ai_engine import media
     cfg = _media_cfg("video")
     result = media.generate_video(cfg["base"], cfg["key"], model or cfg["model"],
@@ -196,7 +239,10 @@ async def _handle_generate_video(prompt: str, aspect_ratio: str = "9:16", durati
     return json.dumps(result, ensure_ascii=False)
 
 
-async def _handle_generate_audio(text: str, voice_id: str = "", model: str = "") -> str:
+async def _handle_generate_audio(text: str = "", voice_id: str = "", model: str = "") -> str:
+    if not (text or "").strip():
+        return json.dumps({"ok": False, "code": "no_text",
+                           "error": "Нужен текст для синтеза/распознавания голоса."}, ensure_ascii=False)
     from ai_engine import media
     cfg = _media_cfg("audio")
     result = media.generate_audio(cfg["base"], cfg["key"], model or cfg["model"],

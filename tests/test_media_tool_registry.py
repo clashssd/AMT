@@ -243,3 +243,79 @@ def test_clean_ref_falls_back_to_attachment_on_disk(monkeypatch, tmp_path):
 def test_clean_ref_returns_empty_when_nothing_valid():
     assert _main._clean_ref_base64("not-base64!!!", "no images here", None) == ""
     assert _main._clean_ref_base64("", "no images here", None) == ""
+
+
+# --- _normalize_args: weak-model resilience (missing/null/type-mismatched args) ---
+
+def test_normalize_applies_schema_default_for_missing_optional():
+    tool = tool_registry.tool_registry.get("generate_image")
+    out = tool_registry.ToolRegistry._normalize_args(tool, {})
+    assert out["size"] == "1:1"          # default injected
+    assert "prompt" not in out           # required, no default → not invented
+    assert out.get("model", "") == ""    # default ""
+
+
+def test_normalize_drops_unknown_keys_and_null():
+    tool = tool_registry.tool_registry.get("generate_image")
+    out = tool_registry.ToolRegistry._normalize_args(tool, {"prompt": "x", "bogus": 1, "model": None})
+    assert "bogus" not in out            # unknown param must NOT reach handler
+    assert out["prompt"] == "x"
+    # model=None → dropped (no schema default for model) → handler default kicks in
+    assert out.get("model", "") in ("", None)
+
+
+def test_normalize_coerces_integer_string():
+    tool = tool_registry.tool_registry.get("generate_video")
+    out = tool_registry.ToolRegistry._normalize_args(tool, {"prompt": "v", "duration": "7"})
+    assert out["duration"] == 7         # "7" → 7 per schema type=integer
+
+
+def test_normalize_coerces_string_number():
+    tool = tool_registry.tool_registry.get("generate_image")
+    out = tool_registry.ToolRegistry._normalize_args(tool, {"size": 1024})
+    assert out["size"] == "1024"        # int → str per schema type=string
+
+
+# --- no-prompt guard: handler returns clean JSON, not a TypeError ---
+
+def test_generate_image_no_prompt_returns_clean_error():
+    import ai_engine.media as real_media
+    called = {"n": 0}
+    def _boom(*a, **k):
+        called["n"] += 1
+        return {"ok": True}
+    with mock.patch.dict("sys.modules", {"main": SimpleNamespace(server_settings=_fake_settings())}):
+        with mock.patch.object(real_media, "generate_image", _boom):
+            out = asyncio.run(tool_registry._handle_generate_image(prompt="", size="1:1"))
+    payload = json.loads(out)
+    assert payload["ok"] is False
+    assert payload["code"] == "no_prompt"
+    assert called["n"] == 0            # must NOT reach media when prompt empty
+
+
+def test_generate_video_no_prompt_returns_clean_error():
+    import ai_engine.media as real_media
+    called = {"n": 0}
+    def _boom(*a, **k):
+        called["n"] += 1
+        return {"ok": True}
+    with mock.patch.dict("sys.modules", {"main": SimpleNamespace(server_settings=_fake_settings())}):
+        with mock.patch.object(real_media, "generate_video", _boom):
+            out = asyncio.run(tool_registry._handle_generate_video(prompt=""))
+    payload = json.loads(out)
+    assert payload["code"] == "no_prompt"
+    assert called["n"] == 0
+
+
+def test_generate_audio_no_text_returns_clean_error():
+    import ai_engine.media as real_media
+    called = {"n": 0}
+    def _boom(*a, **k):
+        called["n"] += 1
+        return {"ok": True}
+    with mock.patch.dict("sys.modules", {"main": SimpleNamespace(server_settings=_fake_settings())}):
+        with mock.patch.object(real_media, "generate_audio", _boom):
+            out = asyncio.run(tool_registry._handle_generate_audio(text=""))
+    payload = json.loads(out)
+    assert payload["code"] == "no_text"
+    assert called["n"] == 0

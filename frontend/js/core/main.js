@@ -121,6 +121,7 @@ const importAgentsBtn = document.getElementById('importAgentsBtn');
 const importAgentsFile = document.getElementById('importAgentsFile');
 const pinnedSection = document.getElementById('pinnedSection');
 const pinnedList = document.getElementById('pinnedList');
+let _pinnedCollapsed = false; // состояние свёрнутости ленты закреплённых
 const settingsSubnavLinks = document.querySelectorAll('.settings-subnav-links a');
 // Агенты / скиллы / ключи
 const agentName = document.getElementById('agentName');
@@ -921,13 +922,13 @@ function attachPinButton(msgEl, idx, isPinned, role) {
         mkBtn('msg-edit-btn', ICONS.edit, 'Редактировать сообщение (текст и файлы)', (e) => { e.stopPropagation(); openMessageEdit(idx); });
         mkBtn('msg-delete-btn', ICONS.del, 'Удалить это сообщение', (e) => { e.stopPropagation(); deleteMessage(idx); });
     } else {
-        // Ответ ИИ: Копировать / Перегенерировать / Удалить ответ
+        // Ответ ИИ: Копировать / Закрепить / Перегенерировать / Удалить ответ
         mkBtn('msg-copy-btn', ICONS.copy, 'Скопировать ответ ИИ', (e) => { e.stopPropagation(); doCopy(); });
+        const aiPinBtn = mkBtn('msg-pin-btn', ICONS.pin, 'Закрепить / открепить ответ ИИ', (e) => { e.stopPropagation(); togglePinMessage(idx); });
+        aiPinBtn.classList.toggle('pinned', !!isPinned);
         mkBtn('msg-regen-btn', ICONS.regen, 'Получить новый ответ на последний вопрос', (e) => { e.stopPropagation(); regenerateMessage(idx); });
         mkBtn('msg-delete-btn', ICONS.del, 'Удалить ответ ИИ', (e) => { e.stopPropagation(); deleteMessage(idx); });
         // Убрать лишние кнопки user-ролей, если рендер переиспользует элемент
-        const pin = actions.querySelector('.msg-pin-btn');
-        if (pin) pin.remove();
         const ed = actions.querySelector('.msg-edit-btn');
         if (ed) ed.remove();
     }
@@ -2476,21 +2477,57 @@ function renderPinned() {
     const pinned = chat ? chat.messages.filter(m => m.pinned) : [];
     if (pinned.length === 0) {
         pinnedSection.classList.add('hidden');
+        _pinnedCollapsed = false;
         return;
     }
     pinnedSection.classList.remove('hidden');
+
+    // Заголовок с кнопкой свернуть/развернуть
+    const header = pinnedSection.querySelector('.pinned-header');
+    if (header) {
+        const label = header.querySelector('.pinned-title');
+        if (label) label.textContent = `Закрепленные (${pinned.length})`;
+        let toggle = header.querySelector('.pinned-toggle');
+        if (!toggle) {
+            toggle = document.createElement('button');
+            toggle.className = 'pinned-toggle';
+            toggle.title = 'Свернуть / развернуть';
+            toggle.setAttribute('aria-label', 'Свернуть / развернуть закрепленные');
+            header.appendChild(toggle);
+        }
+        toggle.textContent = _pinnedCollapsed ? '▶' : '▼';
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            _pinnedCollapsed = !_pinnedCollapsed;
+            pinnedList.classList.toggle('collapsed', _pinnedCollapsed);
+            toggle.textContent = _pinnedCollapsed ? '▶' : '▼';
+        });
+        pinnedList.classList.toggle('collapsed', _pinnedCollapsed);
+    }
+
     pinnedList.innerHTML = '';
     pinned.forEach(m => {
         const div = document.createElement('div');
         div.className = 'pinned-item';
         const text = m.content.length > 160 ? m.content.slice(0, 160) + '…' : m.content;
+        const idx = chat.messages.indexOf(m);
         div.innerHTML = `
             <span class="pin-role">${m.role === 'user' ? 'Вы' : 'AMT'}</span>
             <span class="pin-text">${escapeHtml(text)}</span>
             <button class="pin-unpin" title="Открепить">✕</button>
         `;
-        div.querySelector('.pin-unpin').addEventListener('click', () => {
-            const idx = chat.messages.indexOf(m);
+        // Клик по карточке — перейти к сообщению в чате (не по кнопке «✕»)
+        div.addEventListener('click', (e) => {
+            if (e.target.closest('.pin-unpin')) return;
+            const el = chatMessages.querySelector(`.message[data-msg-idx="${idx}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.add('msg-nav-flash');
+                setTimeout(() => el.classList.remove('msg-nav-flash'), 1200);
+            }
+        });
+        div.querySelector('.pin-unpin').addEventListener('click', (e) => {
+            e.stopPropagation();
             if (idx >= 0) togglePinMessage(idx);
         });
         pinnedList.appendChild(div);

@@ -2892,8 +2892,24 @@ input[type="file"]:hover { border-color: rgba(171,165,197,0.35); }
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
+.pinned-title { flex: 1; }
+.pinned-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #facc15;
+    font-size: 11px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+.pinned-toggle:hover { background: rgba(250,204,21,0.15); }
 .pinned-list { display: flex; flex-direction: column; gap: 6px; }
+.pinned-list.collapsed { display: none; }
 .pinned-item {
     font-size: 13px;
     color: #d0d0d0;
@@ -2904,6 +2920,12 @@ input[type="file"]:hover { border-color: rgba(171,165,197,0.35); }
     display: flex;
     align-items: center;
     gap: 8px;
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease;
+}
+.pinned-item:hover {
+    background: rgba(250,204,21,0.08);
+    border-color: rgba(250,204,21,0.35);
 }
 .pinned-item .pin-role { font-size: 11px; color: #888; flex-shrink: 0; }
 .pinned-item .pin-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

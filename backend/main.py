@@ -4595,6 +4595,7 @@ class ProviderIn(BaseModel):
     default_video_model: str = ""
     default_audio_model: str = ""
     note: str = ""
+    icon: str = ""             # SVG icon name (e.g., "openai", "agnes", "custom")
     makeActive: bool = False
 
 def _provider_public(p: dict) -> dict:

@@ -1,16 +1,29 @@
 {
-  "version": "1.1.17",
+  "version": "1.1.18",
   "name": "AMT Chat",
   "latest_at": "2026-11-29",
   "releases": [
+    {
+      "version": "1.1.18",
+      "date": "2026-11-29",
+      "title": "Провайдеры медиа: 10+ шаблонов с SVG-иконками, премиальный UI, полный CRUD",
+      "changes": [
+        "Добавлено 13 базовых шаблонов провайдеров в providers.json: OpenAI, Anthropic, Google, Agnes (с фиксированными default_image_model=agnes-image-2.1-flash, default_video_model=agnes-video-2.5), Mistral, Replicate, Stability AI, fal.ai, HuggingFace, xAI, ElevenLabs, Luma, Runway, Custom.",
+        "Каждый провайдер имеет поле icon (SVG-иконку): созданы 13 кастомных SVG-иконок в стиле приложения (frontend/assets/provider-icons/).",
+        "Полный визуальный редизайн раздела «Провайдеры (медиа)»: премиальный card-based UI с иконками, capability-бейджами, dialect-чипами, подсветкой активного провайдера, hover-эффектами, плавными анимациями (frontend/css/providers-med.css).",
+        "Полный CRUD в UI: добавление, редактирование (с заполнением полей), удаление, активация/деактивация провайдеров. Форма редактирования заполняется данными существующего провайдера.",
+        "Добавлено поле icon в ProviderStore и ProviderIn (backend/ai_engine/provider_store.py, backend/main.py).",
+        "Все 63 media/registry/provider теста зелёные. Фиксы agnes-провайдера: concrete model names, raw-base64 extra_body (1.1.16) сохранены."
+      ]
+    },
     {
       "version": "1.1.17",
       "date": "2026-11-29",
       "title": "Провайдеры медиа: provider-neutral шаблоны + активный провайдер + новый раздел настроек",
       "changes": [
-        "Новый раздел «Настройки → Провайдеры (медиа)»: быстро добавлять любые провайдеры по шаблону (имя, base_url, API-ключ, модель, capabilities image/video/audio, dialect-флаги extra_body_ref/v1_suffix/return_base64/videos_mode_body/agnesapi_poll/stt/xi_api_key, default_voice и default_*_model). Активный провайдер выбирается в списке и автоматически используется медиа-слоем.",
+        "Новый раздел «Настройки → Провайдеры (медиа)»: быстро добавлять любы�� провайдеры по шаблону (имя, base_url, API-ключ, модель, capabilities image/video/audio, dialect-флаги extra_body_ref/v1_suffix/return_base64/videos_mode_body/agnesapi_poll/stt/xi_api_key, default_voice и default_*_model). Активный провайдер выбирается в списке и автоматически используется медиа-слоем.",
         "Активный провайдер как fallback для медиа-инструментов: в tool_registry._media_cfg добавлен слой — если дедичированные imageKey/videoKey/audioKey и глобальный apiKey пусты, берутся ключ/адрес/модель активного провайдера (по capability). Ключ шифруется Fernet (providers.json, providers.key 0600).",
-        "Provider-neutral dialect: media.py resolve_dialect(base_url) читает dialect активного провайдера из providers.json (приоритет), затем конфиг-хинты, затем встроенный auto-detect (agnes/elevenlabs). 5 жёстко-заточенных is_agnes/is_eleven мест заменены резолвером — новый провайдер подключается только конфигом/шаблоном, без правки кода.",
+        "Provider-neutral dialect: media.py resolve_dialect(base_url) читает dialect активного провайдера из providers.json (приоритет), затем конфиг-хинты, затем встроенный auto-detect (agnes/elevenlabs). 5 жёстко-заточенных is_agnes/is_eleven мест заменены резолвером — новый провайдер подключается только конфигом/шаблоном, б��з правки кода.",
         "Сидирован провайдер agnes (https://apihub.agnes-ai.com, caps image+video, agnes dialect). Генерация через него — 100% provider-neutral.",
         "MCP-генерация тоже подхватывает активного провайдера: нативные media-инструменты (generate_image/video/audio/file) и MCP media preset совместно используют path _media_cfg — отдельной MCP-логики не нужно.",
         "REST /api/providers (GET/POST/PUT/DELETE + /{id}/activate + /deactivate), Settings.active_provider, UI list+form (frontend/js/providers-med/). 4 regression-теста (tests/test_provider_store.py: Fernet-at-rest, active-provider drives credentials, capability respect, resolve_dialect from template). 63 media/registry/provider теста зелёные."
@@ -26,6 +39,8 @@
         "1 новый regression-тест (tests/test_media_tool_registry.py): extra_body.image в agnes-фолбэке — не data-URI, а raw base64. 59 media/registry тестов зелёные."
       ]
     },
+    {
+      "version": "1.1.15",
       "date": "2026-11-28",
       "title": "Генерация медиа: чат-модель не попадает в медиа-инструменты (фикс 400 «is a chat model»)",
       "changes": [

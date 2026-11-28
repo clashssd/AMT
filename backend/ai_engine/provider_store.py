@@ -2,8 +2,8 @@
 """ProviderStore — CRUD + active-provider selection for media provider templates.
 
 Provider-neutral: a provider "template" is a full descriptor (base_url, api_key,
-model, capabilities, dialect flags) stored in a portable `providers.json`. The
-API key is Fernet-encrypted at rest (separate key file, 0600) — same pattern as
+model, capabilities, dialect flags, icon) stored in a portable `providers.json`.
+The API key is Fernet-encrypted at rest (separate key file, 0600) — same pattern as
 MCPManager (mcp_key.key). The active provider id is persisted; the media layer
 resolves the active provider's credentials/dialect for generation.
 
@@ -11,7 +11,8 @@ Storage layout:
   providers.json  -> {"providers": [ {id, name, base_url, api_key_enc, model,
                                       capabilities: {image,video,audio},
                                       dialect: {extra_body_ref, v1_suffix, ...},
-                                      default_voice, default_image_model, ...},
+                                      default_voice, default_image_model, ...,
+                                      icon: "openai" | "anthropic" | ...},
                                       ...],
                      "activeId": ""}
 
@@ -39,7 +40,7 @@ class ProviderStore:
     _FIELDS = (
         "id", "name", "base_url", "model",
         "capabilities", "dialect", "default_voice", "default_image_model",
-        "default_video_model", "default_audio_model", "note",
+        "default_video_model", "default_audio_model", "note", "icon",
     )
 
     def __init__(self, path: str):

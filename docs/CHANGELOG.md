@@ -9,7 +9,26 @@
 
 ---
 
-## 1.1.17 — текущий (2026-11-29)
+## 1.1.18 — текущий (2026-11-29)
+
+- Добавлено 13 базовых шаблонов провайдеров в providers.json: OpenAI,
+  Anthropic, Google, Agnes (с фиксированными default_image_model=
+  agnes-image-2.1-flash, default_video_model=agnes-video-2.5), Mistral,
+  Replicate, Stability AI, fal.ai, HuggingFace, xAI, ElevenLabs, Luma,
+  Runway, Custom.
+- Каждый провайдер имеет поле icon (SVG-иконку): созданы 13 кастомных
+  SVG-иконок в стиле приложения (frontend/assets/provider-icons/).
+- Полный визуальный редизайн раздела «Провайдеры (медиа)»: премиальный
+  card-based UI с иконками, capability-бейджами, dialect-чипами,
+  подсветкой активного провайдера, hover-эффектами, плавными анимациями
+  (frontend/css/providers-med.css).
+- Полный CRUD в UI: добавление, редактирование (с заполнением полей),
+  удаление, ак��ивация/деактивация провайдеров. Форма редактирования
+  заполняется данными существующего провайдера.
+- Добавлено поле icon в ProviderStore и ProviderIn.
+- Все 63 media/registry/provider теста зелёные.
+
+## 1.1.17 — (2026-11-29)
 
 - Новый раздел «Настройки → Провайдеры (медиа)»: быстро добавлять любые
   провайдеры по шаблону (имя, base_url, API-ключ, модель, capabilities

@@ -1,0 +1,520 @@
+/* ============================================================================
+   AMT Chat — PROVIDERS-MED CSS
+   Premium card-based provider templates with visual hierarchy
+   ==========================================================================*/
+
+.providers-med-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Provider card grid */
+.providers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+}
+
+/* Single provider card */
+.provider-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--theme-radius);
+    padding: 20px;
+    cursor: pointer;
+    transition: all var(--motion-base) var(--ease-out);
+    position: relative;
+    overflow: hidden;
+}
+
+.provider-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    opacity: 0;
+    transition: opacity var(--motion-base) var(--ease-out);
+}
+
+.provider-card:hover {
+    border-color: var(--border-strong);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.provider-card:hover::before {
+    opacity: 1;
+}
+
+.provider-card.active {
+    border-color: var(--accent);
+    background: var(--surface-2);
+}
+
+.provider-card.active::before {
+    opacity: 1;
+}
+
+.provider-card.active .provider-badge {
+    background: var(--accent);
+    color: var(--accent-contrast);
+}
+
+/* Card header */
+.provider-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.provider-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--surface-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+}
+
+.provider-icon-wrap svg {
+    width: 28px;
+    height: 28px;
+    stroke: var(--text);
+    fill: none;
+    stroke-width: 1.5;
+}
+
+.provider-card.active .provider-icon-wrap {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+}
+
+.provider-card.active .provider-icon-wrap svg {
+    stroke: var(--accent);
+}
+
+.provider-name-block {
+    flex: 1;
+    min-width: 0;
+}
+
+.provider-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-strong);
+    margin: 0 0 4px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.provider-base {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.provider-badge {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: var(--surface-3);
+    color: var(--text-dim);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+}
+
+/* Capabilities row */
+.provider-caps {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.cap-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-dim);
+    background: var(--surface-0);
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+}
+
+.cap-badge svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.6;
+}
+
+.cap-badge.active {
+    color: var(--text);
+    background: var(--surface-hover);
+}
+
+/* Dialect flags */
+.provider-dialects {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.dialect-chip {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+    background: var(--surface-0);
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--divider);
+}
+
+/* Actions row */
+.provider-actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 14px;
+    border-top: 1px solid var(--divider);
+}
+
+.provider-action-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    background: var(--surface-0);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all var(--motion-fast) var(--ease-out);
+}
+
+.provider-action-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+}
+
+.provider-action-btn:active {
+    transform: scale(0.98);
+}
+
+.provider-action-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.6;
+}
+
+.provider-action-btn.primary {
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border-color: var(--accent);
+}
+
+.provider-action-btn.primary:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent-dim);
+}
+
+/* Add button */
+.provider-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent-contrast);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    transition: all var(--motion-base) var(--ease-out);
+}
+
+.provider-add-btn:hover {
+    background: var(--accent-dim);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px var(--accent-glow);
+}
+
+.provider-add-btn:active {
+    transform: translateY(0);
+}
+
+.provider-add-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+}
+
+/* Edit form */
+.provider-form {
+    background: var(--surface-0);
+    border: 1px solid var(--border);
+    border-radius: var(--theme-radius);
+    padding: 24px;
+    display: none;
+}
+
+.provider-form.visible {
+    display: block;
+}
+
+.provider-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.provider-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.provider-form-group.full {
+    grid-column: 1 / -1;
+}
+
+.provider-form-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.provider-form-group input,
+.provider-form-group select {
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--field-bg);
+    border: 1px solid var(--field-border);
+    border-radius: var(--radius-xs);
+    outline: none;
+    transition: all var(--motion-fast) var(--ease-out);
+}
+
+.provider-form-group input:focus,
+.provider-form-group select:focus {
+    border-color: var(--field-border-focus);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.provider-form-group input::placeholder {
+    color: var(--field-placeholder);
+}
+
+.provider-caps-row {
+    display: flex;
+    gap: 16px;
+    padding: 12px 0;
+    border-top: 1px solid var(--divider);
+    border-bottom: 1px solid var(--divider);
+    margin: 16px 0;
+}
+
+.provider-cap-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+}
+
+.provider-cap-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.provider-cap-toggle .cap-toggle-box {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 2px solid var(--border-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--motion-fast) var(--ease-out);
+}
+
+.provider-cap-toggle input:checked + .cap-toggle-box {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.provider-cap-toggle input:checked + .cap-toggle-box::after {
+    content: '✓';
+    color: var(--accent-contrast);
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.provider-dialects-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 12px 0;
+}
+
+.provider-dialect-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+}
+
+.provider-dialect-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.provider-dialect-toggle .dialect-toggle-box {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1.5px solid var(--border-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--motion-fast) var(--ease-out);
+}
+
+.provider-dialect-toggle input:checked + .dialect-toggle-box {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.provider-dialect-toggle input:checked + .dialect-toggle-box::after {
+    content: '✓';
+    color: var(--accent-contrast);
+    font-size: 9px;
+    font-weight: bold;
+}
+
+.provider-form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.provider-form-btn {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all var(--motion-fast) var(--ease-out);
+    border: 1px solid var(--border);
+    background: var(--surface-0);
+    color: var(--text);
+}
+
+.provider-form-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+}
+
+.provider-form-btn.primary {
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border-color: var(--accent);
+}
+
+.provider-form-btn.primary:hover {
+    background: var(--accent-dim);
+}
+
+/* Icon picker */
+.provider-icon-picker {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 10px 0;
+}
+
+.provider-icon-option {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--motion-fast) var(--ease-out);
+    background: var(--surface-0);
+}
+
+.provider-icon-option:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+}
+
+.provider-icon-option.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.provider-icon-option svg {
+    width: 20px;
+    height: 20px;
+    stroke: var(--text);
+    fill: none;
+    stroke-width: 1.5;
+}
+
+/* Empty state */
+.providers-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+    font-size: 14px;
+}
+
+.providers-empty svg {
+    width: 48px;
+    height: 48px;
+    stroke: var(--text-faint);
+    fill: none;
+    stroke-width: 1;
+    margin-bottom: 12px;
+}
